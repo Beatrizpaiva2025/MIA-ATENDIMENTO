@@ -1,0 +1,201 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Controle de Atendimento - IA vs Humano{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-3">🎛️ Controle de Atendimento</h2>
+            <p class="text-muted">Gerencie quais conversas estão com IA ou atendimento humano</p>
+        </div>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <h3 class="text-success">{{ stats.ia_ativa or 0 }}</h3>
+                    <p class="mb-0">🤖 IA Ativa</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body text-center">
+                    <h3 class="text-warning">{{ stats.humano_ativo or 0 }}</h3>
+                    <p class="mb-0">👤 Atendimento Humano</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-danger">
+                <div class="card-body text-center">
+                    <h3 class="text-danger">{{ stats.ia_desligada or 0 }}</h3>
+                    <p class="mb-0">⏸️ IA Desligada</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <h3 class="text-primary">{{ stats.total or 0 }}</h3>
+                    <p class="mb-0">📊 Total</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comandos Rápidos -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">⚡ Comandos Especiais do WhatsApp</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="alert alert-warning mb-0">
+                                <h4 class="mb-1">*</h4>
+                                <small>Transferir para humano</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-success mb-0">
+                                <h4 class="mb-1">+</h4>
+                                <small>Voltar para IA</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-danger mb-0">
+                                <h4 class="mb-1">##</h4>
+                                <small>Desligar IA</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-primary mb-0">
+                                <h4 class="mb-1">++</h4>
+                                <small>Religar IA</small>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <p class="mb-0 text-muted">
+                        <strong>Como usar:</strong> Cliente ou atendente digita esses comandos no WhatsApp para alternar o modo de atendimento.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Atendimentos Ativos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">📋 Atendimentos em Modo Humano ou Desligado</h5>
+                </div>
+                <div class="card-body">
+                    {% if atendimentos %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Telefone</th>
+                                    <th>Estado</th>
+                                    <th>Atendente</th>
+                                    <th>Data/Hora</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for atendimento in atendimentos %}
+                                <tr>
+                                    <td>{{ atendimento.phone }}</td>
+                                    <td>
+                                        {% if atendimento.estado == 'HUMANO_ATIVO' %}
+                                        <span class="badge bg-warning">👤 Humano</span>
+                                        {% elif atendimento.estado == 'IA_DESLIGADA' %}
+                                        <span class="badge bg-danger">⏸️ Desligada</span>
+                                        {% else %}
+                                        <span class="badge bg-success">🤖 IA</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ atendimento.atendente or '-' }}</td>
+                                    <td>{{ atendimento.timestamp_formatted }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button onclick="alterarEstado('{{ atendimento.phone }}', 'ia')" 
+                                                    class="btn btn-success btn-sm" title="Ativar IA">
+                                                🤖
+                                            </button>
+                                            <button onclick="alterarEstado('{{ atendimento.phone }}', 'humano')" 
+                                                    class="btn btn-warning btn-sm" title="Ativar Humano">
+                                                👤
+                                            </button>
+                                            <button onclick="alterarEstado('{{ atendimento.phone }}', 'desligar')" 
+                                                    class="btn btn-danger btn-sm" title="Desligar IA">
+                                                ⏸️
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-5">
+                        <h4>✅ Todos os atendimentos estão com IA ativa!</h4>
+                        <p>Quando houver transferências ou desligamentos, aparecerão aqui.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function alterarEstado(phone, acao) {
+    let url = '';
+    let confirmMsg = '';
+    
+    if (acao === 'ia') {
+        url = `/admin/controle/api/ativar-ia/${phone}`;
+        confirmMsg = 'Ativar IA?';
+    } else if (acao === 'humano') {
+        const atendente = prompt('Nome do atendente:', 'Admin');
+        if (!atendente) return;
+        url = `/admin/controle/api/ativar-humano/${phone}?atendente=${atendente}`;
+        confirmMsg = 'Ativar atendimento humano?';
+    } else if (acao === 'desligar') {
+        url = `/admin/controle/api/desligar-ia/${phone}`;
+        confirmMsg = 'DESLIGAR IA?';
+    }
+    
+    if (!confirm(confirmMsg)) return;
+    
+    try {
+        const response = await fetch(url, { method: 'POST' });
+        const data = await response.json();
+        
+        alert(data.mensagem);
+        location.reload();
+        
+    } catch (error) {
+        alert('Erro: ' + error.message);
+    }
+}
+</script>
+
+<style>
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 1rem;
+}
+</style>
+{% endblock %}

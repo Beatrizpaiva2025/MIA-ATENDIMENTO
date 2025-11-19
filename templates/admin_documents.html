@@ -1,0 +1,279 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Análise de Documentos - Painel Administrativo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📄 Análise de Documentos (GPT-4 Vision)</h2>
+        <button class="btn btn-primary" onclick="atualizarLista()">
+            <i class="bi bi-arrow-clockwise"></i> Atualizar
+        </button>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Total Analisados</h5>
+                    <p class="card-text display-4" id="totalAnalisados">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Hoje</h5>
+                    <p class="card-text display-4" id="totalHoje">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Esta Semana</h5>
+                    <p class="card-text display-4" id="totalSemana">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Tempo Médio</h5>
+                    <p class="card-text display-4" id="tempoMedio">-</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label for="filtroData" class="form-label">Período:</label>
+                    <select class="form-select" id="filtroData" onchange="filtrarDocumentos()">
+                        <option value="hoje">Hoje</option>
+                        <option value="semana" selected>Esta Semana</option>
+                        <option value="mes">Este Mês</option>
+                        <option value="todos">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="filtroTipo" class="form-label">Tipo de Documento:</label>
+                    <select class="form-select" id="filtroTipo" onchange="filtrarDocumentos()">
+                        <option value="todos">Todos</option>
+                        <option value="certidao">Certidão</option>
+                        <option value="diploma">Diploma</option>
+                        <option value="contrato">Contrato</option>
+                        <option value="identidade">Documento de Identidade</option>
+                        <option value="outros">Outros</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="busca" class="form-label">Buscar:</label>
+                    <input type="text" class="form-control" id="busca" placeholder="Cliente ou telefone..." onkeyup="filtrarDocumentos()">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Documentos -->
+    <div class="card shadow">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Documentos Analisados</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Cliente</th>
+                            <th>Telefone</th>
+                            <th>Tipo Detectado</th>
+                            <th>Preview</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="documentosTableBody">
+                        <tr>
+                            <td colspan="7" class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Carregando...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Detalhes da Análise</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalDetalhesBody">
+                <!-- Conteúdo carregado dinamicamente -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let documentosData = [];
+
+async function carregarDocumentos() {
+    try {
+        const response = await fetch('/admin/api/documents');
+        const data = await response.json();
+        
+        documentosData = data.documentos || [];
+        
+        // Atualizar estatísticas
+        document.getElementById('totalAnalisados').textContent = data.total || 0;
+        document.getElementById('totalHoje').textContent = data.total_hoje || 0;
+        document.getElementById('totalSemana').textContent = data.total_semana || 0;
+        document.getElementById('tempoMedio').textContent = (data.tempo_medio || 0) + 's';
+        
+        // Atualizar tabela
+        filtrarDocumentos();
+        
+    } catch (error) {
+        console.error('Erro ao carregar documentos:', error);
+        document.getElementById('documentosTableBody').innerHTML = 
+            '<tr><td colspan="7" class="text-center text-danger">Erro ao carregar documentos</td></tr>';
+    }
+}
+
+function filtrarDocumentos() {
+    const filtroData = document.getElementById('filtroData').value;
+    const filtroTipo = document.getElementById('filtroTipo').value;
+    const busca = document.getElementById('busca').value.toLowerCase();
+    
+    let documentosFiltrados = documentosData.filter(doc => {
+        // Filtro de data
+        const dataDoc = new Date(doc.data_hora);
+        const hoje = new Date();
+        const inicioSemana = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - hoje.getDay());
+        const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        
+        let passaData = true;
+        if (filtroData === 'hoje') passaData = dataDoc.toDateString() === hoje.toDateString();
+        else if (filtroData === 'semana') passaData = dataDoc >= inicioSemana;
+        else if (filtroData === 'mes') passaData = dataDoc >= inicioMes;
+        
+        // Filtro de tipo
+        const passaTipo = filtroTipo === 'todos' || doc.tipo_documento === filtroTipo;
+        
+        // Filtro de busca
+        const passaBusca = busca === '' || 
+            doc.cliente.toLowerCase().includes(busca) || 
+            doc.telefone.includes(busca);
+        
+        return passaData && passaTipo && passaBusca;
+    });
+    
+    atualizarTabela(documentosFiltrados);
+}
+
+function atualizarTabela(documentos) {
+    const tbody = document.getElementById('documentosTableBody');
+    
+    if (documentos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum documento encontrado</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = documentos.map(doc => `
+        <tr>
+            <td>${new Date(doc.data_hora).toLocaleString('pt-BR')}</td>
+            <td>${doc.cliente || 'Sem nome'}</td>
+            <td>${doc.telefone}</td>
+            <td><span class="badge bg-info">${doc.tipo_documento || 'Não identificado'}</span></td>
+            <td>
+                <img src="${doc.url_imagem}" alt="Preview" style="max-width: 100px; max-height: 60px; cursor: pointer;" 
+                     onclick="verDetalhes('${doc._id}')">
+            </td>
+            <td><span class="badge bg-success">Analisado</span></td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="verDetalhes('${doc._id}')">
+                    <i class="bi bi-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-info" onclick="baixarAnalise('${doc._id}')">
+                    <i class="bi bi-download"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function verDetalhes(docId) {
+    try {
+        const doc = documentosData.find(d => d._id === docId);
+        if (!doc) return;
+        
+        const modalBody = document.getElementById('modalDetalhesBody');
+        modalBody.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Imagem Original:</h6>
+                    <img src="${doc.url_imagem}" class="img-fluid mb-3" alt="Documento">
+                </div>
+                <div class="col-md-6">
+                    <h6>Informações:</h6>
+                    <p><strong>Cliente:</strong> ${doc.cliente || 'Sem nome'}</p>
+                    <p><strong>Telefone:</strong> ${doc.telefone}</p>
+                    <p><strong>Data/Hora:</strong> ${new Date(doc.data_hora).toLocaleString('pt-BR')}</p>
+                    <p><strong>Tipo:</strong> ${doc.tipo_documento || 'Não identificado'}</p>
+                    
+                    <h6 class="mt-3">Análise GPT-4 Vision:</h6>
+                    <div class="alert alert-info">
+                        <pre style="white-space: pre-wrap;">${doc.analise || 'Análise não disponível'}</pre>
+                    </div>
+                    
+                    ${doc.dados_extraidos ? `
+                        <h6>Dados Extraídos:</h6>
+                        <ul>
+                            ${Object.entries(doc.dados_extraidos).map(([k, v]) => `<li><strong>${k}:</strong> ${v}</li>`).join('')}
+                        </ul>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Erro ao carregar detalhes:', error);
+        alert('Erro ao carregar detalhes do documento');
+    }
+}
+
+function baixarAnalise(docId) {
+    window.location.href = `/admin/api/documents/${docId}/download`;
+}
+
+function atualizarLista() {
+    carregarDocumentos();
+}
+
+// Carregar ao iniciar
+carregarDocumentos();
+
+// Atualizar a cada minuto
+setInterval(carregarDocumentos, 60000);
+</script>
+{% endblock %}

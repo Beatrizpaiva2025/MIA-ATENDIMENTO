@@ -1,0 +1,270 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Dashboard - Painel Administrativo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📊 Dashboard</h2>
+        <div class="text-muted">
+            <i class="bi bi-calendar"></i> Última atualização: <span id="lastUpdate"></span>
+        </div>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Conversas Hoje</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="conversasHoje">-</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-chat-dots fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Leads Qualificados</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="leadsQualificados">-</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-person-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Taxa de Conversão</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="taxaConversao">-</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-graph-up fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Tempo Médio Resposta</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="tempoMedio">-</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row">
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Conversas por Dia (Últimos 7 dias)</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="conversasChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Status das Conversas</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Conversas Recentes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Conversas Recentes</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="conversasTable">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Telefone</th>
+                                    <th>Última Mensagem</th>
+                                    <th>Status</th>
+                                    <th>Data/Hora</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="conversasTableBody">
+                                <tr>
+                                    <td colspan="6" class="text-center">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Atualizar timestamp
+document.getElementById('lastUpdate').textContent = new Date().toLocaleString('pt-BR');
+
+// Função para buscar dados do dashboard
+async function carregarDashboard() {
+    try {
+        const response = await fetch('/admin/api/dashboard-data');
+        const data = await response.json();
+        
+        // Atualizar cards
+        document.getElementById('conversasHoje').textContent = data.conversas_hoje || 0;
+        document.getElementById('leadsQualificados').textContent = data.leads_qualificados || 0;
+        document.getElementById('taxaConversao').textContent = (data.taxa_conversao || 0) + '%';
+        document.getElementById('tempoMedio').textContent = (data.tempo_medio || 0) + 's';
+        
+        // Atualizar tabela
+        atualizarTabelaConversas(data.conversas_recentes || []);
+        
+        // Criar gráficos
+        criarGraficoConversas(data.conversas_por_dia || []);
+        criarGraficoStatus(data.status_conversas || {});
+        
+    } catch (error) {
+        console.error('Erro ao carregar dashboard:', error);
+    }
+}
+
+function atualizarTabelaConversas(conversas) {
+    const tbody = document.getElementById('conversasTableBody');
+    if (conversas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhuma conversa encontrada</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = conversas.map(conv => `
+        <tr>
+            <td>${conv.nome || 'Sem nome'}</td>
+            <td>${conv.telefone}</td>
+            <td>${conv.ultima_mensagem ? conv.ultima_mensagem.substring(0, 50) + '...' : '-'}</td>
+            <td><span class="badge bg-${conv.status === 'ativo' ? 'success' : 'secondary'}">${conv.status}</span></td>
+            <td>${new Date(conv.data_hora).toLocaleString('pt-BR')}</td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="verConversa('${conv.telefone}')">
+                    <i class="bi bi-eye"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function criarGraficoConversas(dados) {
+    const ctx = document.getElementById('conversasChart');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dados.map(d => d.data),
+            datasets: [{
+                label: 'Conversas',
+                data: dados.map(d => d.total),
+                borderColor: 'rgb(108, 92, 231)',
+                backgroundColor: 'rgba(108, 92, 231, 0.1)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+}
+
+function criarGraficoStatus(dados) {
+    const ctx = document.getElementById('statusChart');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(dados),
+            datasets: [{
+                data: Object.values(dados),
+                backgroundColor: [
+                    'rgba(108, 92, 231, 0.8)',
+                    'rgba(162, 155, 254, 0.8)',
+                    'rgba(99, 102, 241, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+}
+
+function verConversa(telefone) {
+    window.location.href = `/admin/conversas/${telefone}`;
+}
+
+// Carregar dados ao iniciar
+carregarDashboard();
+
+// Atualizar a cada 30 segundos
+setInterval(carregarDashboard, 30000);
+</script>
+
+<style>
+.border-left-primary {
+    border-left: 0.25rem solid #6c5ce7 !important;
+}
+.border-left-success {
+    border-left: 0.25rem solid #28a745 !important;
+}
+.border-left-info {
+    border-left: 0.25rem solid #17a2b8 !important;
+}
+.border-left-warning {
+    border-left: 0.25rem solid #ffc107 !important;
+}
+#conversasChart, #statusChart {
+    max-height: 300px;
+}
+</style>
+{% endblock %}

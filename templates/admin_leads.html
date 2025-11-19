@@ -1,0 +1,407 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Gestão de Leads - Painel Administrativo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>👥 Gestão de Leads (CRM)</h2>
+        <div>
+            <button class="btn btn-success" onclick="exportarLeads()">
+                <i class="bi bi-download"></i> Exportar CSV
+            </button>
+            <button class="btn btn-primary" onclick="atualizarLista()">
+                <i class="bi bi-arrow-clockwise"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total de Leads</div>
+                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalLeads">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Qualificados</div>
+                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="leadsQualificados">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Em Negociação</div>
+                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="leadsNegociacao">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Convertidos</div>
+                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="leadsConvertidos">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="filtroStatus" class="form-label">Status:</label>
+                    <select class="form-select" id="filtroStatus" onchange="filtrarLeads()">
+                        <option value="todos">Todos</option>
+                        <option value="novo">Novo</option>
+                        <option value="qualificado">Qualificado</option>
+                        <option value="negociacao">Em Negociação</option>
+                        <option value="convertido">Convertido</option>
+                        <option value="perdido">Perdido</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filtroData" class="form-label">Período:</label>
+                    <select class="form-select" id="filtroData" onchange="filtrarLeads()">
+                        <option value="hoje">Hoje</option>
+                        <option value="semana" selected>Esta Semana</option>
+                        <option value="mes">Este Mês</option>
+                        <option value="todos">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filtroOrigem" class="form-label">Origem:</label>
+                    <select class="form-select" id="filtroOrigem" onchange="filtrarLeads()">
+                        <option value="todos">Todas</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="site">Site</option>
+                        <option value="indicacao">Indicação</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="busca" class="form-label">Buscar:</label>
+                    <input type="text" class="form-control" id="busca" placeholder="Nome ou telefone..." onkeyup="filtrarLeads()">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Leads -->
+    <div class="card shadow">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Leads</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Telefone</th>
+                            <th>Email</th>
+                            <th>Origem</th>
+                            <th>Status</th>
+                            <th>Score</th>
+                            <th>Data Cadastro</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leadsTableBody">
+                        <tr>
+                            <td colspan="8" class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Carregando...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Detalhes do Lead</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalDetalhesBody">
+                <!-- Conteúdo carregado dinamicamente -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarLead()">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let leadsData = [];
+let leadAtual = null;
+
+async function carregarLeads() {
+    try {
+        const response = await fetch('/admin/api/leads');
+        const data = await response.json();
+        
+        leadsData = data.leads || [];
+        
+        // Atualizar estatísticas
+        document.getElementById('totalLeads').textContent = data.total || 0;
+        document.getElementById('leadsQualificados').textContent = data.qualificados || 0;
+        document.getElementById('leadsNegociacao').textContent = data.negociacao || 0;
+        document.getElementById('leadsConvertidos').textContent = data.convertidos || 0;
+        
+        // Atualizar tabela
+        filtrarLeads();
+        
+    } catch (error) {
+        console.error('Erro ao carregar leads:', error);
+        document.getElementById('leadsTableBody').innerHTML = 
+            '<tr><td colspan="8" class="text-center text-danger">Erro ao carregar leads</td></tr>';
+    }
+}
+
+function filtrarLeads() {
+    const filtroStatus = document.getElementById('filtroStatus').value;
+    const filtroData = document.getElementById('filtroData').value;
+    const filtroOrigem = document.getElementById('filtroOrigem').value;
+    const busca = document.getElementById('busca').value.toLowerCase();
+    
+    let leadsFiltrados = leadsData.filter(lead => {
+        // Filtro de status
+        const passaStatus = filtroStatus === 'todos' || lead.status === filtroStatus;
+        
+        // Filtro de origem
+        const passaOrigem = filtroOrigem === 'todos' || lead.origem === filtroOrigem;
+        
+        // Filtro de data
+        const dataLead = new Date(lead.data_cadastro);
+        const hoje = new Date();
+        const inicioSemana = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - hoje.getDay());
+        const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        
+        let passaData = true;
+        if (filtroData === 'hoje') passaData = dataLead.toDateString() === hoje.toDateString();
+        else if (filtroData === 'semana') passaData = dataLead >= inicioSemana;
+        else if (filtroData === 'mes') passaData = dataLead >= inicioMes;
+        
+        // Filtro de busca
+        const passaBusca = busca === '' || 
+            lead.nome.toLowerCase().includes(busca) || 
+            lead.telefone.includes(busca) ||
+            (lead.email && lead.email.toLowerCase().includes(busca));
+        
+        return passaStatus && passaOrigem && passaData && passaBusca;
+    });
+    
+    atualizarTabela(leadsFiltrados);
+}
+
+function atualizarTabela(leads) {
+    const tbody = document.getElementById('leadsTableBody');
+    
+    if (leads.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center">Nenhum lead encontrado</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = leads.map(lead => `
+        <tr>
+            <td>${lead.nome}</td>
+            <td>${lead.telefone}</td>
+            <td>${lead.email || '-'}</td>
+            <td><span class="badge bg-secondary">${lead.origem}</span></td>
+            <td>${getStatusBadge(lead.status)}</td>
+            <td><span class="badge ${getScoreClass(lead.score)}">${lead.score || 0}</span></td>
+            <td>${new Date(lead.data_cadastro).toLocaleDateString('pt-BR')}</td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="verDetalhes('${lead._id}')">
+                    <i class="bi bi-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-success" onclick="abrirWhatsApp('${lead.telefone}')">
+                    <i class="bi bi-whatsapp"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'novo': '<span class="badge bg-info">Novo</span>',
+        'qualificado': '<span class="badge bg-primary">Qualificado</span>',
+        'negociacao': '<span class="badge bg-warning">Em Negociação</span>',
+        'convertido': '<span class="badge bg-success">Convertido</span>',
+        'perdido': '<span class="badge bg-danger">Perdido</span>'
+    };
+    return badges[status] || '<span class="badge bg-secondary">-</span>';
+}
+
+function getScoreClass(score) {
+    if (score >= 80) return 'bg-success';
+    if (score >= 50) return 'bg-warning';
+    return 'bg-danger';
+}
+
+async function verDetalhes(leadId) {
+    try {
+        leadAtual = leadsData.find(l => l._id === leadId);
+        if (!leadAtual) return;
+        
+        const modalBody = document.getElementById('modalDetalhesBody');
+        modalBody.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Informações Pessoais:</h6>
+                    <div class="mb-3">
+                        <label class="form-label">Nome:</label>
+                        <input type="text" class="form-control" id="editNome" value="${leadAtual.nome}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Telefone:</label>
+                        <input type="text" class="form-control" id="editTelefone" value="${leadAtual.telefone}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email:</label>
+                        <input type="email" class="form-control" id="editEmail" value="${leadAtual.email || ''}">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6>Status e Origem:</h6>
+                    <div class="mb-3">
+                        <label class="form-label">Status:</label>
+                        <select class="form-select" id="editStatus">
+                            <option value="novo" ${leadAtual.status === 'novo' ? 'selected' : ''}>Novo</option>
+                            <option value="qualificado" ${leadAtual.status === 'qualificado' ? 'selected' : ''}>Qualificado</option>
+                            <option value="negociacao" ${leadAtual.status === 'negociacao' ? 'selected' : ''}>Em Negociação</option>
+                            <option value="convertido" ${leadAtual.status === 'convertido' ? 'selected' : ''}>Convertido</option>
+                            <option value="perdido" ${leadAtual.status === 'perdido' ? 'selected' : ''}>Perdido</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Origem:</label>
+                        <select class="form-select" id="editOrigem">
+                            <option value="whatsapp" ${leadAtual.origem === 'whatsapp' ? 'selected' : ''}>WhatsApp</option>
+                            <option value="site" ${leadAtual.origem === 'site' ? 'selected' : ''}>Site</option>
+                            <option value="indicacao" ${leadAtual.origem === 'indicacao' ? 'selected' : ''}>Indicação</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Score (0-100):</label>
+                        <input type="number" class="form-control" id="editScore" value="${leadAtual.score || 0}" min="0" max="100">
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6>Observações:</h6>
+                    <textarea class="form-control" id="editObservacoes" rows="3">${leadAtual.observacoes || ''}</textarea>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6>Histórico de Interações:</h6>
+                    <div class="list-group">
+                        ${leadAtual.interacoes ? leadAtual.interacoes.map(int => `
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">${int.tipo}</h6>
+                                    <small>${new Date(int.data).toLocaleString('pt-BR')}</small>
+                                </div>
+                                <p class="mb-1">${int.descricao}</p>
+                            </div>
+                        `).join('') : '<p class="text-muted">Nenhuma interação registrada</p>'}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Erro ao carregar detalhes:', error);
+        alert('Erro ao carregar detalhes do lead');
+    }
+}
+
+async function salvarLead() {
+    if (!leadAtual) return;
+    
+    try {
+        const dadosAtualizados = {
+            nome: document.getElementById('editNome').value,
+            telefone: document.getElementById('editTelefone').value,
+            email: document.getElementById('editEmail').value,
+            status: document.getElementById('editStatus').value,
+            origem: document.getElementById('editOrigem').value,
+            score: parseInt(document.getElementById('editScore').value),
+            observacoes: document.getElementById('editObservacoes').value
+        };
+        
+        const response = await fetch(`/admin/api/leads/${leadAtual._id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(dadosAtualizados)
+        });
+        
+        if (response.ok) {
+            alert('Lead atualizado com sucesso!');
+            bootstrap.Modal.getInstance(document.getElementById('modalDetalhes')).hide();
+            carregarLeads();
+        } else {
+            alert('Erro ao atualizar lead');
+        }
+    } catch (error) {
+        console.error('Erro ao salvar:', error);
+        alert('Erro ao salvar alterações');
+    }
+}
+
+function abrirWhatsApp(telefone) {
+    window.open(`https://wa.me/${telefone.replace(/\D/g, '')}`, '_blank');
+}
+
+function exportarLeads() {
+    window.location.href = '/admin/api/leads/export';
+}
+
+function atualizarLista() {
+    carregarLeads();
+}
+
+// Carregar ao iniciar
+carregarLeads();
+
+// Atualizar a cada minuto
+setInterval(carregarLeads, 60000);
+</script>
+
+<style>
+.border-left-primary {
+    border-left: 0.25rem solid #6c5ce7 !important;
+}
+.border-left-success {
+    border-left: 0.25rem solid #28a745 !important;
+}
+.border-left-info {
+    border-left: 0.25rem solid #17a2b8 !important;
+}
+.border-left-warning {
+    border-left: 0.25rem solid #ffc107 !important;
+}
+</style>
+{% endblock %}

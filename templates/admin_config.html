@@ -1,0 +1,41 @@
+{% extends "admin_base.html" %}
+{% block title %}Configurações{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-gear"></i> Configurações do Sistema</h1>
+</div>
+<div class="row">
+    <div class="col-md-6">
+        <div class="stat-card">
+            <h4>Status das Integrações</h4>
+            <hr>
+            <div class="mb-3">
+                <strong>OpenAI:</strong> {{config.openai_status}}
+            </div>
+            <div class="mb-3">
+                <strong>MongoDB:</strong> {{config.mongodb_status}}
+            </div>
+            <div class="mb-3">
+                <strong>Z-API (WhatsApp):</strong> {{config.zapi_status}}
+            </div>
+            <div class="mb-3">
+                <strong>Instagram:</strong> {{config.instagram_status}}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="stat-card">
+            <h4>Webhooks URLs</h4>
+            <hr>
+            <div class="mb-3">
+                <strong>WhatsApp:</strong>
+                <input type="text" class="form-control mt-2" value="{{webhooks.whatsapp}}" readonly>
+            </div>
+            <div class="mb-3">
+                <strong>Instagram:</strong>
+                <input type="text" class="form-control mt-2" value="{{webhooks.instagram}}" readonly>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
