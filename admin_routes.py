@@ -34,7 +34,7 @@ db = mongo_client["mia_bot"] if mongo_client else None
 async def admin_dashboard(request: Request):
     """Dashboard principal com estatísticas gerais"""
     try:
-        if not db:
+        if db is None:  # ✅ CORRIGIDO
             return templates.TemplateResponse("admin_dashboard.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -99,7 +99,7 @@ async def admin_dashboard(request: Request):
 async def admin_pipeline(request: Request):
     """Visualização do pipeline de vendas (funil)"""
     try:
-        if not db:
+        if db is None:  # ✅ CORRIGIDO
             return templates.TemplateResponse("admin_pipeline.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -151,7 +151,7 @@ async def admin_pipeline(request: Request):
 async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Optional[str] = None):
     """Gestão completa de leads com filtros"""
     try:
-        if not db:
+        if db is None:  # ✅ CORRIGIDO
             return templates.TemplateResponse("admin_leads.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -204,7 +204,7 @@ async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Op
 async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
     """Gerenciar transferências para atendimento humano"""
     try:
-        if not db:
+        if db is None:  # ✅ CORRIGIDO
             return templates.TemplateResponse("admin_transfers.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -248,7 +248,7 @@ async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
 async def admin_documents(request: Request, status: Optional[str] = None):
     """Visualizar documentos analisados pelo GPT-4 Vision"""
     try:
-        if not db:
+        if db is None:  # ✅ CORRIGIDO
             return templates.TemplateResponse("admin_documents.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -297,7 +297,7 @@ async def admin_config(request: Request):
         # Verificar status das integrações
         config = {
             "openai_status": "✅ Configurado" if os.getenv("OPENAI_API_KEY") else "❌ Não configurado",
-            "mongodb_status": "✅ Conectado" if db else "❌ Não conectado",
+            "mongodb_status": "✅ Conectado" if db is not None else "❌ Não conectado",  # ✅ CORRIGIDO
             "zapi_status": "✅ Configurado" if os.getenv("ZAPI_TOKEN") else "❌ Não configurado",
             "instagram_status": "⚠️ Opcional",
             "render_url": os.getenv("RENDER_EXTERNAL_URL", "https://mia-atendimento.onrender.com"),
@@ -331,7 +331,7 @@ async def admin_config(request: Request):
 async def api_stats():
     """Retornar estatísticas em JSON"""
     try:
-        if not db:
+        if db is None:  # ✅ CORRIGIDO
             raise HTTPException(status_code=503, detail="MongoDB não disponível")
         
         stats = {
