@@ -591,4 +591,63 @@ async def diagnostic_templates():
     
     html_parts.append("</body></html>")
     return "".join(html_parts)
+@app.get("/diagnostic/jinja", response_class=HTMLResponse)
+async def diagnostic_jinja():
+    """Diagnóstico configuração Jinja2"""
+    
+    html_parts = ["<html><head><style>body{font-family:monospace;padding:20px;background:#1a1a1a;color:#0f0;}pre{background:#000;padding:10px;border:1px solid #0f0;}</style></head><body>"]
+    html_parts.append("<h1>🔍 DIAGNÓSTICO JINJA2</h1>")
+    
+    # 1. Verificar objeto templates do main
+    html_parts.append("<h2>📦 Objeto 'templates' do main.py:</h2>")
+    try:
+        html_parts.append(f"<pre>Type: {type(templates)}\n")
+        html_parts.append(f"Directory: {templates.directory if hasattr(templates, 'directory') else 'N/A'}\n")
+        if hasattr(templates, 'env') and hasattr(templates.env, 'loader'):
+            loader = templates.env.loader
+            html_parts.append(f"Loader: {type(loader)}\n")
+            if hasattr(loader, 'searchpath'):
+                html_parts.append(f"Searchpath: {loader.searchpath}\n")
+        html_parts.append("</pre>")
+    except Exception as e:
+        html_parts.append(f"<pre style='color:red;'>❌ Erro: {e}</pre>")
+    
+    # 2. Verificar objeto templates do admin_training_routes
+    html_parts.append("<h2>📦 Objeto 'templates' do admin_training_routes.py:</h2>")
+    try:
+        from admin_training_routes import templates as training_templates
+        html_parts.append(f"<pre>Type: {type(training_templates)}\n")
+        html_parts.append(f"Directory: {training_templates.directory if hasattr(training_templates, 'directory') else 'N/A'}\n")
+        if hasattr(training_templates, 'env') and hasattr(training_templates.env, 'loader'):
+            loader = training_templates.env.loader
+            html_parts.append(f"Loader: {type(loader)}\n")
+            if hasattr(loader, 'searchpath'):
+                html_parts.append(f"Searchpath: {loader.searchpath}\n")
+        html_parts.append("</pre>")
+    except Exception as e:
+        html_parts.append(f"<pre style='color:red;'>❌ Erro ao importar: {e}</pre>")
+    
+    # 3. Tentar renderizar manualmente
+    html_parts.append("<h2>🧪 Teste de renderização manual:</h2>")
+    try:
+        from jinja2 import Environment, FileSystemLoader
+        import os
+        
+        template_dir = os.path.join(os.getcwd(), "templates")
+        html_parts.append(f"<pre>Template dir absoluto: {template_dir}\n")
+        html_parts.append(f"Dir existe? {os.path.exists(template_dir)}\n")
+        
+        env = Environment(loader=FileSystemLoader(template_dir))
+        html_parts.append(f"Templates disponíveis: {env.list_templates()[:20]}\n")
+        
+        # Tentar carregar admin_treinamento.html
+        template = env.get_template("admin_treinamento.html")
+        html_parts.append(f"✅ Template carregado com sucesso!\n")
+        html_parts.append(f"Template name: {template.name}\n")
+        html_parts.append("</pre>")
+    except Exception as e:
+        html_parts.append(f"<pre style='color:red;'>❌ Erro: {e}</pre>")
+    
+    html_parts.append("</body></html>")
+    return "".join(html_parts)
 
