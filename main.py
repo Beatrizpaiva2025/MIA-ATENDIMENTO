@@ -27,6 +27,7 @@ from io import BytesIO
 
 # Importar rotas do admin
 from admin_routes import router as admin_router
+from admin_training_routes import router as training_router
 from admin_controle_routes import router as controle_router
 
 # ============================================================
@@ -55,6 +56,7 @@ db = mongo_client["mia_bot"]
 # INCLUIR ROTAS DO PAINEL ADMIN
 # ============================================================
 app.include_router(admin_router)
+app.include_router(training_router)
 app.include_router(controle_router)
 
 # ============================================================
