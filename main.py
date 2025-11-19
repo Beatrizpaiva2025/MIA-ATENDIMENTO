@@ -542,3 +542,53 @@ async def startup_event():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+    # ============================================================
+# ROTA DE DIAGNÓSTICO TEMPORÁRIA
+# ============================================================
+import os
+from pathlib import Path
+from fastapi.responses import HTMLResponse
+
+@app.get("/diagnostic/templates", response_class=HTMLResponse)
+async def diagnostic_templates():
+    """Diagnóstico completo de templates"""
+    
+    html_parts = ["<html><head><style>body{font-family:monospace;padding:20px;background:#1a1a1a;color:#0f0;}pre{background:#000;padding:10px;border:1px solid #0f0;}</style></head><body>"]
+    html_parts.append("<h1>🔍 DIAGNÓSTICO DE TEMPLATES</h1>")
+    
+    # 1. Diretório atual
+    html_parts.append("<h2>📁 Diretório de trabalho:</h2>")
+    html_parts.append(f"<pre>{os.getcwd()}</pre>")
+    
+    # 2. Listar pasta templates
+    html_parts.append("<h2>📂 Conteúdo da pasta templates/:</h2>")
+    templates_path = Path("templates")
+    if templates_path.exists():
+        html_parts.append("<pre>")
+        for file in sorted(templates_path.rglob("*")):
+            if file.is_file():
+                size = file.stat().st_size
+                html_parts.append(f"{file.relative_to('.')} - {size:,} bytes\n")
+        html_parts.append("</pre>")
+    else:
+        html_parts.append("<pre style='color:red;'>❌ PASTA TEMPLATES NÃO EXISTE!</pre>")
+    
+    # 3. Procurar arquivos treinamento
+    html_parts.append("<h2>🔎 Procurando arquivos com 'treinamento' ou 'training':</h2>")
+    html_parts.append("<pre>")
+    for pattern in ["*treinamento*", "*training*"]:
+        for file in Path(".").rglob(pattern):
+            html_parts.append(f"{file} - {'DIR' if file.is_dir() else f'{file.stat().st_size} bytes'}\n")
+    html_parts.append("</pre>")
+    
+    # 4. Listar TODOS arquivos .html no projeto
+    html_parts.append("<h2>📄 TODOS os arquivos .html no projeto:</h2>")
+    html_parts.append("<pre>")
+    for file in Path(".").rglob("*.html"):
+        size = file.stat().st_size
+        html_parts.append(f"{file} - {size:,} bytes\n")
+    html_parts.append("</pre>")
+    
+    html_parts.append("</body></html>")
+    return "".join(html_parts)
+
