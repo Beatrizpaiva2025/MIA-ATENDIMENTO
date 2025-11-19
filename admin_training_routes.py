@@ -1,5 +1,5 @@
 """
-admin_training_routes.py - VERSÃO CORRIGIDA
+admin_training_routes.py - VERSÃO CORRIGIDA COM VARIÁVEIS EM PORTUGUÊS
 Rotas para gerenciamento de treinamento da IA
 """
 
@@ -104,12 +104,14 @@ async def training_page(request: Request):
         
         logger.info(f"✅ Renderizando template (bot_id: {bot_id})")
         
+        # ✅ CORREÇÃO: Passar variáveis em português E inglês (compatibilidade)
         return templates.TemplateResponse(
             "admin_treinamento.html",
             {
                 "request": request,
                 "bot_id": bot_id,
-                "personality": bot.get("personality", {}),
+                "personalidade": bot.get("personality", {}),  # ✅ Português
+                "personality": bot.get("personality", {}),     # ✅ Inglês (compatibilidade)
                 "knowledge_count": len(bot.get("knowledge_base", [])),
                 "faq_count": len(bot.get("faqs", []))
             }
