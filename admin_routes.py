@@ -92,6 +92,56 @@ async def admin_dashboard(request: Request):
         })
 
 # ============================================
+# API: DASHBOARD DATA (para atualização em tempo real)
+# ============================================
+
+@router.get("/api/dashboard-data")
+async def api_dashboard_data():
+    """Retorna dados do dashboard em JSON para atualização em tempo real"""
+    try:
+        if db is None:
+            raise HTTPException(status_code=500, detail="MongoDB não configurado")
+        
+        # Importar funções do controle_atendimento
+        from controle_atendimento import estatisticas_atendimento
+        
+        # Buscar estatísticas
+        stats_controle = await estatisticas_atendimento()
+        
+        # Conversas hoje
+        hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        conversas_hoje = await db.conversas.count_documents({
+            "timestamp": {"$gte": hoje}
+        })
+        
+        # Leads qualificados
+        leads_qualificados = await db.leads.count_documents({
+            "estagio": {"$in": ["QUALIFICADO", "PROPOSTA", "NEGOCIACAO"]}
+        })
+        
+        # Taxa de conversão (aproximada)
+        total_conversas = await db.conversas.count_documents({})
+        taxa_conversao = (leads_qualificados / total_conversas * 100) if total_conversas > 0 else 0
+        
+        # Tempo médio de resposta (simulado por enquanto)
+        tempo_medio = "0s"
+        
+        return JSONResponse({
+            "conversas_hoje": conversas_hoje,
+            "leads_qualificados": leads_qualificados,
+            "taxa_conversao": round(taxa_conversao, 1),
+            "tempo_medio_resposta": tempo_medio,
+            "ia_ativa": stats_controle.get("ia_ativa", 0),
+            "atendimento_humano": stats_controle.get("humano_ativo", 0),
+            "ia_desligada": stats_controle.get("ia_desligada", 0),
+            "total": stats_controle.get("total", 0)
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar dados do dashboard: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================
 # PIPELINE DE VENDAS
 # ============================================
 
