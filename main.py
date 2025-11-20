@@ -120,32 +120,37 @@ Certidão de Nascimento, Casamento, Óbito, Diploma, Histórico Escolar, CNH, RG
 # ============================================================
 # FUNÇÃO: BAIXAR MÍDIA DA Z-API
 # ============================================================
-async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
-    """
-    Baixa arquivo de mídia (imagem/áudio) da Z-API
-    
-    Args:
-        media_url: URL da mídia fornecida pela Z-API
-    
-    Returns:
-        bytes: Conteúdo do arquivo ou None se falhar
-    """
+async def send_whatsapp_message(phone: str, message: str):
+    """Enviar mensagem via Z-API"""
     try:
-        logger.info(f"📥 Baixando mídia: {media_url[:50]}...")
+        # TESTE 1: URL simples
+        url = f"https://api.z-api.io/instances/3E4255284F9C20BCBD775E3E11E99CA6/token/4EDA979AE181FE76311C51F5/send-text"
         
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.get(media_url)
+        payload = {
+            "phone": phone,
+            "message": message
+        }
+        
+        logger.info(f"🔍 TESTE - URL: {url}")
+        logger.info(f"🔍 TESTE - Payload: {payload}")
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload)
+            
+            logger.info(f"🔍 TESTE - Status: {response.status_code}")
+            logger.info(f"🔍 TESTE - Response: {response.text}")
             
             if response.status_code == 200:
-                logger.info(f"✅ Mídia baixada: {len(response.content)} bytes")
-                return response.content
+                logger.info(f"✅ Mensagem enviada para {phone}")
+                return True
             else:
-                logger.error(f"❌ Erro ao baixar mídia: {response.status_code}")
-                return None
+                logger.error(f"❌ Erro: {response.status_code} - {response.text}")
+                return False
                 
     except Exception as e:
-        logger.error(f"❌ Erro ao baixar mídia: {str(e)}")
-        return None
+        logger.error(f"❌ Erro ao enviar: {str(e)}")
+        return False
+
 
 # ============================================================
 # FUNÇÃO: PROCESSAR IMAGEM COM GPT-4 VISION
