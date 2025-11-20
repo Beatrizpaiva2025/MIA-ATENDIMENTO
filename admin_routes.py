@@ -1,648 +1,348 @@
-# ============================================================
-# VERSÃO COMPLETA MULTIMÍDIA + PAINEL ADMIN - main.py
-# ============================================================
-# Bot WhatsApp com suporte a:
-# ✅ Mensagens de texto
-# ✅ Imagens (GPT-4 Vision) - Leitura de documentos
-# ✅ Áudios (Whisper) - Transcrição de voz
-# ✅ Painel Administrativo Completo
-# ✅ TREINAMENTO DINÂMICO DO MONGODB
-# ============================================================
+"""
+MIA Bot - Rotas do Painel Administrativo
+Sistema de gestão omnichannel com pipeline de vendas, CRM e análise de documentos
+"""
 
-from fastapi import FastAPI, Request, HTTPException, Form
-from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict
 import os
-import httpx
-from openai import OpenAI
-from datetime import datetime
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 import logging
-from typing import Optional, Dict, Any, List
-from pydantic import BaseModel
-import traceback
-import json
-import base64
-from io import BytesIO
 
-# Importar rotas do admin
-from admin_routes import router as admin_router
-from admin_training_routes import router as training_router
-from admin_controle_routes import router as controle_router
-
-# ============================================================
-# CONFIGURAÇÃO DE LOGGING
-# ============================================================
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Configurar logging
 logger = logging.getLogger(__name__)
 
-# ============================================================
-# INICIALIZAÇÃO
-# ============================================================
-app = FastAPI(title="WhatsApp AI Platform - Legacy Translations")
-
-# Templates
+# Configurar templates
 templates = Jinja2Templates(directory="templates")
 
-# Clientes
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-# Usar mesma conexão do admin
-from admin_training_routes import get_database
-db = get_database()
+# Criar router
+router = APIRouter(prefix="/admin", tags=["Admin Panel"])
 
-# ============================================================
-# INCLUIR ROTAS DO PAINEL ADMIN
-# ============================================================
-app.include_router(admin_router)
-app.include_router(training_router)
-app.include_router(controle_router)
+# Conectar MongoDB
+MONGODB_URI = os.getenv("MONGODB_URI")
+mongo_client = MongoClient(MONGODB_URI) if MONGODB_URI else None
+db = mongo_client["mia_bot"] if mongo_client else None
 
-# ============================================================
-# CONFIGURAÇÕES Z-API
-# ============================================================
-ZAPI_INSTANCE_ID = os.getenv("ZAPI_INSTANCE_ID")
-ZAPI_TOKEN = os.getenv("ZAPI_TOKEN")
-ZAPI_CLIENT_TOKEN = os.getenv("ZAPI_CLIENT_TOKEN")
-ZAPI_URL = os.getenv("ZAPI_URL", "https://api.z-api.io")
+# ============================================
+# DASHBOARD PRINCIPAL
+# ============================================
 
-# ============================================================
-# MODELOS PYDANTIC
-# ============================================================
-class Message(BaseModel):
-    phone: str
-    message: str
-    timestamp: datetime = datetime.now()
-    role: str = "user"
-    message_type: str = "text"
-
-# ============================================================
-# FUNÇÃO: BUSCAR TREINAMENTO DINÂMICO DO MONGODB
-# ============================================================
-async def get_bot_training() -> str:
-    """Busca treinamento dinâmico do bot Mia no MongoDB"""
+@router.get("/", response_class=HTMLResponse)
+async def admin_dashboard(request: Request):
+    """Dashboard principal com estatísticas gerais"""
     try:
-        bot = await db.bots.find_one({"name": "Mia"})
+        if db is None:  # ✅ CORRIGIDO
+            return templates.TemplateResponse("admin_dashboard.html", {
+                "request": request,
+                "error": "MongoDB não configurado"
+            })
         
-        if not bot:
-            logger.warning("⚠️ Bot Mia não encontrado no banco, usando padrão")
-            return """Você é a Mia, assistente da Legacy Translations.
-Responda de forma profissional e educada."""
+        # Buscar estatísticas
+        total_conversas = db.conversas.count_documents({})
+        total_leads = db.leads.count_documents({})
+        total_documentos = db.documentos.count_documents({})
+        total_transferencias = db.transferencias.count_documents({"status": "PENDENTE"})
         
-        # Extrair dados do bot
-        personality = bot.get("personality", {})
-        knowledge_base = bot.get("knowledge_base", [])
-        faqs = bot.get("faqs", [])
+        # Conversas por canal (últimos 7 dias)
+        date_limit = datetime.now() - timedelta(days=7)
+        conversas_whatsapp = db.conversas.count_documents({
+            "canal": "WhatsApp",
+            "timestamp": {"$gte": date_limit}
+        })
+        conversas_instagram = db.conversas.count_documents({
+            "canal": "Instagram",
+            "timestamp": {"$gte": date_limit}
+        })
+        conversas_webchat = db.conversas.count_documents({
+            "canal": "WebChat",
+            "timestamp": {"$gte": date_limit}
+        })
         
-        # Montar prompt dinâmico
-        prompt_parts = []
+        # Últimas conversas
+        ultimas_conversas = list(db.conversas.find().sort("timestamp", -1).limit(10))
         
-        # Objetivos (goals)
-        if personality.get("goals"):
-            goals_text = "\n".join(personality["goals"]) if isinstance(personality["goals"], list) else personality["goals"]
-            prompt_parts.append(f"**OBJETIVOS:**\n{goals_text}")
+        # Formatar datas
+        for conv in ultimas_conversas:
+            conv["timestamp_formatted"] = conv["timestamp"].strftime("%d/%m/%Y %H:%M")
         
-        # Tom de voz
-        if personality.get("tone"):
-            prompt_parts.append(f"**TOM DE VOZ:**\n{personality['tone']}")
-        
-        # Restrições
-        if personality.get("restrictions"):
-            restrictions_text = "\n".join(personality["restrictions"]) if isinstance(personality["restrictions"], list) else personality["restrictions"]
-            prompt_parts.append(f"**RESTRIÇÕES:**\n{restrictions_text}")
-        
-        # Base de conhecimento
-        if knowledge_base:
-            kb_text = "\n\n".join([
-                f"**{item.get('title', 'Info')}:**\n{item.get('content', '')}"
-                for item in knowledge_base
-            ])
-            prompt_parts.append(f"**BASE DE CONHECIMENTO:**\n{kb_text}")
-        
-        # FAQs
-        if faqs:
-            faq_text = "\n\n".join([
-                f"P: {item.get('question', '')}\nR: {item.get('answer', '')}"
-                for item in faqs
-            ])
-            prompt_parts.append(f"**PERGUNTAS FREQUENTES:**\n{faq_text}")
-        
-        final_prompt = "\n\n".join(prompt_parts)
-        
-        logger.info(f"✅ Treinamento carregado do MongoDB ({len(knowledge_base)} conhecimentos, {len(faqs)} FAQs)")
-        
-        return final_prompt
-        
-    except Exception as e:
-        logger.error(f"❌ Erro ao buscar treinamento: {e}")
-        return """Você é a Mia, assistente da Legacy Translations.
-Responda de forma profissional e educada."""
-
-# ============================================================
-# FUNÇÃO: ENVIAR MENSAGEM WHATSAPP
-# ============================================================
-async def send_whatsapp_message(phone: str, message: str):
-    """Envia mensagem via Z-API com Client-Token"""
-    try:
-        # Construir URL completa
-        url = f"https://api.z-api.io/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text"
-        
-        # Headers COM Client-Token
-        headers = {
-            "Content-Type": "application/json",
-            "Client-Token": ZAPI_CLIENT_TOKEN or ""
+        stats = {
+            "total_conversas": total_conversas,
+            "total_leads": total_leads,
+            "total_documentos": total_documentos,
+            "transferencias_pendentes": total_transferencias,
+            "conversas_whatsapp": conversas_whatsapp,
+            "conversas_instagram": conversas_instagram,
+            "conversas_webchat": conversas_webchat,
+            "ultimas_conversas": ultimas_conversas
         }
         
-        # Payload
-        payload = {
-            "phone": phone,
-            "message": message
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "stats": stats
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro no dashboard: {e}")
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "error": str(e)
+        })
+
+# ============================================
+# PIPELINE DE VENDAS
+# ============================================
+
+@router.get("/pipeline", response_class=HTMLResponse)
+async def admin_pipeline(request: Request):
+    """Visualização do pipeline de vendas (funil)"""
+    try:
+        if db is None:  # ✅ CORRIGIDO
+            return templates.TemplateResponse("admin_pipeline.html", {
+                "request": request,
+                "error": "MongoDB não configurado"
+            })
+        
+        # Leads por estágio do funil
+        pipeline_data = {
+            "novo": db.leads.count_documents({"estagio": "NOVO"}),
+            "contato_inicial": db.leads.count_documents({"estagio": "CONTATO_INICIAL"}),
+            "qualificado": db.leads.count_documents({"estagio": "QUALIFICADO"}),
+            "proposta": db.leads.count_documents({"estagio": "PROPOSTA"}),
+            "negociacao": db.leads.count_documents({"estagio": "NEGOCIACAO"}),
+            "fechado": db.leads.count_documents({"estagio": "FECHADO"}),
+            "perdido": db.leads.count_documents({"estagio": "PERDIDO"})
         }
         
-        # Logs de debug
-        logger.info(f"📤 Enviando mensagem para {phone}")
-        logger.info(f"🔑 Client-Token: {'Configurado' if headers['Client-Token'] else 'VAZIO'}")
+        # Leads por canal
+        leads_por_canal = {
+            "WhatsApp": db.leads.count_documents({"canal": "WhatsApp"}),
+            "Instagram": db.leads.count_documents({"canal": "Instagram"}),
+            "WebChat": db.leads.count_documents({"canal": "WebChat"})
+        }
         
-        # Enviar requisição COM headers
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            
-            logger.info(f"📊 Status Z-API: {response.status_code}")
-            logger.info(f"📊 Resposta: {response.text}")
-            
-            if response.status_code == 200:
-                logger.info(f"✅ Mensagem enviada com sucesso")
-                return True
-            else:
-                logger.error(f"❌ Erro ao enviar: {response.status_code} - {response.text}")
-                return False
-                
-    except Exception as e:
-        logger.error(f"❌ Exceção ao enviar mensagem: {str(e)}")
-        logger.error(traceback.format_exc())
-        return False
-
-# ============================================================
-# FUNÇÃO: BAIXAR MÍDIA DA Z-API
-# ============================================================
-async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
-    """Baixa mídia (imagem/áudio) da Z-API"""
-    try:
-        logger.info(f"⬇️ Baixando mídia: {media_url[:100]}")
+        # Leads recentes
+        leads_recentes = list(db.leads.find().sort("timestamp", -1).limit(20))
         
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.get(media_url)
-            
-            if response.status_code == 200:
-                logger.info(f"✅ Mídia baixada ({len(response.content)} bytes)")
-                return response.content
-            else:
-                logger.error(f"❌ Erro ao baixar mídia: {response.status_code}")
-                return None
-                
-    except Exception as e:
-        logger.error(f"❌ Erro ao baixar mídia: {str(e)}")
-        return None
-
-# ============================================================
-# FUNÇÃO: PROCESSAR IMAGEM COM GPT-4 VISION
-# ============================================================
-async def process_image_with_vision(image_bytes: bytes, phone: str) -> str:
-    """Analisa imagem com GPT-4 Vision"""
-    try:
-        logger.info(f"🖼️ Processando imagem com Vision ({len(image_bytes)} bytes)")
+        for lead in leads_recentes:
+            lead["timestamp_formatted"] = lead["timestamp"].strftime("%d/%m/%Y %H:%M")
         
-        # Converter para base64
-        base64_image = base64.b64encode(image_bytes).decode('utf-8')
-        
-        # Buscar treinamento dinâmico
-        training_prompt = await get_bot_training()
-        
-        # Chamar GPT-4 Vision
-        response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"""{training_prompt}
-
-**TAREFA ESPECIAL - ANÁLISE DE IMAGEM:**
-Você recebeu uma imagem de documento. Analise e forneça:
-1. Tipo de documento (certidão, diploma, contrato, etc)
-2. Idioma detectado
-3. Número estimado de páginas (se visível)
-4. Orçamento baseado nas regras de preço do treinamento
-5. Prazo de entrega
-
-Seja direto e objetivo na resposta."""
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Analise este documento e me dê um orçamento de tradução."
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            max_tokens=800
-        )
-        
-        analysis = response.choices[0].message.content
-        
-        # Salvar no banco
-        await db.conversas.insert_one({
-            "phone": phone,
-            "message": "[IMAGEM ENVIADA]",
-            "role": "user",
-            "timestamp": datetime.now(),
-            "canal": "WhatsApp",
-            "type": "image"
+        return templates.TemplateResponse("admin_pipeline.html", {
+            "request": request,
+            "pipeline": pipeline_data,
+            "leads_por_canal": leads_por_canal,
+            "leads_recentes": leads_recentes
         })
         
-        await db.conversas.insert_one({
-            "phone": phone,
-            "message": analysis,
-            "role": "assistant",
-            "timestamp": datetime.now(),
-            "canal": "WhatsApp"
+    except Exception as e:
+        logger.error(f"Erro no pipeline: {e}")
+        return templates.TemplateResponse("admin_pipeline.html", {
+            "request": request,
+            "error": str(e)
+        })
+
+# ============================================
+# GESTÃO DE LEADS (CRM)
+# ============================================
+
+@router.get("/leads", response_class=HTMLResponse)
+async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Optional[str] = None):
+    """Gestão completa de leads com filtros"""
+    try:
+        if db is None:  # ✅ CORRIGIDO
+            return templates.TemplateResponse("admin_leads.html", {
+                "request": request,
+                "error": "MongoDB não configurado"
+            })
+        
+        # Construir filtro
+        filtro = {}
+        if canal:
+            filtro["canal"] = canal
+        if estagio:
+            filtro["estagio"] = estagio
+        
+        # Buscar leads
+        leads = list(db.leads.find(filtro).sort("timestamp", -1).limit(100))
+        
+        # Formatar dados
+        for lead in leads:
+            lead["timestamp_formatted"] = lead["timestamp"].strftime("%d/%m/%Y %H:%M")
+            lead["_id"] = str(lead["_id"])
+        
+        # Estatísticas
+        total_leads = len(leads)
+        leads_quentes = db.leads.count_documents({**filtro, "temperatura": "QUENTE"})
+        leads_mornos = db.leads.count_documents({**filtro, "temperatura": "MORNO"})
+        leads_frios = db.leads.count_documents({**filtro, "temperatura": "FRIO"})
+        
+        return templates.TemplateResponse("admin_leads.html", {
+            "request": request,
+            "leads": leads,
+            "total_leads": total_leads,
+            "leads_quentes": leads_quentes,
+            "leads_mornos": leads_mornos,
+            "leads_frios": leads_frios,
+            "filtro_canal": canal,
+            "filtro_estagio": estagio
         })
         
-        logger.info(f"✅ Análise Vision concluída")
-        return analysis
-        
     except Exception as e:
-        logger.error(f"❌ Erro no Vision: {str(e)}")
-        logger.error(traceback.format_exc())
-        return "Desculpe, não consegui analisar a imagem. Pode me dizer quantas páginas tem o documento?"
+        logger.error(f"Erro na gestão de leads: {e}")
+        return templates.TemplateResponse("admin_leads.html", {
+            "request": request,
+            "error": str(e)
+        })
 
-# ============================================================
-# FUNÇÃO: PROCESSAR ÁUDIO COM WHISPER
-# ============================================================
-async def process_audio_with_whisper(audio_bytes: bytes, phone: str) -> Optional[str]:
-    """Transcreve áudio com Whisper"""
+# ============================================
+# TRANSFERÊNCIAS PARA HUMANO
+# ============================================
+
+@router.get("/transfers", response_class=HTMLResponse)
+async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
+    """Gerenciar transferências para atendimento humano"""
     try:
-        logger.info(f"🎤 Processando áudio com Whisper ({len(audio_bytes)} bytes)")
+        if db is None:  # ✅ CORRIGIDO
+            return templates.TemplateResponse("admin_transfers.html", {
+                "request": request,
+                "error": "MongoDB não configurado"
+            })
         
-        # Salvar temporariamente
-        temp_file = BytesIO(audio_bytes)
-        temp_file.name = "audio.ogg"
+        # Buscar transferências
+        filtro = {"status": status} if status else {}
+        transferencias = list(db.transferencias.find(filtro).sort("timestamp", -1).limit(50))
         
-        # Chamar Whisper
-        transcription = openai_client.audio.transcriptions.create(
-            model="whisper-1",
-            file=temp_file,
-            language="pt"  # Pode ser pt, en, es
-        )
+        # Formatar dados
+        for trans in transferencias:
+            trans["timestamp_formatted"] = trans["timestamp"].strftime("%d/%m/%Y %H:%M")
+            trans["_id"] = str(trans["_id"])
         
-        transcribed_text = transcription.text
+        # Estatísticas
+        total_pendentes = db.transferencias.count_documents({"status": "PENDENTE"})
+        total_em_atendimento = db.transferencias.count_documents({"status": "EM_ATENDIMENTO"})
+        total_concluidas = db.transferencias.count_documents({"status": "CONCLUIDO"})
         
-        # Salvar no banco
-        await db.conversas.insert_one({
-            "phone": phone,
-            "message": f"[ÁUDIO] {transcribed_text}",
-            "role": "user",
-            "timestamp": datetime.now(),
-            "canal": "WhatsApp",
-            "type": "audio"
+        return templates.TemplateResponse("admin_transfers.html", {
+            "request": request,
+            "transferencias": transferencias,
+            "total_pendentes": total_pendentes,
+            "total_em_atendimento": total_em_atendimento,
+            "total_concluidas": total_concluidas,
+            "filtro_status": status
         })
         
-        logger.info(f"✅ Áudio transcrito: {transcribed_text[:100]}")
-        return transcribed_text
-        
     except Exception as e:
-        logger.error(f"❌ Erro no Whisper: {str(e)}")
-        logger.error(traceback.format_exc())
-        return None
+        logger.error(f"Erro nas transferências: {e}")
+        return templates.TemplateResponse("admin_transfers.html", {
+            "request": request,
+            "error": str(e)
+        })
 
-# ============================================================
-# FUNÇÃO: BUSCAR CONTEXTO DA CONVERSA
-# ============================================================
-async def get_conversation_context(phone: str, limit: int = 10) -> List[Dict]:
-    """Busca últimas mensagens da conversa"""
-    try:
-        messages = await db.conversas.find(
-            {"phone": phone}
-        ).sort("timestamp", -1).limit(limit).to_list(length=limit)
-        
-        # Inverter para ordem cronológica
-        messages.reverse()
-        
-        return [
-            {"role": msg["role"], "content": msg["message"]}
-            for msg in messages
-        ]
-    except Exception as e:
-        logger.error(f"❌ Erro ao buscar contexto: {e}")
-        return []
+# ============================================
+# ANÁLISE DE DOCUMENTOS
+# ============================================
 
-# ============================================================
-# FUNÇÃO: PROCESSAR MENSAGEM COM IA
-# ============================================================
-async def process_message_with_ai(phone: str, message: str) -> str:
-    """Processar mensagem com GPT-4 usando treinamento dinâmico"""
+@router.get("/documents", response_class=HTMLResponse)
+async def admin_documents(request: Request, status: Optional[str] = None):
+    """Visualizar documentos analisados pelo GPT-4 Vision"""
     try:
-        # Buscar treinamento dinâmico do MongoDB
-        system_prompt = await get_bot_training()
+        if db is None:  # ✅ CORRIGIDO
+            return templates.TemplateResponse("admin_documents.html", {
+                "request": request,
+                "error": "MongoDB não configurado"
+            })
         
-        # Buscar contexto
-        context = await get_conversation_context(phone)
+        # Buscar documentos
+        filtro = {"status": status} if status else {}
+        documentos = list(db.documentos.find(filtro).sort("timestamp", -1).limit(50))
         
-        # Montar mensagens
-        messages = [
-            {"role": "system", "content": system_prompt}
-        ] + context + [
-            {"role": "user", "content": message}
-        ]
+        # Formatar dados
+        for doc in documentos:
+            doc["timestamp_formatted"] = doc["timestamp"].strftime("%d/%m/%Y %H:%M")
+            doc["_id"] = str(doc["_id"])
         
-        # Chamar GPT-4
-        response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            max_tokens=500,
-            temperature=0.7
-        )
+        # Estatísticas
+        total_documentos = len(documentos)
+        docs_aprovados = db.documentos.count_documents({"status": "APROVADO"})
+        docs_pendentes = db.documentos.count_documents({"status": "PENDENTE"})
+        docs_rejeitados = db.documentos.count_documents({"status": "REJEITADO"})
         
-        reply = response.choices[0].message.content
-        
-        # Salvar no banco
-        await db.conversas.insert_one({
-            "phone": phone,
-            "message": message,
-            "role": "user",
-            "timestamp": datetime.now(),
-            "canal": "WhatsApp"
+        return templates.TemplateResponse("admin_documents.html", {
+            "request": request,
+            "documentos": documentos,
+            "total_documentos": total_documentos,
+            "docs_aprovados": docs_aprovados,
+            "docs_pendentes": docs_pendentes,
+            "docs_rejeitados": docs_rejeitados,
+            "filtro_status": status
         })
         
-        await db.conversas.insert_one({
-            "phone": phone,
-            "message": reply,
-            "role": "assistant",
-            "timestamp": datetime.now(),
-            "canal": "WhatsApp"
+    except Exception as e:
+        logger.error(f"Erro na análise de documentos: {e}")
+        return templates.TemplateResponse("admin_documents.html", {
+            "request": request,
+            "error": str(e)
+        })
+
+# ============================================
+# CONFIGURAÇÕES DO SISTEMA
+# ============================================
+
+@router.get("/config", response_class=HTMLResponse)
+async def admin_config(request: Request):
+    """Configurações do sistema e integrações"""
+    try:
+        # Verificar status das integrações
+        config = {
+            "openai_status": "✅ Configurado" if os.getenv("OPENAI_API_KEY") else "❌ Não configurado",
+            "mongodb_status": "✅ Conectado" if db is not None else "❌ Não conectado",  # ✅ CORRIGIDO
+            "zapi_status": "✅ Configurado" if os.getenv("ZAPI_TOKEN") else "❌ Não configurado",
+            "instagram_status": "⚠️ Opcional",
+            "render_url": os.getenv("RENDER_EXTERNAL_URL", "https://mia-atendimento.onrender.com"),
+            "ambiente": os.getenv("ENVIRONMENT", "production")
+        }
+        
+        # Webhooks URLs
+        webhooks = {
+            "whatsapp": f"{config['render_url']}/webhook/whatsapp",
+            "instagram": f"{config['render_url']}/webhook/instagram"
+        }
+        
+        return templates.TemplateResponse("admin_config.html", {
+            "request": request,
+            "config": config,
+            "webhooks": webhooks
         })
         
-        return reply
-        
     except Exception as e:
-        logger.error(f"❌ Erro ao processar com IA: {str(e)}")
-        logger.error(traceback.format_exc())
-        return "Desculpe, tive um problema. Pode repetir?"
+        logger.error(f"Erro nas configurações: {e}")
+        return templates.TemplateResponse("admin_config.html", {
+            "request": request,
+            "error": str(e)
+        })
 
-# ============================================================
-# FUNÇÃO AUXILIAR: NORMALIZAR TELEFONE
-# ============================================================
-def normalize_phone(phone: str) -> str:
-    """Normaliza número de telefone para comparação"""
-    return ''.join(filter(str.isdigit, phone))[-10:]
+# ============================================
+# API ENDPOINTS (JSON)
+# ============================================
 
-# ============================================================
-# WEBHOOK: WHATSAPP (Z-API) - INTEGRADO
-# ============================================================
-@app.post("/webhook/whatsapp")
-async def webhook_whatsapp(request: Request):
-    """
-    Webhook principal para receber mensagens do WhatsApp via Z-API
-    Suporta: texto, imagens e áudios
-    """
+@router.get("/api/stats")
+async def api_stats():
+    """Retornar estatísticas em JSON"""
     try:
-        data = await request.json()
-        logger.info(f"📨 Webhook recebido: {json.dumps(data, indent=2)}")
+        if db is None:  # ✅ CORRIGIDO
+            raise HTTPException(status_code=503, detail="MongoDB não disponível")
         
-        # ============================================
-        # 🛑 CONTROLE DE ATIVAÇÃO DA IA
-        # ============================================
-        ia_enabled = os.getenv("IA_ENABLED", "true").lower() == "true"
-        em_manutencao = os.getenv("MANUTENCAO", "false").lower() == "true"
+        stats = {
+            "total_conversas": db.conversas.count_documents({}),
+            "total_leads": db.leads.count_documents({}),
+            "total_documentos": db.documentos.count_documents({}),
+            "transferencias_pendentes": db.transferencias.count_documents({"status": "PENDENTE"}),
+            "timestamp": datetime.now().isoformat()
+        }
         
-        # Extrair dados básicos
-        phone = data.get("phone", "")
-        message_id = data.get("messageId", "")
-        connected_phone = data.get("connectedPhone", "")
-        is_group = data.get("isGroup", False)
+        return stats
         
-        # 🚫 FILTRO: Ignorar mensagens de grupos
-        if is_group:
-            logger.info(f"🚫 Mensagem de grupo ignorada")
-            return JSONResponse({"status": "ignored", "reason": "group message"})
-        
-        # ✅ DETECÇÃO CORRETA DE TIPO DE MENSAGEM
-        # Z-API não envia "messageType", detectar pela presença dos campos
-        message_type = "text"  # padrão
-        
-        if "image" in data and data.get("image"):
-            message_type = "image"
-        elif "audio" in data and data.get("audio"):
-            message_type = "audio"
-        elif "text" in data and data.get("text"):
-            message_type = "text"
-        
-        logger.info(f"🔍 Tipo detectado: {message_type}")
-        
-        if not phone:
-            return JSONResponse({"status": "ignored", "reason": "no phone"})
-        
-        # Se em manutenção, responder e sair
-        if em_manutencao:
-            logger.info(f"🔧 Modo manutenção ativo - mensagem de {phone}")
-            if message_type == "text":
-                mensagem_manutencao = """🔧 *Sistema em Manutenção*
-
-Olá! Estamos melhorando nosso atendimento.
-Em breve voltaremos! 😊
-
-📞 Para urgências: (contato)"""
-                await send_whatsapp_message(phone, mensagem_manutencao)
-            return JSONResponse({"status": "maintenance"})
-        
-        # Se IA desabilitada, apenas logar e sair
-        if not ia_enabled:
-            logger.info(f"⏸️ IA desabilitada - mensagem de {phone} ignorada")
-            return JSONResponse({"status": "ia_disabled"})
-        
-        # ============================================
-        # ✅ PROCESSAR MENSAGEM DE TEXTO
-        # ============================================
-        if message_type == "text":
-            text = data.get("text", {}).get("message", "")
-            
-            if not text:
-                return JSONResponse({"status": "ignored", "reason": "empty text"})
-            
-            logger.info(f"💬 Texto de {phone}: {text}")
-            
-            # Processar com IA
-            reply = await process_message_with_ai(phone, text)
-            
-            # Enviar resposta
-            await send_whatsapp_message(phone, reply)
-            
-            return JSONResponse({"status": "processed", "type": "text"})
-        
-        # ============================================
-        # ✅ PROCESSAR IMAGEM
-        # ============================================
-        elif message_type == "image":
-            image_url = data.get("image", {}).get("imageUrl", "")
-            caption = data.get("image", {}).get("caption", "")
-            
-            if not image_url:
-                return JSONResponse({"status": "ignored", "reason": "no image url"})
-            
-            logger.info(f"🖼️ Imagem de {phone}: {image_url[:50]}")
-            
-            # Baixar imagem
-            image_bytes = await download_media_from_zapi(image_url)
-            
-            if not image_bytes:
-                await send_whatsapp_message(phone, "Desculpe, não consegui baixar a imagem. Pode tentar enviar novamente?")
-                return JSONResponse({"status": "error", "reason": "download failed"})
-            
-            # Analisar com Vision
-            analysis = await process_image_with_vision(image_bytes, phone)
-            
-            # Enviar resposta
-            await send_whatsapp_message(phone, analysis)
-            
-            return JSONResponse({"status": "processed", "type": "image"})
-        
-        # ============================================
-        # ✅ PROCESSAR ÁUDIO
-        # ============================================
-        elif message_type == "audio":
-            audio_url = data.get("audio", {}).get("audioUrl", "")
-            
-            if not audio_url:
-                return JSONResponse({"status": "ignored", "reason": "no audio url"})
-            
-            logger.info(f"🎤 Áudio de {phone}: {audio_url[:50]}")
-            
-            # Baixar áudio
-            audio_bytes = await download_media_from_zapi(audio_url)
-            
-            if not audio_bytes:
-                await send_whatsapp_message(phone, "Desculpe, não consegui baixar o áudio. Pode tentar enviar novamente?")
-                return JSONResponse({"status": "error", "reason": "download failed"})
-            
-            # Transcrever com Whisper
-            transcription = await process_audio_with_whisper(audio_bytes, phone)
-            
-            if not transcription:
-                await send_whatsapp_message(phone, "Desculpe, não consegui entender o áudio. Pode escrever ou enviar novamente?")
-                return JSONResponse({"status": "error", "reason": "transcription failed"})
-            
-            logger.info(f"📝 Transcrição: {transcription}")
-            
-            # Processar transcrição com IA
-            reply = await process_message_with_ai(phone, transcription)
-            
-            # Enviar resposta
-            await send_whatsapp_message(phone, reply)
-            
-            return JSONResponse({"status": "processed", "type": "audio"})
-        
-        else:
-            logger.warning(f"⚠️ Tipo de mensagem não suportado: {message_type}")
-            return JSONResponse({"status": "ignored", "reason": "unsupported type"})
-            
     except Exception as e:
-        logger.error(f"❌ ERRO no webhook: {str(e)}")
-        logger.error(traceback.format_exc())
-        return JSONResponse({"status": "error", "error": str(e)}, status_code=500)
-
-# ============================================================
-# ROTA: PÁGINA INICIAL
-# ============================================================
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    """Página inicial"""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>MIA Bot - Legacy Translations</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                max-width: 800px;
-                margin: 50px auto;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-            }
-            .container {
-                background: rgba(255,255,255,0.1);
-                padding: 40px;
-                border-radius: 20px;
-                backdrop-filter: blur(10px);
-            }
-            h1 { font-size: 2.5em; margin-bottom: 10px; }
-            .status { color: #4ade80; font-weight: bold; }
-            a {
-                display: inline-block;
-                margin: 10px 10px 10px 0;
-                padding: 15px 30px;
-                background: white;
-                color: #667eea;
-                text-decoration: none;
-                border-radius: 10px;
-                font-weight: bold;
-                transition: transform 0.2s;
-            }
-            a:hover { transform: scale(1.05); }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🤖 MIA Bot</h1>
-            <p class="status">✅ Sistema Ativo</p>
-            <p>Assistente virtual inteligente da Legacy Translations</p>
-            
-            <h3>📊 Painel Administrativo:</h3>
-            <a href="/admin">Dashboard</a>
-            <a href="/admin/treinamento">Treinamento IA</a>
-            <a href="/admin/pipeline">Pipeline</a>
-            <a href="/admin/leads">Leads</a>
-            
-            <h3>🔧 Recursos:</h3>
-            <ul>
-                <li>✅ Mensagens de texto (GPT-4)</li>
-                <li>✅ Análise de imagens (GPT-4 Vision)</li>
-                <li>✅ Transcrição de áudio (Whisper)</li>
-                <li>✅ Treinamento dinâmico (MongoDB)</li>
-            </ul>
-        </div>
-    </body>
-    </html>
-    """
-
-# ============================================================
-# ROTA: HEALTH CHECK
-# ============================================================
-@app.get("/health")
-async def health_check():
-    """Health check para Render.com"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "MIA Bot",
-        "version": "3.0"
-    }
-
-# ============================================================
-# INICIAR SERVIDOR
-# ============================================================
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", 10000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+        raise HTTPException(status_code=500, detail=str(e))
