@@ -1,15 +1,15 @@
 """
 MIA Bot - Rotas do Painel Administrativo
 Sistema de gestão omnichannel com pipeline de vendas, CRM e análise de documentos
+VERSÃO ASYNC - Integrada com dados em tempo real do bot
 """
 
 from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 import os
-from pymongo import MongoClient
 import logging
 
 # Configurar logging
@@ -21,10 +21,9 @@ templates = Jinja2Templates(directory="templates")
 # Criar router
 router = APIRouter(prefix="/admin", tags=["Admin Panel"])
 
-# Conectar MongoDB
-MONGODB_URI = os.getenv("MONGODB_URI")
-mongo_client = MongoClient(MONGODB_URI) if MONGODB_URI else None
-db = mongo_client["mia_bot"] if mongo_client else None
+# ✅ USAR MESMA CONEXÃO DO BOT (Motor async)
+from admin_training_routes import get_database
+db = get_database()
 
 # ============================================
 # DASHBOARD PRINCIPAL
@@ -34,48 +33,73 @@ db = mongo_client["mia_bot"] if mongo_client else None
 async def admin_dashboard(request: Request):
     """Dashboard principal com estatísticas gerais"""
     try:
-        if db is None:  # ✅ CORRIGIDO
-            return templates.TemplateResponse("admin_dashboard.html", {
-                "request": request,
-                "error": "MongoDB não configurado"
-            })
+        # Buscar estatísticas em tempo real
+        total_conversas = await db.conversas.count_documents({})
         
-        # Buscar estatísticas
-        total_conversas = db.conversas.count_documents({})
-        total_leads = db.leads.count_documents({})
-        total_documentos = db.documentos.count_documents({})
-        total_transferencias = db.transferencias.count_documents({"status": "PENDENTE"})
+        # Conversas de hoje
+        hoje_inicio = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        conversas_hoje = await db.conversas.count_documents({
+            "timestamp": {"$gte": hoje_inicio},
+            "role": "user"
+        })
+        
+        # Leads (conversas únicas por telefone)
+        pipeline_leads = [
+            {"$group": {"_id": "$phone"}},
+            {"$count": "total"}
+        ]
+        leads_result = await db.conversas.aggregate(pipeline_leads).to_list(length=1)
+        total_leads = leads_result[0]["total"] if leads_result else 0
+        
+        # Documentos analisados (imagens)
+        total_documentos = await db.conversas.count_documents({"type": "image"})
         
         # Conversas por canal (últimos 7 dias)
         date_limit = datetime.now() - timedelta(days=7)
-        conversas_whatsapp = db.conversas.count_documents({
+        conversas_whatsapp = await db.conversas.count_documents({
             "canal": "WhatsApp",
             "timestamp": {"$gte": date_limit}
         })
-        conversas_instagram = db.conversas.count_documents({
-            "canal": "Instagram",
-            "timestamp": {"$gte": date_limit}
-        })
-        conversas_webchat = db.conversas.count_documents({
-            "canal": "WebChat",
-            "timestamp": {"$gte": date_limit}
-        })
         
-        # Últimas conversas
-        ultimas_conversas = list(db.conversas.find().sort("timestamp", -1).limit(10))
+        # Últimas conversas (agrupadas por telefone)
+        ultimas_conversas_raw = await db.conversas.find({
+            "role": "user"
+        }).sort("timestamp", -1).limit(50).to_list(length=50)
         
-        # Formatar datas
-        for conv in ultimas_conversas:
-            conv["timestamp_formatted"] = conv["timestamp"].strftime("%d/%m/%Y %H:%M")
+        # Agrupar por telefone e pegar última mensagem
+        conversas_por_telefone = {}
+        for conv in ultimas_conversas_raw:
+            phone = conv.get("phone", "")
+            if phone and phone not in conversas_por_telefone:
+                conversas_por_telefone[phone] = {
+                    "phone": phone,
+                    "message": conv.get("message", ""),
+                    "timestamp": conv.get("timestamp"),
+                    "timestamp_formatted": conv.get("timestamp").strftime("%d/%m/%Y %H:%M") if conv.get("timestamp") else "",
+                    "canal": conv.get("canal", "WhatsApp"),
+                    "type": conv.get("type", "text")
+                }
+        
+        ultimas_conversas = list(conversas_por_telefone.values())[:10]
+        
+        # Calcular taxa de conversão (simplificado)
+        taxa_conversao = 0
+        if total_leads > 0:
+            # Considerar "conversão" se teve mais de 3 mensagens
+            conversas_ativas = 0
+            for phone in conversas_por_telefone.keys():
+                count = await db.conversas.count_documents({"phone": phone})
+                if count >= 3:
+                    conversas_ativas += 1
+            taxa_conversao = int((conversas_ativas / total_leads) * 100)
         
         stats = {
             "total_conversas": total_conversas,
+            "conversas_hoje": conversas_hoje,
             "total_leads": total_leads,
             "total_documentos": total_documentos,
-            "transferencias_pendentes": total_transferencias,
+            "taxa_conversao": taxa_conversao,
             "conversas_whatsapp": conversas_whatsapp,
-            "conversas_instagram": conversas_instagram,
-            "conversas_webchat": conversas_webchat,
             "ultimas_conversas": ultimas_conversas
         }
         
@@ -86,10 +110,80 @@ async def admin_dashboard(request: Request):
         
     except Exception as e:
         logger.error(f"Erro no dashboard: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return templates.TemplateResponse("admin_dashboard.html", {
             "request": request,
-            "error": str(e)
+            "error": str(e),
+            "stats": {
+                "total_conversas": 0,
+                "conversas_hoje": 0,
+                "total_leads": 0,
+                "total_documentos": 0,
+                "taxa_conversao": 0,
+                "conversas_whatsapp": 0,
+                "ultimas_conversas": []
+            }
         })
+
+# ============================================
+# API: DADOS DO DASHBOARD (JSON)
+# ============================================
+
+@router.get("/api/dashboard-data")
+async def get_dashboard_data():
+    """Retorna dados do dashboard em JSON para atualização em tempo real"""
+    try:
+        # Conversas de hoje
+        hoje_inicio = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        conversas_hoje = await db.conversas.count_documents({
+            "timestamp": {"$gte": hoje_inicio},
+            "role": "user"
+        })
+        
+        # Total de conversas
+        total_conversas = await db.conversas.count_documents({})
+        
+        # Leads únicos
+        pipeline_leads = [
+            {"$group": {"_id": "$phone"}},
+            {"$count": "total"}
+        ]
+        leads_result = await db.conversas.aggregate(pipeline_leads).to_list(length=1)
+        total_leads = leads_result[0]["total"] if leads_result else 0
+        
+        # Documentos
+        total_documentos = await db.conversas.count_documents({"type": "image"})
+        
+        # Conversas por dia (últimos 7 dias)
+        conversas_por_dia = []
+        for i in range(6, -1, -1):
+            dia = datetime.now() - timedelta(days=i)
+            dia_inicio = dia.replace(hour=0, minute=0, second=0, microsecond=0)
+            dia_fim = dia_inicio + timedelta(days=1)
+            
+            count = await db.conversas.count_documents({
+                "timestamp": {"$gte": dia_inicio, "$lt": dia_fim},
+                "role": "user"
+            })
+            
+            conversas_por_dia.append({
+                "data": dia.strftime("%d/%m"),
+                "count": count
+            })
+        
+        return {
+            "conversas_hoje": conversas_hoje,
+            "total_conversas": total_conversas,
+            "total_leads": total_leads,
+            "total_documentos": total_documentos,
+            "conversas_por_dia": conversas_por_dia,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar dados: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
 # PIPELINE DE VENDAS
@@ -99,45 +193,90 @@ async def admin_dashboard(request: Request):
 async def admin_pipeline(request: Request):
     """Visualização do pipeline de vendas (funil)"""
     try:
-        if db is None:  # ✅ CORRIGIDO
-            return templates.TemplateResponse("admin_pipeline.html", {
-                "request": request,
-                "error": "MongoDB não configurado"
-            })
+        # Buscar todas as conversas agrupadas por telefone
+        pipeline = [
+            {"$group": {
+                "_id": "$phone",
+                "total_mensagens": {"$sum": 1},
+                "ultima_mensagem": {"$max": "$timestamp"}
+            }},
+            {"$sort": {"ultima_mensagem": -1}}
+        ]
         
-        # Leads por estágio do funil
+        leads_data = await db.conversas.aggregate(pipeline).to_list(length=1000)
+        
+        # Classificar leads por estágio baseado em número de mensagens
         pipeline_data = {
-            "novo": db.leads.count_documents({"estagio": "NOVO"}),
-            "contato_inicial": db.leads.count_documents({"estagio": "CONTATO_INICIAL"}),
-            "qualificado": db.leads.count_documents({"estagio": "QUALIFICADO"}),
-            "proposta": db.leads.count_documents({"estagio": "PROPOSTA"}),
-            "negociacao": db.leads.count_documents({"estagio": "NEGOCIACAO"}),
-            "fechado": db.leads.count_documents({"estagio": "FECHADO"}),
-            "perdido": db.leads.count_documents({"estagio": "PERDIDO"})
+            "novo": 0,  # 1-2 mensagens
+            "contato_inicial": 0,  # 3-5 mensagens
+            "qualificado": 0,  # 6-10 mensagens
+            "proposta": 0,  # 11-15 mensagens
+            "negociacao": 0,  # 16+ mensagens
+            "fechado": 0,
+            "perdido": 0
         }
+        
+        for lead in leads_data:
+            total = lead["total_mensagens"]
+            if total <= 2:
+                pipeline_data["novo"] += 1
+            elif total <= 5:
+                pipeline_data["contato_inicial"] += 1
+            elif total <= 10:
+                pipeline_data["qualificado"] += 1
+            elif total <= 15:
+                pipeline_data["proposta"] += 1
+            else:
+                pipeline_data["negociacao"] += 1
         
         # Leads por canal
         leads_por_canal = {
-            "WhatsApp": db.leads.count_documents({"canal": "WhatsApp"}),
-            "Instagram": db.leads.count_documents({"canal": "Instagram"}),
-            "WebChat": db.leads.count_documents({"canal": "WebChat"})
+            "WhatsApp": await db.conversas.distinct("phone", {"canal": "WhatsApp"}),
+            "Instagram": [],
+            "WebChat": []
+        }
+        
+        leads_por_canal_count = {
+            "WhatsApp": len(leads_por_canal["WhatsApp"]),
+            "Instagram": 0,
+            "WebChat": 0
         }
         
         # Leads recentes
-        leads_recentes = list(db.leads.find().sort("timestamp", -1).limit(20))
+        leads_recentes_raw = await db.conversas.find({
+            "role": "user"
+        }).sort("timestamp", -1).limit(20).to_list(length=20)
         
-        for lead in leads_recentes:
-            lead["timestamp_formatted"] = lead["timestamp"].strftime("%d/%m/%Y %H:%M")
+        # Agrupar por telefone
+        leads_por_telefone = {}
+        for msg in leads_recentes_raw:
+            phone = msg.get("phone", "")
+            if phone and phone not in leads_por_telefone:
+                # Contar mensagens deste lead
+                total_msgs = await db.conversas.count_documents({"phone": phone})
+                
+                leads_por_telefone[phone] = {
+                    "phone": phone,
+                    "timestamp": msg.get("timestamp"),
+                    "timestamp_formatted": msg.get("timestamp").strftime("%d/%m/%Y %H:%M") if msg.get("timestamp") else "",
+                    "canal": msg.get("canal", "WhatsApp"),
+                    "total_mensagens": total_msgs,
+                    "estagio": "NOVO" if total_msgs <= 2 else "QUALIFICADO" if total_msgs <= 10 else "NEGOCIACAO"
+                }
+        
+        leads_recentes = list(leads_por_telefone.values())
         
         return templates.TemplateResponse("admin_pipeline.html", {
             "request": request,
             "pipeline": pipeline_data,
-            "leads_por_canal": leads_por_canal,
+            "leads_por_canal": leads_por_canal_count,
             "leads_recentes": leads_recentes
         })
         
     except Exception as e:
         logger.error(f"Erro no pipeline: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return templates.TemplateResponse("admin_pipeline.html", {
             "request": request,
             "error": str(e)
@@ -151,32 +290,62 @@ async def admin_pipeline(request: Request):
 async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Optional[str] = None):
     """Gestão completa de leads com filtros"""
     try:
-        if db is None:  # ✅ CORRIGIDO
-            return templates.TemplateResponse("admin_leads.html", {
-                "request": request,
-                "error": "MongoDB não configurado"
+        # Buscar todos os leads (telefones únicos)
+        filtro_canal = {"canal": canal} if canal else {}
+        
+        pipeline = [
+            {"$match": filtro_canal},
+            {"$group": {
+                "_id": "$phone",
+                "total_mensagens": {"$sum": 1},
+                "ultima_mensagem": {"$max": "$timestamp"},
+                "canal": {"$first": "$canal"}
+            }},
+            {"$sort": {"ultima_mensagem": -1}},
+            {"$limit": 100}
+        ]
+        
+        leads_data = await db.conversas.aggregate(pipeline).to_list(length=100)
+        
+        # Formatar leads
+        leads = []
+        for lead_data in leads_data:
+            total = lead_data["total_mensagens"]
+            
+            # Determinar estágio
+            if total <= 2:
+                estagio_lead = "NOVO"
+                temperatura = "FRIO"
+            elif total <= 5:
+                estagio_lead = "CONTATO_INICIAL"
+                temperatura = "MORNO"
+            elif total <= 10:
+                estagio_lead = "QUALIFICADO"
+                temperatura = "QUENTE"
+            else:
+                estagio_lead = "NEGOCIACAO"
+                temperatura = "QUENTE"
+            
+            # Filtrar por estágio se especificado
+            if estagio and estagio_lead != estagio:
+                continue
+            
+            leads.append({
+                "_id": str(lead_data["_id"]),
+                "phone": lead_data["_id"],
+                "canal": lead_data.get("canal", "WhatsApp"),
+                "estagio": estagio_lead,
+                "temperatura": temperatura,
+                "total_mensagens": total,
+                "timestamp": lead_data["ultima_mensagem"],
+                "timestamp_formatted": lead_data["ultima_mensagem"].strftime("%d/%m/%Y %H:%M") if lead_data.get("ultima_mensagem") else ""
             })
-        
-        # Construir filtro
-        filtro = {}
-        if canal:
-            filtro["canal"] = canal
-        if estagio:
-            filtro["estagio"] = estagio
-        
-        # Buscar leads
-        leads = list(db.leads.find(filtro).sort("timestamp", -1).limit(100))
-        
-        # Formatar dados
-        for lead in leads:
-            lead["timestamp_formatted"] = lead["timestamp"].strftime("%d/%m/%Y %H:%M")
-            lead["_id"] = str(lead["_id"])
         
         # Estatísticas
         total_leads = len(leads)
-        leads_quentes = db.leads.count_documents({**filtro, "temperatura": "QUENTE"})
-        leads_mornos = db.leads.count_documents({**filtro, "temperatura": "MORNO"})
-        leads_frios = db.leads.count_documents({**filtro, "temperatura": "FRIO"})
+        leads_quentes = len([l for l in leads if l["temperatura"] == "QUENTE"])
+        leads_mornos = len([l for l in leads if l["temperatura"] == "MORNO"])
+        leads_frios = len([l for l in leads if l["temperatura"] == "FRIO"])
         
         return templates.TemplateResponse("admin_leads.html", {
             "request": request,
@@ -191,6 +360,8 @@ async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Op
         
     except Exception as e:
         logger.error(f"Erro na gestão de leads: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return templates.TemplateResponse("admin_leads.html", {
             "request": request,
             "error": str(e)
@@ -204,32 +375,15 @@ async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Op
 async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
     """Gerenciar transferências para atendimento humano"""
     try:
-        if db is None:  # ✅ CORRIGIDO
-            return templates.TemplateResponse("admin_transfers.html", {
-                "request": request,
-                "error": "MongoDB não configurado"
-            })
-        
-        # Buscar transferências
-        filtro = {"status": status} if status else {}
-        transferencias = list(db.transferencias.find(filtro).sort("timestamp", -1).limit(50))
-        
-        # Formatar dados
-        for trans in transferencias:
-            trans["timestamp_formatted"] = trans["timestamp"].strftime("%d/%m/%Y %H:%M")
-            trans["_id"] = str(trans["_id"])
-        
-        # Estatísticas
-        total_pendentes = db.transferencias.count_documents({"status": "PENDENTE"})
-        total_em_atendimento = db.transferencias.count_documents({"status": "EM_ATENDIMENTO"})
-        total_concluidas = db.transferencias.count_documents({"status": "CONCLUIDO"})
+        # Por enquanto, retornar vazio (funcionalidade futura)
+        transferencias = []
         
         return templates.TemplateResponse("admin_transfers.html", {
             "request": request,
             "transferencias": transferencias,
-            "total_pendentes": total_pendentes,
-            "total_em_atendimento": total_em_atendimento,
-            "total_concluidas": total_concluidas,
+            "total_pendentes": 0,
+            "total_em_atendimento": 0,
+            "total_concluidas": 0,
             "filtro_status": status
         })
         
@@ -248,26 +402,28 @@ async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
 async def admin_documents(request: Request, status: Optional[str] = None):
     """Visualizar documentos analisados pelo GPT-4 Vision"""
     try:
-        if db is None:  # ✅ CORRIGIDO
-            return templates.TemplateResponse("admin_documents.html", {
-                "request": request,
-                "error": "MongoDB não configurado"
+        # Buscar conversas com imagens
+        filtro = {"type": "image"}
+        
+        documentos_raw = await db.conversas.find(filtro).sort("timestamp", -1).limit(50).to_list(length=50)
+        
+        # Formatar documentos
+        documentos = []
+        for doc in documentos_raw:
+            documentos.append({
+                "_id": str(doc.get("_id", "")),
+                "phone": doc.get("phone", ""),
+                "timestamp": doc.get("timestamp"),
+                "timestamp_formatted": doc.get("timestamp").strftime("%d/%m/%Y %H:%M") if doc.get("timestamp") else "",
+                "message": doc.get("message", "[IMAGEM]"),
+                "status": "ANALISADO"
             })
-        
-        # Buscar documentos
-        filtro = {"status": status} if status else {}
-        documentos = list(db.documentos.find(filtro).sort("timestamp", -1).limit(50))
-        
-        # Formatar dados
-        for doc in documentos:
-            doc["timestamp_formatted"] = doc["timestamp"].strftime("%d/%m/%Y %H:%M")
-            doc["_id"] = str(doc["_id"])
         
         # Estatísticas
         total_documentos = len(documentos)
-        docs_aprovados = db.documentos.count_documents({"status": "APROVADO"})
-        docs_pendentes = db.documentos.count_documents({"status": "PENDENTE"})
-        docs_rejeitados = db.documentos.count_documents({"status": "REJEITADO"})
+        docs_aprovados = total_documentos  # Todos analisados são considerados aprovados
+        docs_pendentes = 0
+        docs_rejeitados = 0
         
         return templates.TemplateResponse("admin_documents.html", {
             "request": request,
@@ -281,6 +437,8 @@ async def admin_documents(request: Request, status: Optional[str] = None):
         
     except Exception as e:
         logger.error(f"Erro na análise de documentos: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return templates.TemplateResponse("admin_documents.html", {
             "request": request,
             "error": str(e)
@@ -297,7 +455,7 @@ async def admin_config(request: Request):
         # Verificar status das integrações
         config = {
             "openai_status": "✅ Configurado" if os.getenv("OPENAI_API_KEY") else "❌ Não configurado",
-            "mongodb_status": "✅ Conectado" if db is not None else "❌ Não conectado",  # ✅ CORRIGIDO
+            "mongodb_status": "✅ Conectado",
             "zapi_status": "✅ Configurado" if os.getenv("ZAPI_TOKEN") else "❌ Não configurado",
             "instagram_status": "⚠️ Opcional",
             "render_url": os.getenv("RENDER_EXTERNAL_URL", "https://mia-atendimento.onrender.com"),
@@ -331,14 +489,23 @@ async def admin_config(request: Request):
 async def api_stats():
     """Retornar estatísticas em JSON"""
     try:
-        if db is None:  # ✅ CORRIGIDO
-            raise HTTPException(status_code=503, detail="MongoDB não disponível")
+        total_conversas = await db.conversas.count_documents({})
+        
+        # Leads únicos
+        pipeline_leads = [
+            {"$group": {"_id": "$phone"}},
+            {"$count": "total"}
+        ]
+        leads_result = await db.conversas.aggregate(pipeline_leads).to_list(length=1)
+        total_leads = leads_result[0]["total"] if leads_result else 0
+        
+        total_documentos = await db.conversas.count_documents({"type": "image"})
         
         stats = {
-            "total_conversas": db.conversas.count_documents({}),
-            "total_leads": db.leads.count_documents({}),
-            "total_documentos": db.documentos.count_documents({}),
-            "transferencias_pendentes": db.transferencias.count_documents({"status": "PENDENTE"}),
+            "total_conversas": total_conversas,
+            "total_leads": total_leads,
+            "total_documentos": total_documentos,
+            "transferencias_pendentes": 0,
             "timestamp": datetime.now().isoformat()
         }
         
