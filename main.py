@@ -1,5 +1,477 @@
 # ============================================================
-# WEBHOOK CORRIGIDO: WHATSAPP (Z-API)
+# VERSÃO COMPLETA MULTIMÍDIA + PAINEL ADMIN - main.py
+# ============================================================
+# Bot WhatsApp com suporte a:
+# ✅ Mensagens de texto
+# ✅ Imagens (GPT-4 Vision) - Leitura de documentos
+# ✅ Áudios (Whisper) - Transcrição de voz
+# ✅ Painel Administrativo Completo
+# ✅ Treinamento Dinâmico do Banco de Dados
+# ============================================================
+# 🔧 CORREÇÕES APLICADAS:
+# ✅ Removida função send_whatsapp_message duplicada
+# ✅ Corrigida detecção de tipo de mensagem (imagens e áudios)
+# ✅ Adicionada função download_media_from_zapi
+# ✅ Implementado carregamento dinâmico de treinamento do banco
+# ============================================================
+
+from fastapi import FastAPI, Request, HTTPException, Form
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+import os
+import httpx
+from openai import OpenAI
+from datetime import datetime
+from motor.motor_asyncio import AsyncIOMotorClient
+import logging
+from typing import Optional, Dict, Any, List
+from pydantic import BaseModel
+import traceback
+import json
+import base64
+from io import BytesIO
+
+# Importar rotas do admin
+from admin_routes import router as admin_router
+from admin_training_routes import router as training_router
+from admin_controle_routes import router as controle_router
+
+# ============================================================
+# CONFIGURAÇÃO DE LOGGING
+# ============================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# ============================================================
+# INICIALIZAÇÃO
+# ============================================================
+app = FastAPI(title="WhatsApp AI Platform - Legacy Translations")
+
+# Templates
+templates = Jinja2Templates(directory="templates")
+
+# Clientes
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+mongo_client = AsyncIOMotorClient(os.getenv("MONGODB_URI"))
+db = mongo_client["mia_bot"]
+
+# ============================================================
+# INCLUIR ROTAS DO PAINEL ADMIN
+# ============================================================
+app.include_router(admin_router)
+app.include_router(training_router)
+app.include_router(controle_router)
+
+# ============================================================
+# CONFIGURAÇÕES Z-API
+# ============================================================
+ZAPI_INSTANCE_ID = os.getenv("ZAPI_INSTANCE_ID")
+ZAPI_TOKEN = os.getenv("ZAPI_TOKEN")
+ZAPI_CLIENT_TOKEN = os.getenv("ZAPI_CLIENT_TOKEN")
+ZAPI_URL = os.getenv("ZAPI_URL", "https://api.z-api.io")
+
+# ============================================================
+# MODELOS PYDANTIC
+# ============================================================
+class Message(BaseModel):
+    phone: str
+    message: str
+    timestamp: datetime = datetime.now()
+    role: str = "user"
+    message_type: str = "text"
+
+# ============================================================
+# CONTEXTO DA MIA (PERSONALIDADE) - FALLBACK
+# ============================================================
+MIA_SYSTEM_PROMPT = """
+Você é a Mia, assistente virtual da Legacy Translations, empresa especializada em traduções juramentadas.
+
+**PERSONALIDADE:**
+- Profissional, cordial e prestativa
+- Use emojis moderadamente (📄, ✅, 💼, 🌍)
+- Tom formal mas acessível
+
+**CAPACIDADES:**
+- Análise de documentos via imagem (GPT-4 Vision)
+- Identificação de tipo de documento
+- Cálculo de preços de tradução
+- Orientação sobre processos
+
+**DOCUMENTOS ACEITOS:**
+Certidão de Nascimento, Casamento, Óbito, Diploma, Histórico Escolar, CNH, RG, Passaporte, Contrato, Procuração, etc.
+
+**TABELA DE PREÇOS (2024):**
+- Certidões simples: R$ 80-100
+- Diplomas: R$ 120-150
+- Contratos (por página): R$ 60-80
+- Documentos complexos: consultar
+
+**QUANDO TRANSFERIR PARA HUMANO:**
+- Negociações complexas
+- Documentos muito técnicos
+- Cliente solicita falar com pessoa
+- Situações sensíveis
+
+**INSTRUÇÕES:**
+1. Sempre pergunte o nome do cliente
+2. Se enviar imagem, analise com GPT-4 Vision
+3. Identifique o documento e calcule preço
+4. Explique processo e prazo
+5. Ofereça finalizar orçamento
+"""
+
+# ============================================================
+# FUNÇÃO: BUSCAR TREINAMENTO DINÂMICO DO BANCO
+# ============================================================
+async def get_bot_training() -> str:
+    """
+    Busca treinamento dinâmico do bot Mia no banco de dados.
+    Retorna prompt construído a partir de:
+    - Personalidade (tom, objetivos, restrições)
+    - Base de conhecimento
+    - FAQs
+    
+    Se falhar, retorna MIA_SYSTEM_PROMPT como fallback.
+    """
+    try:
+        logger.info("🔍 Buscando treinamento do bot Mia no banco...")
+        
+        bot = await db.bots.find_one({"name": "Mia"})
+        
+        if not bot:
+            logger.warning("⚠️ Bot Mia não encontrado no banco, usando prompt padrão")
+            return MIA_SYSTEM_PROMPT
+        
+        # Extrair dados
+        personality = bot.get("personality", {})
+        knowledge_base = bot.get("knowledge_base", [])
+        faqs = bot.get("faqs", [])
+        
+        # Construir prompt dinâmico
+        prompt_parts = []
+        
+        # Cabeçalho
+        prompt_parts.append("Você é a Mia, assistente oficial da empresa Legacy Translations.")
+        prompt_parts.append("Especializada em tradução certificada e juramentada.\n")
+        
+        # Tom de voz
+        if personality.get("tone"):
+            prompt_parts.append(f"**TOM DE VOZ:** {personality['tone']}\n")
+        
+        # Objetivos
+        if personality.get("goals"):
+            prompt_parts.append("**OBJETIVOS:**")
+            for goal in personality["goals"]:
+                prompt_parts.append(f"- {goal}")
+            prompt_parts.append("")
+        
+        # Restrições
+        if personality.get("restrictions"):
+            prompt_parts.append("**RESTRIÇÕES DE COMPORTAMENTO:**")
+            for restriction in personality["restrictions"]:
+                prompt_parts.append(f"- {restriction}")
+            prompt_parts.append("")
+        
+        # Base de conhecimento
+        if knowledge_base:
+            prompt_parts.append("**BASE DE CONHECIMENTO:**\n")
+            for item in knowledge_base:
+                prompt_parts.append(f"### {item.get('title', 'Sem título')}")
+                prompt_parts.append(item.get('content', ''))
+                prompt_parts.append("")
+        
+        # FAQs
+        if faqs:
+            prompt_parts.append("**PERGUNTAS FREQUENTES:**\n")
+            for faq in faqs:
+                prompt_parts.append(f"**P:** {faq.get('question', '')}")
+                prompt_parts.append(f"**R:** {faq.get('answer', '')}")
+                prompt_parts.append("")
+        
+        # Montar prompt final
+        final_prompt = "\n".join(prompt_parts)
+        
+        logger.info(f"✅ Treinamento dinâmico carregado ({len(final_prompt)} caracteres)")
+        logger.info(f"   - Objetivos: {len(personality.get('goals', []))}")
+        logger.info(f"   - Restrições: {len(personality.get('restrictions', []))}")
+        logger.info(f"   - Conhecimentos: {len(knowledge_base)}")
+        logger.info(f"   - FAQs: {len(faqs)}")
+        
+        return final_prompt
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar treinamento do banco: {e}")
+        logger.error(traceback.format_exc())
+        logger.warning("⚠️ Usando prompt padrão como fallback")
+        return MIA_SYSTEM_PROMPT
+
+# ============================================================
+# FUNÇÃO: ENVIAR MENSAGEM WHATSAPP
+# ============================================================
+async def send_whatsapp_message(phone: str, message: str):
+    """Envia mensagem via Z-API com Client-Token"""
+    try:
+        # Construir URL completa
+        url = f"{ZAPI_URL}/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text"
+        
+        # Headers COM Client-Token
+        headers = {
+            "Content-Type": "application/json",
+            "Client-Token": ZAPI_CLIENT_TOKEN or ""
+        }
+        
+        # Payload
+        payload = {
+            "phone": phone,
+            "message": message
+        }
+        
+        # Logs de debug
+        logger.info(f"🔍 Enviando para Z-API: {url}")
+        logger.info(f"🔍 Telefone: {phone}")
+        logger.info(f"🔍 Client-Token configurado: {'Sim' if headers['Client-Token'] else 'Não'}")
+        
+        # Enviar requisição COM headers
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            
+            logger.info(f"🔍 Status Z-API: {response.status_code}")
+            logger.info(f"🔍 Resposta Z-API: {response.text}")
+            
+            if response.status_code == 200:
+                logger.info(f"✅ Mensagem enviada com sucesso para {phone}")
+                return True
+            else:
+                logger.error(f"❌ Erro ao enviar: {response.status_code} - {response.text}")
+                return False
+                
+    except Exception as e:
+        logger.error(f"❌ Exceção ao enviar para Z-API: {e}")
+        return False
+
+# ============================================================
+# FUNÇÃO: BAIXAR MÍDIA DA Z-API
+# ============================================================
+async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
+    """
+    Baixa mídia (imagem ou áudio) da Z-API
+    
+    Args:
+        media_url: URL da mídia fornecida pela Z-API
+    
+    Returns:
+        bytes: Conteúdo da mídia em bytes, ou None se falhar
+    """
+    try:
+        logger.info(f"🔽 Baixando mídia: {media_url[:50]}...")
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(media_url)
+            
+            if response.status_code == 200:
+                logger.info(f"✅ Mídia baixada com sucesso ({len(response.content)} bytes)")
+                return response.content
+            else:
+                logger.error(f"❌ Erro ao baixar mídia: {response.status_code}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"❌ Exceção ao baixar mídia: {e}")
+        logger.error(traceback.format_exc())
+        return None
+
+# ============================================================
+# FUNÇÃO: PROCESSAR IMAGEM COM GPT-4 VISION
+# ============================================================
+async def process_image_with_vision(image_bytes: bytes, phone: str) -> str:
+    """
+    Analisa imagem usando GPT-4 Vision para identificar documento
+    
+    Args:
+        image_bytes: Bytes da imagem
+        phone: Telefone do usuário (para contexto)
+    
+    Returns:
+        str: Análise do documento
+    """
+    try:
+        logger.info(f"🔍 Analisando imagem com GPT-4 Vision para {phone}")
+        
+        # Converter para base64
+        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+        
+        # Chamar GPT-4 Vision
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """Você é um especialista em análise de documentos para tradução juramentada.
+                    
+                    Analise a imagem e forneça:
+                    1. Tipo de documento identificado
+                    2. Idioma do documento
+                    3. Qualidade da imagem (boa/média/ruim)
+                    4. Se é adequado para tradução juramentada
+                    5. Estimativa de preço baseado na tabela da Legacy Translations
+                    
+                    Seja objetivo e profissional."""
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Analise este documento e me diga que tipo é, se está legível e qual seria o preço aproximado da tradução juramentada."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=500
+        )
+        
+        analysis = response.choices[0].message.content
+        logger.info(f"✅ Análise concluída: {analysis[:100]}...")
+        
+        # Salvar no banco
+        await db.documentos.insert_one({
+            "phone": phone,
+            "timestamp": datetime.now(),
+            "analysis": analysis,
+            "status": "ANALISADO"
+        })
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao processar imagem: {str(e)}")
+        logger.error(traceback.format_exc())
+        return "Desculpe, tive um problema ao analisar a imagem. Pode tentar enviar novamente?"
+
+# ============================================================
+# FUNÇÃO: PROCESSAR ÁUDIO COM WHISPER
+# ============================================================
+async def process_audio_with_whisper(audio_bytes: bytes, phone: str) -> str:
+    """
+    Transcreve áudio usando Whisper
+    
+    Args:
+        audio_bytes: Bytes do áudio
+        phone: Telefone do usuário
+    
+    Returns:
+        str: Texto transcrito
+    """
+    try:
+        logger.info(f"🎤 Transcrevendo áudio com Whisper para {phone}")
+        
+        # Criar arquivo temporário em memória
+        audio_file = BytesIO(audio_bytes)
+        audio_file.name = "audio.ogg"
+        
+        # Transcrever com Whisper
+        transcript = openai_client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            language="pt"
+        )
+        
+        transcription = transcript.text
+        logger.info(f"✅ Transcrição: {transcription[:100]}...")
+        
+        return transcription
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao transcrever áudio: {str(e)}")
+        logger.error(traceback.format_exc())
+        return None
+
+# ============================================================
+# FUNÇÃO: BUSCAR CONTEXTO DA CONVERSA
+# ============================================================
+async def get_conversation_context(phone: str, limit: int = 10) -> List[Dict]:
+    """Busca últimas mensagens da conversa"""
+    try:
+        messages = await db.conversas.find(
+            {"phone": phone}
+        ).sort("timestamp", -1).limit(limit).to_list(length=limit)
+        
+        # Inverter para ordem cronológica
+        messages.reverse()
+        
+        return [
+            {"role": msg["role"], "content": msg["message"]}
+            for msg in messages
+        ]
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar contexto: {str(e)}")
+        return []
+
+# ============================================================
+# FUNÇÃO: PROCESSAR MENSAGEM COM IA
+# ============================================================
+async def process_message_with_ai(phone: str, message: str) -> str:
+    """Processar mensagem com GPT-4 usando treinamento dinâmico"""
+    try:
+        # Buscar contexto da conversa
+        context = await get_conversation_context(phone)
+        
+        # ✅ BUSCAR TREINAMENTO DINÂMICO DO BANCO
+        system_prompt = await get_bot_training()
+        
+        # Montar mensagens
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ] + context + [
+            {"role": "user", "content": message}
+        ]
+        
+        # Chamar GPT-4
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            max_tokens=500,
+            temperature=0.7
+        )
+        
+        reply = response.choices[0].message.content
+        
+        # Salvar no banco
+        await db.conversas.insert_one({
+            "phone": phone,
+            "message": message,
+            "role": "user",
+            "timestamp": datetime.now(),
+            "canal": "WhatsApp"
+        })
+        
+        await db.conversas.insert_one({
+            "phone": phone,
+            "message": reply,
+            "role": "assistant",
+            "timestamp": datetime.now(),
+            "canal": "WhatsApp"
+        })
+        
+        return reply
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao processar com IA: {str(e)}")
+        logger.error(traceback.format_exc())
+        return "Desculpe, tive um problema. Pode repetir?"
+
+# ============================================================
+# WEBHOOK: WHATSAPP (Z-API) - CORRIGIDO
 # ============================================================
 @app.post("/webhook/whatsapp")
 async def webhook_whatsapp(request: Request):
@@ -122,10 +594,10 @@ async def webhook_whatsapp(request: Request):
             transcription = await process_audio_with_whisper(audio_bytes, phone)
             
             if not transcription:
-                await send_whatsapp_message(phone, "Desculpe, não consegui transcrever o áudio. Pode tentar novamente?")
+                await send_whatsapp_message(phone, "Desculpe, não consegui entender o áudio. Pode escrever ou enviar novamente?")
                 return JSONResponse({"status": "error", "reason": "transcription failed"})
             
-            logger.info(f"📝 Transcrição: {transcription[:100]}...")
+            logger.info(f"📝 Transcrição: {transcription}")
             
             # Processar transcrição com IA
             reply = await process_message_with_ai(phone, transcription)
@@ -145,58 +617,70 @@ async def webhook_whatsapp(request: Request):
         logger.error(traceback.format_exc())
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
+# ============================================================
+# ROTA: HEALTH CHECK
+# ============================================================
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    try:
+        # Testar MongoDB
+        await db.command("ping")
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "openai": "✅ Configurado" if os.getenv("OPENAI_API_KEY") else "❌ Não configurado",
+            "mongodb": "✅ Conectado",
+            "zapi_instance": "✅ Configurado" if ZAPI_INSTANCE_ID else "❌ Não configurado",
+            "zapi_token": "✅ Configurado" if ZAPI_TOKEN else "❌ Não configurado",
+            "zapi_client_token": "✅ Configurado" if ZAPI_CLIENT_TOKEN else "❌ Não configurado"
+        }
+    except Exception as e:
+        return JSONResponse(
+            {"status": "unhealthy", "error": str(e)},
+            status_code=503
+        )
 
 # ============================================================
-# RESUMO DAS MUDANÇAS
+# ROTA RAIZ
 # ============================================================
-
-# ANTES (LINHA 397):
-# message_type = data.get("messageType", "text")
-
-# DEPOIS (LINHAS 395-410):
-# if "text" in data and data["text"].get("message"):
-#     message_type = "text"
-# elif "image" in data and data["image"].get("imageUrl"):
-#     message_type = "image"
-# elif "audio" in data and data["audio"].get("audioUrl"):
-#     message_type = "audio"
-# else:
-#     message_type = "unknown"
+@app.get("/")
+async def root():
+    """Redirecionar para painel admin"""
+    return RedirectResponse(url="/admin")
 
 # ============================================================
-# POR QUE ESSA MUDANÇA É NECESSÁRIA?
+# STARTUP
 # ============================================================
+@app.on_event("startup")
+async def startup_event():
+    """Evento de inicialização"""
+    logger.info("=" * 60)
+    logger.info("🚀 WhatsApp AI Platform - Legacy Translations")
+    logger.info("📦 VERSÃO MULTIMÍDIA + ADMIN 2.0 + TREINAMENTO DINÂMICO")
+    logger.info("=" * 60)
+    logger.info(f"✅ OpenAI: {'Configurado' if os.getenv('OPENAI_API_KEY') else '❌ FALTANDO'}")
+    logger.info(f"✅ MongoDB: {'Configurado' if os.getenv('MONGODB_URI') else '❌ FALTANDO'}")
+    logger.info(f"✅ Z-API Instance: {'Configurado' if ZAPI_INSTANCE_ID else '❌ FALTANDO'}")
+    logger.info(f"✅ Z-API Token: {'Configurado' if ZAPI_TOKEN else '❌ FALTANDO'}")
+    logger.info(f"✅ Z-API Client-Token: {'Configurado' if ZAPI_CLIENT_TOKEN else '❌ FALTANDO'}")
+    logger.info("=" * 60)
+    logger.info("🎯 FUNCIONALIDADES ATIVAS:")
+    logger.info("   ✅ Mensagens de texto")
+    logger.info("   ✅ Imagens (GPT-4 Vision)")
+    logger.info("   ✅ Áudios (Whisper)")
+    logger.info("   ✅ Painel Admin Completo")
+    logger.info("   ✅ Controle IA vs Humano")
+    logger.info("   ✅ Treinamento Dinâmico do Banco")
+    logger.info("=" * 60)
+    logger.info("🔧 CORREÇÕES APLICADAS:")
+    logger.info("   ✅ Função duplicada removida")
+    logger.info("   ✅ Detecção de mídia corrigida")
+    logger.info("   ✅ Função download_media_from_zapi adicionada")
+    logger.info("   ✅ Treinamento dinâmico implementado")
+    logger.info("=" * 60)
 
-# A Z-API NÃO envia um campo "messageType" nos webhooks.
-# Todos os webhooks têm "type": "ReceivedCallback".
-# 
-# O tipo de mensagem é identificado pela PRESENÇA de campos:
-# - "text": {...} → Mensagem de texto
-# - "image": {...} → Mensagem de imagem
-# - "audio": {...} → Mensagem de áudio
-#
-# Com o código antigo, o bot SEMPRE assumia "text" como padrão,
-# então imagens e áudios NUNCA eram processados corretamente.
-
-# ============================================================
-# LOGS ESPERADOS APÓS A CORREÇÃO
-# ============================================================
-
-# TEXTO:
-# 📨 Webhook recebido: {...}
-# 🔍 Tipo detectado: text
-# 💬 Texto de 16893094980: Oi
-
-# IMAGEM:
-# 📨 Webhook recebido: {...}
-# 🔍 Tipo detectado: image
-# 🖼️ Imagem de 16893094980: https://...
-# 🔍 Analisando imagem com GPT-4 Vision...
-# ✅ Análise concluída: ...
-
-# ÁUDIO:
-# 📨 Webhook recebido: {...}
-# 🔍 Tipo detectado: audio
-# 🎤 Áudio de 16893094980: https://...
-# 🔍 Transcrevendo áudio com Whisper...
-# ✅ Transcrição: ...
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
