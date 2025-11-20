@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from openai import OpenAI
 from datetime import datetime
-from routes.admin_routes import router as admin_router
+from admin_routes import router as admin_router
 import base64
 
 # ============================================================
