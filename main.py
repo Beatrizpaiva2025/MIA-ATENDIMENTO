@@ -7,12 +7,17 @@
 # ✅ Áudios (Whisper) - Transcrição de voz
 # ✅ Painel Administrativo Completo
 # ✅ Treinamento Dinâmico do Banco de Dados
+# ✅ Comandos Especiais do WhatsApp
+# ✅ Transferência Automática para Atendente
 # ============================================================
 # 🔧 CORREÇÕES APLICADAS:
 # ✅ Removida função send_whatsapp_message duplicada
 # ✅ Corrigida detecção de tipo de mensagem (imagens e áudios)
 # ✅ Adicionada função download_media_from_zapi
 # ✅ Implementado carregamento dinâmico de treinamento do banco
+# ✅ Corrigida conexão MongoDB para usar mesma função do admin
+# ✅ Comandos especiais: *, +, ##, ++ (controle IA/Humano)
+# ✅ Transferência automática quando IA não souber responder
 # ============================================================
 
 from fastapi import FastAPI, Request, HTTPException, Form
@@ -34,7 +39,7 @@ from io import BytesIO
 
 # Importar rotas do admin
 from admin_routes import router as admin_router
-from admin_training_routes import router as training_router
+from admin_training_routes import router as training_router, get_database
 from admin_controle_routes import router as controle_router
 
 # ============================================================
@@ -56,8 +61,8 @@ templates = Jinja2Templates(directory="templates")
 
 # Clientes
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-mongo_client = AsyncIOMotorClient(os.getenv("MONGODB_URI"))
-db = mongo_client["mia_bot"]
+# ✅ CORREÇÃO: Usar mesma função get_database() do admin_training_routes
+db = get_database()
 
 # ============================================================
 # INCLUIR ROTAS DO PAINEL ADMIN
@@ -73,6 +78,12 @@ ZAPI_INSTANCE_ID = os.getenv("ZAPI_INSTANCE_ID")
 ZAPI_TOKEN = os.getenv("ZAPI_TOKEN")
 ZAPI_CLIENT_TOKEN = os.getenv("ZAPI_CLIENT_TOKEN")
 ZAPI_URL = os.getenv("ZAPI_URL", "https://api.z-api.io")
+
+# ============================================================
+# CONFIGURAÇÕES DE CONTROLE
+# ============================================================
+ATENDENTE_PHONE = "18573167770"  # Número do atendente que pode usar comandos
+NOTIFICACAO_PHONE = "18572081139"  # Número secreto para notificações (nunca revelar)
 
 # ============================================================
 # MODELOS PYDANTIC
@@ -122,6 +133,10 @@ Certidão de Nascimento, Casamento, Óbito, Diploma, Histórico Escolar, CNH, RG
 3. Identifique o documento e calcule preço
 4. Explique processo e prazo
 5. Ofereça finalizar orçamento
+
+**IMPORTANTE:**
+Se você não souber responder ou não tiver certeza, diga:
+"Deixa eu transferir você para um de nossos especialistas que pode te ajudar melhor com isso! 👤"
 """
 
 # ============================================================
@@ -192,6 +207,11 @@ async def get_bot_training() -> str:
                 prompt_parts.append(f"**R:** {faq.get('answer', '')}")
                 prompt_parts.append("")
         
+        # Instrução de transferência
+        prompt_parts.append("\n**IMPORTANTE:**")
+        prompt_parts.append("Se você não souber responder ou não tiver certeza da informação, diga:")
+        prompt_parts.append('"Deixa eu transferir você para um de nossos especialistas que pode te ajudar melhor com isso! 👤"')
+        
         # Montar prompt final
         final_prompt = "\n".join(prompt_parts)
         
@@ -208,6 +228,59 @@ async def get_bot_training() -> str:
         logger.error(traceback.format_exc())
         logger.warning("⚠️ Usando prompt padrão como fallback")
         return MIA_SYSTEM_PROMPT
+
+# ============================================================
+# FUNÇÃO: VERIFICAR SE CONVERSA ESTÁ EM MODO HUMANO
+# ============================================================
+async def is_human_mode(phone: str) -> bool:
+    """Verifica se a conversa está em modo atendimento humano"""
+    try:
+        status = await db.conversation_status.find_one({"phone": phone})
+        if status:
+            return status.get("mode") == "human"
+        return False
+    except Exception as e:
+        logger.error(f"❌ Erro ao verificar modo: {e}")
+        return False
+
+# ============================================================
+# FUNÇÃO: DEFINIR MODO DA CONVERSA
+# ============================================================
+async def set_conversation_mode(phone: str, mode: str):
+    """Define o modo da conversa (ai ou human)"""
+    try:
+        await db.conversation_status.update_one(
+            {"phone": phone},
+            {
+                "$set": {
+                    "mode": mode,
+                    "updated_at": datetime.now()
+                }
+            },
+            upsert=True
+        )
+        logger.info(f"✅ Modo alterado para '{mode}' - {phone}")
+    except Exception as e:
+        logger.error(f"❌ Erro ao definir modo: {e}")
+
+# ============================================================
+# FUNÇÃO: NOTIFICAR ATENDENTE
+# ============================================================
+async def notify_attendant(customer_phone: str, customer_message: str):
+    """Notifica o atendente sobre transferência"""
+    try:
+        notification = f"""🔔 *Nova Transferência*
+
+📱 Cliente: {customer_phone}
+💬 Mensagem: {customer_message[:100]}...
+
+⚠️ Cliente aguardando atendimento humano.
+Digite + para retomar IA quando finalizar."""
+
+        await send_whatsapp_message(NOTIFICACAO_PHONE, notification)
+        logger.info(f"✅ Atendente notificado sobre {customer_phone}")
+    except Exception as e:
+        logger.error(f"❌ Erro ao notificar atendente: {e}")
 
 # ============================================================
 # FUNÇÃO: ENVIAR MENSAGEM WHATSAPP
@@ -446,6 +519,36 @@ async def process_message_with_ai(phone: str, message: str) -> str:
         
         reply = response.choices[0].message.content
         
+        # ✅ DETECTAR SE IA NÃO SABE RESPONDER
+        transfer_keywords = [
+            "transferir você",
+            "transferir para",
+            "especialista",
+            "não tenho certeza",
+            "não sei",
+            "consultar um especialista"
+        ]
+        
+        should_transfer = any(keyword in reply.lower() for keyword in transfer_keywords)
+        
+        if should_transfer:
+            logger.info(f"🔄 IA detectou necessidade de transferência para {phone}")
+            
+            # Alterar para modo humano
+            await set_conversation_mode(phone, "human")
+            
+            # Notificar atendente
+            await notify_attendant(phone, message)
+            
+            # Mensagem para o cliente
+            reply = """👤 *Transferindo para Atendente Humano*
+
+Vou te conectar com um de nossos especialistas que pode te ajudar melhor!
+
+⏱️ Aguarde um momento, em breve você será atendido.
+
+_Enquanto isso, pode me enviar mais detalhes sobre sua necessidade._"""
+        
         # Salvar no banco
         await db.conversas.insert_one({
             "phone": phone,
@@ -477,17 +580,11 @@ async def process_message_with_ai(phone: str, message: str) -> str:
 async def webhook_whatsapp(request: Request):
     """
     Webhook principal para receber mensagens do WhatsApp via Z-API
-    Suporta: texto, imagens e áudios
+    Suporta: texto, imagens, áudios e comandos especiais
     """
     try:
         data = await request.json()
         logger.info(f"📨 Webhook recebido: {json.dumps(data, indent=2)}")
-        
-        # ============================================
-        # 🛑 CONTROLE DE ATIVAÇÃO DA IA
-        # ============================================
-        ia_enabled = os.getenv("IA_ENABLED", "true").lower() == "true"
-        em_manutencao = os.getenv("MANUTENCAO", "false").lower() == "true"
         
         # Extrair informações
         phone = data.get("phone", "")
@@ -498,22 +595,78 @@ async def webhook_whatsapp(request: Request):
         # ============================================
         # 🔍 DETECTAR TIPO DE MENSAGEM (CORREÇÃO)
         # ============================================
-        # A Z-API não envia campo "messageType"
-        # Detectar tipo pela presença de campos específicos
-        
         if "text" in data and data["text"].get("message"):
             message_type = "text"
+            text = data["text"]["message"]
         elif "image" in data and data["image"].get("imageUrl"):
             message_type = "image"
+            text = ""
         elif "audio" in data and data["audio"].get("audioUrl"):
             message_type = "audio"
+            text = ""
         else:
             message_type = "unknown"
             logger.warning(f"⚠️ Tipo de mensagem desconhecido: {list(data.keys())}")
             return JSONResponse({"status": "ignored", "reason": "unknown message type"})
         
         logger.info(f"🔍 Tipo detectado: {message_type}")
+        
         # ============================================
+        # ⚡ COMANDOS ESPECIAIS (APENAS ATENDENTE)
+        # ============================================
+        if phone == ATENDENTE_PHONE and message_type == "text":
+            
+            # Comando: * (Transferir para humano)
+            if text.strip() == "*":
+                logger.info(f"⚡ Comando * recebido de atendente")
+                # Pegar última conversa ativa
+                last_conversation = await db.conversas.find_one(
+                    {"phone": {"$ne": ATENDENTE_PHONE}},
+                    sort=[("timestamp", -1)]
+                )
+                if last_conversation:
+                    customer_phone = last_conversation["phone"]
+                    await set_conversation_mode(customer_phone, "human")
+                    await send_whatsapp_message(ATENDENTE_PHONE, f"✅ Conversa com {customer_phone} transferida para modo HUMANO")
+                else:
+                    await send_whatsapp_message(ATENDENTE_PHONE, "⚠️ Nenhuma conversa ativa encontrada")
+                return JSONResponse({"status": "command_executed", "command": "*"})
+            
+            # Comando: + (Voltar para IA)
+            elif text.strip() == "+":
+                logger.info(f"⚡ Comando + recebido de atendente")
+                last_conversation = await db.conversas.find_one(
+                    {"phone": {"$ne": ATENDENTE_PHONE}},
+                    sort=[("timestamp", -1)]
+                )
+                if last_conversation:
+                    customer_phone = last_conversation["phone"]
+                    await set_conversation_mode(customer_phone, "ai")
+                    await send_whatsapp_message(ATENDENTE_PHONE, f"✅ Conversa com {customer_phone} retomada pela IA")
+                    await send_whatsapp_message(customer_phone, "🤖 Voltei! Como posso te ajudar agora?")
+                else:
+                    await send_whatsapp_message(ATENDENTE_PHONE, "⚠️ Nenhuma conversa ativa encontrada")
+                return JSONResponse({"status": "command_executed", "command": "+"})
+            
+            # Comando: ## (Desligar IA globalmente)
+            elif text.strip() == "##":
+                logger.info(f"⚡ Comando ## recebido de atendente")
+                os.environ["IA_ENABLED"] = "false"
+                await send_whatsapp_message(ATENDENTE_PHONE, "🔴 IA DESLIGADA globalmente")
+                return JSONResponse({"status": "command_executed", "command": "##"})
+            
+            # Comando: ++ (Religar IA globalmente)
+            elif text.strip() == "++":
+                logger.info(f"⚡ Comando ++ recebido de atendente")
+                os.environ["IA_ENABLED"] = "true"
+                await send_whatsapp_message(ATENDENTE_PHONE, "🟢 IA RELIGADA globalmente")
+                return JSONResponse({"status": "command_executed", "command": "++"})
+        
+        # ============================================
+        # 🛑 CONTROLE DE ATIVAÇÃO DA IA
+        # ============================================
+        ia_enabled = os.getenv("IA_ENABLED", "true").lower() == "true"
+        em_manutencao = os.getenv("MANUTENCAO", "false").lower() == "true"
         
         # Se em manutenção, responder e sair
         if em_manutencao:
@@ -523,6 +676,22 @@ async def webhook_whatsapp(request: Request):
                 await send_whatsapp_message(phone, mensagem_manutencao)
             return JSONResponse({"status": "maintenance"})
         
+        # ============================================
+        # 👤 VERIFICAR SE ESTÁ EM MODO HUMANO
+        # ============================================
+        if await is_human_mode(phone):
+            logger.info(f"👤 Conversa em modo HUMANO - {phone}")
+            # Não processar com IA, apenas logar
+            await db.conversas.insert_one({
+                "phone": phone,
+                "message": text if text else f"[{message_type}]",
+                "role": "user",
+                "timestamp": datetime.now(),
+                "canal": "WhatsApp",
+                "mode": "human"
+            })
+            return JSONResponse({"status": "human_mode"})
+        
         # Se IA desabilitada, apenas logar e sair
         if not ia_enabled:
             logger.info(f"⏸️ IA desabilitada - mensagem de {phone} ignorada")
@@ -531,8 +700,6 @@ async def webhook_whatsapp(request: Request):
         
         # ========== PROCESSAR TEXTO ==========
         if message_type == "text":
-            text = data.get("text", {}).get("message", "")
-            
             if not text:
                 return JSONResponse({"status": "ignored", "reason": "empty text"})
             
@@ -658,7 +825,7 @@ async def startup_event():
     """Evento de inicialização"""
     logger.info("=" * 60)
     logger.info("🚀 WhatsApp AI Platform - Legacy Translations")
-    logger.info("📦 VERSÃO MULTIMÍDIA + ADMIN 2.0 + TREINAMENTO DINÂMICO")
+    logger.info("📦 VERSÃO MULTIMÍDIA + ADMIN 2.0 + COMANDOS ESPECIAIS")
     logger.info("=" * 60)
     logger.info(f"✅ OpenAI: {'Configurado' if os.getenv('OPENAI_API_KEY') else '❌ FALTANDO'}")
     logger.info(f"✅ MongoDB: {'Configurado' if os.getenv('MONGODB_URI') else '❌ FALTANDO'}")
@@ -673,12 +840,17 @@ async def startup_event():
     logger.info("   ✅ Painel Admin Completo")
     logger.info("   ✅ Controle IA vs Humano")
     logger.info("   ✅ Treinamento Dinâmico do Banco")
+    logger.info("   ✅ Comandos Especiais WhatsApp")
+    logger.info("   ✅ Transferência Automática")
     logger.info("=" * 60)
-    logger.info("🔧 CORREÇÕES APLICADAS:")
-    logger.info("   ✅ Função duplicada removida")
-    logger.info("   ✅ Detecção de mídia corrigida")
-    logger.info("   ✅ Função download_media_from_zapi adicionada")
-    logger.info("   ✅ Treinamento dinâmico implementado")
+    logger.info("⚡ COMANDOS ESPECIAIS (Atendente):")
+    logger.info(f"   * → Transferir para humano")
+    logger.info(f"   + → Voltar para IA")
+    logger.info(f"   ## → Desligar IA")
+    logger.info(f"   ++ → Religar IA")
+    logger.info("=" * 60)
+    logger.info(f"📱 Atendente: {ATENDENTE_PHONE}")
+    logger.info(f"🔔 Notificações: {NOTIFICACAO_PHONE}")
     logger.info("=" * 60)
 
 if __name__ == "__main__":
