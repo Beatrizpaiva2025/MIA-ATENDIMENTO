@@ -15,6 +15,17 @@
             --azul-bg: #eff6ff;
         }
         
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+        
         body {
             background-color: #f8fafc;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -22,7 +33,8 @@
         
         .content-wrapper {
             margin-left: 260px;
-            padding: 30px;
+            padding: 20px 30px 30px 30px;
+            min-height: 100vh;
         }
         
         .page-header {
@@ -98,21 +110,6 @@
             font-size: 0.85rem;
         }
         
-        .test-box {
-            background: linear-gradient(135deg, var(--azul-bg), #f1f5f9);
-            border-radius: 12px;
-            padding: 25px;
-            border: 2px dashed var(--azul-claro);
-        }
-        
-        .response-preview {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 15px;
-            border: 1px solid var(--azul-claro);
-        }
-        
         textarea.form-control {
             min-height: 120px;
             resize: vertical;
@@ -168,11 +165,11 @@
     </style>
 </head>
 <body>
-    <!-- Incluir Sidebar -->
     {% include 'admin_base.html' %}
     
+    <input type="hidden" id="bot-id" value="{{ bot_id }}">
+    
     <div class="content-wrapper">
-        <!-- Page Header -->
         <div class="page-header">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -180,13 +177,12 @@
                     <p class="mb-0 opacity-90">Configure a personalidade, conhecimentos e respostas da assistente virtual</p>
                 </div>
                 <div class="text-end">
-                    <div class="stat-number text-white">{{ total_conhecimentos }}</div>
+                    <div class="stat-number text-white">{{ knowledge_count }}</div>
                     <div class="text-white opacity-75">Conhecimentos</div>
                 </div>
             </div>
         </div>
         
-        <!-- Estatísticas Rápidas -->
         <div class="row mb-4">
             <div class="col-md-4">
                 <div class="stats-card">
@@ -195,7 +191,7 @@
                             <i class="bi bi-book"></i>
                         </div>
                         <div>
-                            <div class="stat-number">{{ total_conhecimentos }}</div>
+                            <div class="stat-number">{{ knowledge_count }}</div>
                             <div class="stat-label">Conhecimentos</div>
                         </div>
                     </div>
@@ -208,7 +204,7 @@
                             <i class="bi bi-question-circle"></i>
                         </div>
                         <div>
-                            <div class="stat-number">{{ total_faqs }}</div>
+                            <div class="stat-number">{{ faq_count }}</div>
                             <div class="stat-label">FAQs Cadastradas</div>
                         </div>
                     </div>
@@ -221,57 +217,41 @@
                             <i class="bi bi-chat-dots"></i>
                         </div>
                         <div>
-                            <div class="stat-number">{{ taxa_resolucao }}%</div>
-                            <div class="stat-label">Taxa de Resolução</div>
+                            <div class="stat-number">100%</div>
+                            <div class="stat-label">Sistema Ativo</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- SEÇÃO 1: Personalidade da Mia -->
         <div class="section-card">
             <h2 class="section-title"><i class="bi bi-person-hearts"></i> Personalidade da Mia</h2>
             
             <div class="alert alert-info mb-4">
-                <i class="bi bi-info-circle"></i> <strong>Dica:</strong> Defina como a Mia deve se comportar e responder aos clientes. Use um tom que reflita a identidade da sua empresa.
+                <i class="bi bi-info-circle"></i> <strong>Dica:</strong> Defina como a Mia deve se comportar e responder aos clientes.
             </div>
             
             <form id="formPersonalidade">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Nome da Assistente</label>
-                        <input type="text" class="form-control" id="nome" value="{{ personalidade.nome }}" placeholder="Ex: Mia, Ana, Sofia...">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Tom de Voz</label>
-                        <select class="form-select" id="tom">
-                            <option value="profissional e amigável" {% if personalidade.tom == "profissional e amigável" %}selected{% endif %}>Profissional e Amigável</option>
-                            <option value="informal e descontraído" {% if personalidade.tom == "informal e descontraído" %}selected{% endif %}>Informal e Descontraído</option>
-                            <option value="formal e técnico" {% if personalidade.tom == "formal e técnico" %}selected{% endif %}>Formal e Técnico</option>
-                            <option value="empático e acolhedor" {% if personalidade.tom == "empático e acolhedor" %}selected{% endif %}>Empático e Acolhedor</option>
-                        </select>
-                    </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tom de Voz</label>
+                    <input type="text" class="form-control" id="personality-tone" 
+                           value="{{ personality.tone if personality else 'Profissional e acolhedor' }}" 
+                           placeholder="Ex: Profissional e amigável">
                 </div>
                 
                 <div class="mb-3">
-                    <label class="form-label fw-bold">Idioma Principal</label>
-                    <select class="form-select" id="idioma">
-                        <option value="português brasileiro" {% if personalidade.idioma == "português brasileiro" %}selected{% endif %}>Português Brasileiro</option>
-                        <option value="inglês" {% if personalidade.idioma == "inglês" %}selected{% endif %}>Inglês</option>
-                        <option value="espanhol" {% if personalidade.idioma == "espanhol" %}selected{% endif %}>Espanhol</option>
-                    </select>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Prompt do Sistema (Instruções Gerais)</label>
-                    <textarea class="form-control" id="promptSistema" rows="6" placeholder="Ex: Você é a Mia, assistente virtual da Legacy Translations. Você ajuda clientes com traduções juramentadas...">{{ personalidade.prompt_sistema }}</textarea>
-                    <small class="text-muted">Este é o "cérebro" da Mia. Descreva quem ela é, o que faz, e como deve agir.</small>
+                    <label class="form-label fw-bold">Objetivos da IA</label>
+                    <textarea class="form-control" id="personality-goals" rows="5" 
+                              placeholder="Um objetivo por linha">{{ personality.goals|join('\n') if personality and personality.goals else '' }}</textarea>
+                    <small class="text-muted">Digite um objetivo por linha</small>
                 </div>
                 
                 <div class="mb-4">
-                    <label class="form-label fw-bold">Mensagem de Saudação Padrão</label>
-                    <textarea class="form-control" id="saudacao" rows="3" placeholder="Ex: Olá! Sou a Mia, assistente da Legacy Translations...">{{ personalidade.saudacao_padrao }}</textarea>
+                    <label class="form-label fw-bold">Restrições de Comportamento</label>
+                    <textarea class="form-control" id="personality-restrictions" rows="5" 
+                              placeholder="Uma restrição por linha">{{ personality.restrictions|join('\n') if personality and personality.restrictions else '' }}</textarea>
+                    <small class="text-muted">Digite uma restrição por linha</small>
                 </div>
                 
                 <button type="submit" class="btn btn-azul">
@@ -280,7 +260,6 @@
             </form>
         </div>
         
-        <!-- SEÇÃO 2: Base de Conhecimentos -->
         <div class="section-card">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="section-title mb-0"><i class="bi bi-book-half"></i> Base de Conhecimentos</h2>
@@ -290,45 +269,17 @@
             </div>
             
             <div class="alert alert-info mb-4">
-                <i class="bi bi-lightbulb"></i> <strong>O que adicionar:</strong> Serviços oferecidos, preços, políticas, processos, informações sobre a empresa, etc.
+                <i class="bi bi-lightbulb"></i> <strong>Adicione:</strong> Serviços, preços, políticas, processos, informações da empresa.
             </div>
             
             <div id="listaConhecimentos">
-                {% for conhecimento in conhecimentos %}
-                <div class="conhecimento-item" data-id="{{ conhecimento._id }}">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <h5 class="mb-2">
-                                <span class="badge-azul">{{ conhecimento.categoria }}</span>
-                                {{ conhecimento.titulo }}
-                            </h5>
-                            <p class="mb-2 text-muted">{{ conhecimento.conteudo[:150] }}...</p>
-                            <small class="text-muted">
-                                <i class="bi bi-tags"></i> {{ conhecimento.palavras_chave|join(', ') }}
-                            </small>
-                        </div>
-                        <div class="ms-3">
-                            <button class="btn btn-sm btn-outline-primary me-1" onclick="editarConhecimento('{{ conhecimento._id }}')">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deletarConhecimento('{{ conhecimento._id }}')">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-                
-                {% if total_conhecimentos == 0 %}
                 <div class="text-center py-5">
                     <i class="bi bi-inbox" style="font-size: 3rem; color: #cbd5e1;"></i>
-                    <p class="text-muted mt-3">Nenhum conhecimento cadastrado ainda. Comece adicionando informações importantes!</p>
+                    <p class="text-muted mt-3">Carregando conhecimentos...</p>
                 </div>
-                {% endif %}
             </div>
         </div>
         
-        <!-- SEÇÃO 3: Perguntas Frequentes (FAQ) -->
         <div class="section-card">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="section-title mb-0"><i class="bi bi-question-circle-fill"></i> Perguntas Frequentes (FAQ)</h2>
@@ -338,61 +289,14 @@
             </div>
             
             <div id="listaFAQs">
-                {% for faq in faqs %}
-                <div class="faq-item" data-id="{{ faq._id }}">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <h6 class="mb-2" style="color: var(--azul-medio);"><i class="bi bi-question-circle"></i> {{ faq.pergunta }}</h6>
-                            <p class="mb-1">{{ faq.resposta }}</p>
-                            <small class="text-muted">Categoria: {{ faq.categoria }}</small>
-                        </div>
-                        <div class="ms-3">
-                            <button class="btn btn-sm btn-outline-primary me-1" onclick="editarFAQ('{{ faq._id }}')">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deletarFAQ('{{ faq._id }}')">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-                
-                {% if total_faqs == 0 %}
                 <div class="text-center py-5">
                     <i class="bi bi-chat-square-text" style="font-size: 3rem; color: #cbd5e1;"></i>
-                    <p class="text-muted mt-3">Nenhuma FAQ cadastrada. Adicione as perguntas mais comuns dos seus clientes!</p>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        
-        <!-- SEÇÃO 4: Testar Mia -->
-        <div class="section-card">
-            <h2 class="section-title"><i class="bi bi-lightning-charge"></i> Testar Mia em Tempo Real</h2>
-            
-            <div class="test-box">
-                <label class="form-label fw-bold">Enviar mensagem de teste:</label>
-                <div class="input-group mb-3">
-                    <input type="text" class="form-control" id="mensagemTeste" placeholder="Ex: Quanto custa uma tradução juramentada?">
-                    <button class="btn btn-azul" onclick="testarMia()">
-                        <i class="bi bi-send"></i> Testar
-                    </button>
-                </div>
-                
-                <div id="respostaTeste" class="response-preview" style="display: none;">
-                    <h6 class="mb-3" style="color: var(--azul-medio);"><i class="bi bi-robot"></i> Resposta da Mia:</h6>
-                    <div id="respostaConteudo"></div>
-                    <hr>
-                    <small class="text-muted">
-                        <strong>Contexto usado:</strong> <span id="contextoUsado"></span>
-                    </small>
+                    <p class="text-muted mt-3">Carregando FAQs...</p>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Modal: Novo Conhecimento -->
     <div class="modal fade" id="modalNovoConhecimento" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -404,27 +308,16 @@
                     <form id="formNovoConhecimento">
                         <div class="mb-3">
                             <label class="form-label">Categoria</label>
-                            <select class="form-select" id="conhecimentoCategoria" required>
-                                <option value="Serviços">Serviços</option>
-                                <option value="Preços">Preços</option>
-                                <option value="Políticas">Políticas</option>
-                                <option value="Processos">Processos</option>
-                                <option value="Empresa">Sobre a Empresa</option>
-                                <option value="Outros">Outros</option>
-                            </select>
+                            <input type="text" class="form-control" id="knowledge-category" placeholder="Ex: Serviços" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Título</label>
-                            <input type="text" class="form-control" id="conhecimentoTitulo" placeholder="Ex: Tradução Juramentada" required>
+                            <input type="text" class="form-control" id="knowledge-title" placeholder="Ex: Tradução Juramentada" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Conteúdo</label>
-                            <textarea class="form-control" id="conhecimentoConteudo" rows="5" placeholder="Descreva as informações completas..." required></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Palavras-chave (separadas por vírgula)</label>
-                            <input type="text" class="form-control" id="conhecimentoPalavras" placeholder="Ex: tradução, juramentada, documento, preço">
-                            <small class="text-muted">Ajuda a Mia a encontrar este conhecimento quando relevante</small>
+                            <textarea class="form-control" id="knowledge-content" rows="5" 
+                                      placeholder="Descreva as informações completas..." required></textarea>
                         </div>
                         <button type="submit" class="btn btn-azul">
                             <i class="bi bi-check-circle"></i> Salvar Conhecimento
@@ -435,7 +328,6 @@
         </div>
     </div>
     
-    <!-- Modal: Novo FAQ -->
     <div class="modal fade" id="modalNovoFAQ" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -447,21 +339,17 @@
                     <form id="formNovoFAQ">
                         <div class="mb-3">
                             <label class="form-label">Categoria</label>
-                            <select class="form-select" id="faqCategoria" required>
-                                <option value="Geral">Geral</option>
-                                <option value="Serviços">Serviços</option>
-                                <option value="Preços">Preços</option>
-                                <option value="Prazos">Prazos</option>
-                                <option value="Documentos">Documentos</option>
-                            </select>
+                            <input type="text" class="form-control" id="faq-category" placeholder="Ex: Geral" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Pergunta</label>
-                            <input type="text" class="form-control" id="faqPergunta" placeholder="Ex: Quanto tempo demora uma tradução?" required>
+                            <input type="text" class="form-control" id="faq-question" 
+                                   placeholder="Ex: Quanto tempo demora uma tradução?" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Resposta</label>
-                            <textarea class="form-control" id="faqResposta" rows="4" placeholder="Digite a resposta completa..." required></textarea>
+                            <textarea class="form-control" id="faq-answer" rows="4" 
+                                      placeholder="Digite a resposta completa..." required></textarea>
                         </div>
                         <button type="submit" class="btn btn-azul">
                             <i class="bi bi-check-circle"></i> Salvar FAQ
@@ -474,175 +362,249 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Mesmo JavaScript da versão roxa...
-        // (Scripts de salvar personalidade, adicionar conhecimento, FAQ, testar Mia, etc.)
+        const botId = document.getElementById('bot-id').value;
+        console.log('🤖 Bot ID:', botId);
         
-        // Salvar Personalidade
+        document.addEventListener('DOMContentLoaded', function() {
+            loadKnowledge();
+            loadFAQs();
+        });
+        
         document.getElementById('formPersonalidade').addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            const tone = document.getElementById('personality-tone').value;
+            const goalsText = document.getElementById('personality-goals').value;
+            const restrictionsText = document.getElementById('personality-restrictions').value;
+            
+            const goals = goalsText.split('\n').filter(g => g.trim());
+            const restrictions = restrictionsText.split('\n').filter(r => r.trim());
+            
             const dados = {
-                nome: document.getElementById('nome').value,
-                tom: document.getElementById('tom').value,
-                idioma: document.getElementById('idioma').value,
-                prompt_sistema: document.getElementById('promptSistema').value,
-                saudacao_padrao: document.getElementById('saudacao').value
+                personality: {
+                    tone: tone,
+                    goals: goals,
+                    restrictions: restrictions
+                }
             };
             
+            console.log('💾 Salvando personalidade:', dados);
+            
             try {
-                const response = await fetch('/admin/api/training/personalidade', {
+                const response = await fetch(`/admin/treinamento/api/personality/${botId}`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(dados)
                 });
                 
                 const result = await response.json();
+                console.log('✅ Resposta:', result);
                 
                 if (result.success) {
                     alert('✅ Personalidade atualizada com sucesso!');
                 } else {
-                    alert('❌ Erro ao salvar: ' + result.message);
+                    alert('❌ Erro: ' + (result.message || 'Erro desconhecido'));
                 }
             } catch (error) {
-                alert('❌ Erro: ' + error.message);
+                console.error('❌ Erro:', error);
+                alert('❌ Erro ao salvar: ' + error.message);
             }
         });
         
-        // Adicionar Conhecimento
+        async function loadKnowledge() {
+            try {
+                console.log('🔄 Carregando conhecimentos...');
+                const response = await fetch(`/admin/treinamento/api/knowledge/${botId}`);
+                const result = await response.json();
+                
+                console.log('✅ Conhecimentos:', result);
+                
+                const container = document.getElementById('listaConhecimentos');
+                
+                if (result.success && result.knowledge && result.knowledge.length > 0) {
+                    container.innerHTML = result.knowledge.map(item => `
+                        <div class="conhecimento-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-2">
+                                        <span class="badge-azul">${item.category || 'Geral'}</span>
+                                        ${item.title}
+                                    </h5>
+                                    <p class="mb-2 text-muted">${item.content}</p>
+                                </div>
+                                <div class="ms-3">
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteKnowledge('${item.id}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = `
+                        <div class="text-center py-5">
+                            <i class="bi bi-inbox" style="font-size: 3rem; color: #cbd5e1;"></i>
+                            <p class="text-muted mt-3">Nenhum conhecimento cadastrado ainda.</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar conhecimentos:', error);
+            }
+        }
+        
         document.getElementById('formNovoConhecimento').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const palavras = document.getElementById('conhecimentoPalavras').value
-                .split(',')
-                .map(p => p.trim())
-                .filter(p => p);
-            
             const dados = {
-                categoria: document.getElementById('conhecimentoCategoria').value,
-                titulo: document.getElementById('conhecimentoTitulo').value,
-                conteudo: document.getElementById('conhecimentoConteudo').value,
-                palavras_chave: palavras
+                title: document.getElementById('knowledge-title').value,
+                content: document.getElementById('knowledge-content').value,
+                category: document.getElementById('knowledge-category').value
             };
             
+            console.log('💾 Adicionando conhecimento:', dados);
+            
             try {
-                const response = await fetch('/admin/api/training/conhecimento', {
+                const response = await fetch(`/admin/treinamento/api/knowledge/${botId}`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(dados)
                 });
                 
                 const result = await response.json();
+                console.log('✅ Resposta:', result);
                 
                 if (result.success) {
-                    alert('✅ Conhecimento adicionado com sucesso!');
-                    location.reload();
+                    alert('✅ Conhecimento adicionado!');
+                    bootstrap.Modal.getInstance(document.getElementById('modalNovoConhecimento')).hide();
+                    document.getElementById('formNovoConhecimento').reset();
+                    loadKnowledge();
                 } else {
-                    alert('❌ Erro: ' + result.message);
+                    alert('❌ Erro: ' + (result.message || 'Erro desconhecido'));
                 }
             } catch (error) {
+                console.error('❌ Erro:', error);
                 alert('❌ Erro: ' + error.message);
             }
         });
         
-        // Adicionar FAQ
+        async function deleteKnowledge(knowledgeId) {
+            if (!confirm('Tem certeza que deseja remover este conhecimento?')) return;
+            
+            try {
+                const response = await fetch(`/admin/treinamento/api/knowledge/${botId}/${knowledgeId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Conhecimento removido!');
+                    loadKnowledge();
+                } else {
+                    alert('❌ Erro: ' + (result.message || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                alert('❌ Erro: ' + error.message);
+            }
+        }
+        
+        async function loadFAQs() {
+            try {
+                console.log('🔄 Carregando FAQs...');
+                const response = await fetch(`/admin/treinamento/api/faqs/${botId}`);
+                const result = await response.json();
+                
+                console.log('✅ FAQs:', result);
+                
+                const container = document.getElementById('listaFAQs');
+                
+                if (result.success && result.faqs && result.faqs.length > 0) {
+                    container.innerHTML = result.faqs.map(item => `
+                        <div class="faq-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-2" style="color: var(--azul-medio);">
+                                        <i class="bi bi-question-circle"></i> ${item.question}
+                                    </h6>
+                                    <p class="mb-1">${item.answer}</p>
+                                    <small class="text-muted">Categoria: ${item.category || 'Geral'}</small>
+                                </div>
+                                <div class="ms-3">
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteFAQ('${item.id}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = `
+                        <div class="text-center py-5">
+                            <i class="bi bi-chat-square-text" style="font-size: 3rem; color: #cbd5e1;"></i>
+                            <p class="text-muted mt-3">Nenhuma FAQ cadastrada ainda.</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar FAQs:', error);
+            }
+        }
+        
         document.getElementById('formNovoFAQ').addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const dados = {
-                categoria: document.getElementById('faqCategoria').value,
-                pergunta: document.getElementById('faqPergunta').value,
-                resposta: document.getElementById('faqResposta').value
+                question: document.getElementById('faq-question').value,
+                answer: document.getElementById('faq-answer').value,
+                category: document.getElementById('faq-category').value
             };
             
+            console.log('💾 Adicionando FAQ:', dados);
+            
             try {
-                const response = await fetch('/admin/api/training/faq', {
+                const response = await fetch(`/admin/treinamento/api/faqs/${botId}`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(dados)
                 });
                 
                 const result = await response.json();
+                console.log('✅ Resposta:', result);
                 
                 if (result.success) {
-                    alert('✅ FAQ adicionada com sucesso!');
-                    location.reload();
+                    alert('✅ FAQ adicionada!');
+                    bootstrap.Modal.getInstance(document.getElementById('modalNovoFAQ')).hide();
+                    document.getElementById('formNovoFAQ').reset();
+                    loadFAQs();
                 } else {
-                    alert('❌ Erro: ' + result.message);
+                    alert('❌ Erro: ' + (result.message || 'Erro desconhecido'));
                 }
             } catch (error) {
+                console.error('❌ Erro:', error);
                 alert('❌ Erro: ' + error.message);
             }
         });
         
-        // Testar Mia
-        async function testarMia() {
-            const mensagem = document.getElementById('mensagemTeste').value;
-            
-            if (!mensagem) {
-                alert('Digite uma mensagem para testar!');
-                return;
-            }
+        async function deleteFAQ(faqId) {
+            if (!confirm('Tem certeza que deseja remover esta FAQ?')) return;
             
             try {
-                const response = await fetch('/admin/api/training/testar', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({mensagem: mensagem})
-                });
-                
-                const result = await response.json();
-                
-                document.getElementById('respostaTeste').style.display = 'block';
-                document.getElementById('respostaConteudo').innerHTML = `
-                    <p class="mb-0">${result.resposta_simulada}</p>
-                `;
-                document.getElementById('contextoUsado').textContent = 
-                    `${result.conhecimentos_usados} conhecimentos, ${result.faqs_usados} FAQs`;
-            } catch (error) {
-                alert('❌ Erro ao testar: ' + error.message);
-            }
-        }
-        
-        // Deletar Conhecimento
-        async function deletarConhecimento(id) {
-            if (!confirm('Tem certeza que deseja deletar este conhecimento?')) return;
-            
-            try {
-                const response = await fetch(`/admin/api/training/conhecimento/${id}`, {
+                const response = await fetch(`/admin/treinamento/api/faqs/${botId}/${faqId}`, {
                     method: 'DELETE'
                 });
                 
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('✅ Conhecimento deletado!');
-                    location.reload();
+                    alert('✅ FAQ removida!');
+                    loadFAQs();
                 } else {
-                    alert('❌ Erro: ' + result.message);
+                    alert('❌ Erro: ' + (result.message || 'Erro desconhecido'));
                 }
             } catch (error) {
-                alert('❌ Erro: ' + error.message);
-            }
-        }
-        
-        // Deletar FAQ
-        async function deletarFAQ(id) {
-            if (!confirm('Tem certeza que deseja deletar esta FAQ?')) return;
-            
-            try {
-                const response = await fetch(`/admin/api/training/faq/${id}`, {
-                    method: 'DELETE'
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert('✅ FAQ deletada!');
-                    location.reload();
-                } else {
-                    alert('❌ Erro: ' + result.message);
-                }
-            } catch (error) {
+                console.error('❌ Erro:', error);
                 alert('❌ Erro: ' + error.message);
             }
         }
