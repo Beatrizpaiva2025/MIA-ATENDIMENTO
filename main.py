@@ -44,6 +44,11 @@ logger = logging.getLogger(__name__)
 # INICIALIZAÇÃO
 # ============================================================
 app = FastAPI(title="WhatsApp AI Platform - Legacy Translations")
+app.mount("/static", StaticFiles(directory="static"), name="static")  ← ADICIONE AQUI
+
+# Templates
+templates = Jinja2Templates(directory="templates")
+
 
 # Templates
 templates = Jinja2Templates(directory="templates")
