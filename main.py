@@ -566,7 +566,7 @@ Aguarde um momento... 😊"""
             # Enviar resposta
             await send_whatsapp_message(phone, reply)
             
-            return JSONResponse({"status": "processed", "type": "text"}
+            return JSONResponse({"status": "processed", "type": "text"})
         
         # ========== PROCESSAR IMAGEM ==========
         elif message_type == "image":
