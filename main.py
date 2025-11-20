@@ -6,6 +6,7 @@
 # ✅ Imagens (GPT-4 Vision) - Leitura de documentos
 # ✅ Áudios (Whisper) - Transcrição de voz
 # ✅ Painel Administrativo Completo
+# ✅ TREINAMENTO DINÂMICO DO MONGODB
 # ============================================================
 
 from fastapi import FastAPI, Request, HTTPException, Form
@@ -79,58 +80,80 @@ class Message(BaseModel):
     message_type: str = "text"
 
 # ============================================================
-# CONTEXTO DA MIA (PERSONALIDADE)
+# FUNÇÃO: BUSCAR TREINAMENTO DINÂMICO DO MONGODB
 # ============================================================
-MIA_SYSTEM_PROMPT = """
-Você é a Mia, assistente virtual da Legacy Translations, empresa especializada em traduções juramentadas.
-
-**PERSONALIDADE:**
-- Profissional, cordial e prestativa
-- Use emojis moderadamente (📄, ✅, 💼, 🌍)
-- Tom formal mas acessível
-
-**CAPACIDADES:**
-- Análise de documentos via imagem (GPT-4 Vision)
-- Identificação de tipo de documento
-- Cálculo de preços de tradução
-- Orientação sobre processos
-
-**DOCUMENTOS ACEITOS:**
-Certidão de Nascimento, Casamento, Óbito, Diploma, Histórico Escolar, CNH, RG, Passaporte, Contrato, Procuração, etc.
-
-**TABELA DE PREÇOS (2024):**
-- Certidões simples: R$ 80-100
-- Diplomas: R$ 120-150
-- Contratos (por página): R$ 60-80
-- Documentos complexos: consultar
-
-**QUANDO TRANSFERIR PARA HUMANO:**
-- Negociações complexas
-- Documentos muito técnicos
-- Cliente solicita falar com pessoa
-- Situações sensíveis
-
-**INSTRUÇÕES:**
-1. Sempre pergunte o nome do cliente
-2. Se enviar imagem, analise com GPT-4 Vision
-3. Identifique o documento e calcule preço
-4. Explique processo e prazo
-5. Ofereça finalizar orçamento
-"""
+async def get_bot_training() -> str:
+    """Busca treinamento dinâmico do bot Mia no MongoDB"""
+    try:
+        bot = await db.bots.find_one({"name": "Mia"})
+        
+        if not bot:
+            logger.warning("⚠️ Bot Mia não encontrado no banco, usando padrão")
+            return """Você é a Mia, assistente da Legacy Translations.
+Responda de forma profissional e educada."""
+        
+        # Extrair dados do bot
+        personality = bot.get("personality", {})
+        knowledge_base = bot.get("knowledge_base", [])
+        faqs = bot.get("faqs", [])
+        
+        # Montar prompt dinâmico
+        prompt_parts = []
+        
+        # Objetivos (goals)
+        if personality.get("goals"):
+            goals_text = "\n".join(personality["goals"]) if isinstance(personality["goals"], list) else personality["goals"]
+            prompt_parts.append(f"**OBJETIVOS:**\n{goals_text}")
+        
+        # Tom de voz
+        if personality.get("tone"):
+            prompt_parts.append(f"**TOM DE VOZ:**\n{personality['tone']}")
+        
+        # Restrições
+        if personality.get("restrictions"):
+            restrictions_text = "\n".join(personality["restrictions"]) if isinstance(personality["restrictions"], list) else personality["restrictions"]
+            prompt_parts.append(f"**RESTRIÇÕES:**\n{restrictions_text}")
+        
+        # Base de conhecimento
+        if knowledge_base:
+            kb_text = "\n\n".join([
+                f"**{item.get('title', 'Info')}:**\n{item.get('content', '')}"
+                for item in knowledge_base
+            ])
+            prompt_parts.append(f"**BASE DE CONHECIMENTO:**\n{kb_text}")
+        
+        # FAQs
+        if faqs:
+            faq_text = "\n\n".join([
+                f"P: {item.get('question', '')}\nR: {item.get('answer', '')}"
+                for item in faqs
+            ])
+            prompt_parts.append(f"**PERGUNTAS FREQUENTES:**\n{faq_text}")
+        
+        final_prompt = "\n\n".join(prompt_parts)
+        
+        logger.info(f"✅ Treinamento carregado do MongoDB ({len(knowledge_base)} conhecimentos, {len(faqs)} FAQs)")
+        
+        return final_prompt
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar treinamento: {e}")
+        return """Você é a Mia, assistente da Legacy Translations.
+Responda de forma profissional e educada."""
 
 # ============================================================
-# FUNÇÃO: BAIXAR MÍDIA DA Z-API
+# FUNÇÃO: ENVIAR MENSAGEM WHATSAPP
 # ============================================================
 async def send_whatsapp_message(phone: str, message: str):
     """Envia mensagem via Z-API com Client-Token"""
     try:
         # Construir URL completa
-        url = f"https://api.z-api.io/instances/3E4255284F9C20BCBD775E3E11E99CA6/token/4EDA979AE181FE76311C51F5/send-text"
+        url = f"https://api.z-api.io/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text"
         
         # Headers COM Client-Token
         headers = {
             "Content-Type": "application/json",
-            "Client-Token": os.getenv("ZAPI_CLIENT_TOKEN", "")
+            "Client-Token": ZAPI_CLIENT_TOKEN or ""
         }
         
         # Payload
@@ -140,48 +163,63 @@ async def send_whatsapp_message(phone: str, message: str):
         }
         
         # Logs de debug
-        logger.info(f"🔍 Enviando para Z-API: {url}")
-        logger.info(f"🔍 Telefone: {phone}")
-        logger.info(f"🔍 Client-Token configurado: {'Sim' if headers['Client-Token'] else 'Não'}")
+        logger.info(f"📤 Enviando mensagem para {phone}")
+        logger.info(f"🔑 Client-Token: {'Configurado' if headers['Client-Token'] else 'VAZIO'}")
         
         # Enviar requisição COM headers
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers, json=payload)
             
-            logger.info(f"🔍 Status Z-API: {response.status_code}")
-            logger.info(f"🔍 Resposta Z-API: {response.text}")
+            logger.info(f"📊 Status Z-API: {response.status_code}")
+            logger.info(f"📊 Resposta: {response.text}")
             
             if response.status_code == 200:
-                logger.info(f"✅ Mensagem enviada com sucesso para {phone}")
+                logger.info(f"✅ Mensagem enviada com sucesso")
                 return True
             else:
                 logger.error(f"❌ Erro ao enviar: {response.status_code} - {response.text}")
                 return False
                 
     except Exception as e:
-        logger.error(f"❌ Exceção ao enviar para Z-API: {e}")
+        logger.error(f"❌ Exceção ao enviar mensagem: {str(e)}")
+        logger.error(traceback.format_exc())
         return False
 
+# ============================================================
+# FUNÇÃO: BAIXAR MÍDIA DA Z-API
+# ============================================================
+async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
+    """Baixa mídia (imagem/áudio) da Z-API"""
+    try:
+        logger.info(f"⬇️ Baixando mídia: {media_url[:100]}")
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(media_url)
+            
+            if response.status_code == 200:
+                logger.info(f"✅ Mídia baixada ({len(response.content)} bytes)")
+                return response.content
+            else:
+                logger.error(f"❌ Erro ao baixar mídia: {response.status_code}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"❌ Erro ao baixar mídia: {str(e)}")
+        return None
 
 # ============================================================
 # FUNÇÃO: PROCESSAR IMAGEM COM GPT-4 VISION
 # ============================================================
 async def process_image_with_vision(image_bytes: bytes, phone: str) -> str:
-    """
-    Analisa imagem usando GPT-4 Vision para identificar documento
-    
-    Args:
-        image_bytes: Bytes da imagem
-        phone: Telefone do usuário (para contexto)
-    
-    Returns:
-        str: Análise do documento
-    """
+    """Analisa imagem com GPT-4 Vision"""
     try:
-        logger.info(f"🔍 Analisando imagem com GPT-4 Vision para {phone}")
+        logger.info(f"🖼️ Processando imagem com Vision ({len(image_bytes)} bytes)")
         
         # Converter para base64
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
+        
+        # Buscar treinamento dinâmico
+        training_prompt = await get_bot_training()
         
         # Chamar GPT-4 Vision
         response = openai_client.chat.completions.create(
@@ -189,23 +227,24 @@ async def process_image_with_vision(image_bytes: bytes, phone: str) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": """Você é um especialista em análise de documentos para tradução juramentada.
-                    
-                    Analise a imagem e forneça:
-                    1. Tipo de documento identificado
-                    2. Idioma do documento
-                    3. Qualidade da imagem (boa/média/ruim)
-                    4. Se é adequado para tradução juramentada
-                    5. Estimativa de preço baseado na tabela da Legacy Translations
-                    
-                    Seja objetivo e profissional."""
+                    "content": f"""{training_prompt}
+
+**TAREFA ESPECIAL - ANÁLISE DE IMAGEM:**
+Você recebeu uma imagem de documento. Analise e forneça:
+1. Tipo de documento (certidão, diploma, contrato, etc)
+2. Idioma detectado
+3. Número estimado de páginas (se visível)
+4. Orçamento baseado nas regras de preço do treinamento
+5. Prazo de entrega
+
+Seja direto e objetivo na resposta."""
                 },
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": "Analise este documento e me diga que tipo é, se está legível e qual seria o preço aproximado da tradução juramentada."
+                            "text": "Analise este documento e me dê um orçamento de tradução."
                         },
                         {
                             "type": "image_url",
@@ -216,66 +255,75 @@ async def process_image_with_vision(image_bytes: bytes, phone: str) -> str:
                     ]
                 }
             ],
-            max_tokens=500
+            max_tokens=800
         )
         
         analysis = response.choices[0].message.content
-        logger.info(f"✅ Análise concluída: {analysis[:100]}...")
         
         # Salvar no banco
-        await db.documentos.insert_one({
+        await db.conversas.insert_one({
             "phone": phone,
+            "message": "[IMAGEM ENVIADA]",
+            "role": "user",
             "timestamp": datetime.now(),
-            "analysis": analysis,
-            "status": "ANALISADO"
+            "canal": "WhatsApp",
+            "type": "image"
         })
         
+        await db.conversas.insert_one({
+            "phone": phone,
+            "message": analysis,
+            "role": "assistant",
+            "timestamp": datetime.now(),
+            "canal": "WhatsApp"
+        })
+        
+        logger.info(f"✅ Análise Vision concluída")
         return analysis
         
     except Exception as e:
-        logger.error(f"❌ Erro ao processar imagem: {str(e)}")
+        logger.error(f"❌ Erro no Vision: {str(e)}")
         logger.error(traceback.format_exc())
-        return "Desculpe, tive um problema ao analisar a imagem. Pode tentar enviar novamente?"
+        return "Desculpe, não consegui analisar a imagem. Pode me dizer quantas páginas tem o documento?"
 
 # ============================================================
 # FUNÇÃO: PROCESSAR ÁUDIO COM WHISPER
 # ============================================================
-async def process_audio_with_whisper(audio_bytes: bytes, phone: str) -> str:
-    """
-    Transcreve áudio usando Whisper
-    
-    Args:
-        audio_bytes: Bytes do áudio
-        phone: Telefone do usuário
-    
-    Returns:
-        str: Texto transcrito
-    """
+async def process_audio_with_whisper(audio_bytes: bytes, phone: str) -> Optional[str]:
+    """Transcreve áudio com Whisper"""
     try:
-        logger.info(f"🎤 Transcrevendo áudio com Whisper para {phone}")
+        logger.info(f"🎤 Processando áudio com Whisper ({len(audio_bytes)} bytes)")
         
-        # Criar arquivo temporário em memória
-        audio_file = BytesIO(audio_bytes)
-        audio_file.name = "audio.ogg"
+        # Salvar temporariamente
+        temp_file = BytesIO(audio_bytes)
+        temp_file.name = "audio.ogg"
         
-        # Transcrever com Whisper
-        transcript = openai_client.audio.transcriptions.create(
+        # Chamar Whisper
+        transcription = openai_client.audio.transcriptions.create(
             model="whisper-1",
-            file=audio_file,
-            language="pt"
+            file=temp_file,
+            language="pt"  # Pode ser pt, en, es
         )
         
-        transcription = transcript.text
-        logger.info(f"✅ Transcrição: {transcription[:100]}...")
+        transcribed_text = transcription.text
         
-        return transcription
+        # Salvar no banco
+        await db.conversas.insert_one({
+            "phone": phone,
+            "message": f"[ÁUDIO] {transcribed_text}",
+            "role": "user",
+            "timestamp": datetime.now(),
+            "canal": "WhatsApp",
+            "type": "audio"
+        })
+        
+        logger.info(f"✅ Áudio transcrito: {transcribed_text[:100]}")
+        return transcribed_text
         
     except Exception as e:
-        logger.error(f"❌ Erro ao transcrever áudio: {str(e)}")
+        logger.error(f"❌ Erro no Whisper: {str(e)}")
         logger.error(traceback.format_exc())
         return None
-        return False
-
 
 # ============================================================
 # FUNÇÃO: BUSCAR CONTEXTO DA CONVERSA
@@ -295,21 +343,24 @@ async def get_conversation_context(phone: str, limit: int = 10) -> List[Dict]:
             for msg in messages
         ]
     except Exception as e:
-        logger.error(f"❌ Erro ao buscar contexto: {str(e)}")
+        logger.error(f"❌ Erro ao buscar contexto: {e}")
         return []
 
 # ============================================================
 # FUNÇÃO: PROCESSAR MENSAGEM COM IA
 # ============================================================
 async def process_message_with_ai(phone: str, message: str) -> str:
-    """Processar mensagem com GPT-4"""
+    """Processar mensagem com GPT-4 usando treinamento dinâmico"""
     try:
+        # Buscar treinamento dinâmico do MongoDB
+        system_prompt = await get_bot_training()
+        
         # Buscar contexto
         context = await get_conversation_context(phone)
         
         # Montar mensagens
         messages = [
-            {"role": "system", "content": MIA_SYSTEM_PROMPT}
+            {"role": "system", "content": system_prompt}
         ] + context + [
             {"role": "user", "content": message}
         ]
@@ -349,9 +400,6 @@ async def process_message_with_ai(phone: str, message: str) -> str:
         return "Desculpe, tive um problema. Pode repetir?"
 
 # ============================================================
-# WEBHOOK: WHATSAPP (Z-API)
-# ============================================================
-# ============================================================
 # FUNÇÃO AUXILIAR: NORMALIZAR TELEFONE
 # ============================================================
 def normalize_phone(phone: str) -> str:
@@ -377,7 +425,7 @@ async def webhook_whatsapp(request: Request):
         ia_enabled = os.getenv("IA_ENABLED", "true").lower() == "true"
         em_manutencao = os.getenv("MANUTENCAO", "false").lower() == "true"
         
-        # Extrair informações
+        # Extrair dados básicos
         phone = data.get("phone", "")
         message_id = data.get("messageId", "")
         connected_phone = data.get("connectedPhone", "")
@@ -388,7 +436,18 @@ async def webhook_whatsapp(request: Request):
             logger.info(f"🚫 Mensagem de grupo ignorada")
             return JSONResponse({"status": "ignored", "reason": "group message"})
         
-        message_type = data.get("messageType", "text")
+        # ✅ DETECÇÃO CORRETA DE TIPO DE MENSAGEM
+        # Z-API não envia "messageType", detectar pela presença dos campos
+        message_type = "text"  # padrão
+        
+        if "image" in data and data.get("image"):
+            message_type = "image"
+        elif "audio" in data and data.get("audio"):
+            message_type = "audio"
+        elif "text" in data and data.get("text"):
+            message_type = "text"
+        
+        logger.info(f"🔍 Tipo detectado: {message_type}")
         
         if not phone:
             return JSONResponse({"status": "ignored", "reason": "no phone"})
@@ -397,7 +456,12 @@ async def webhook_whatsapp(request: Request):
         if em_manutencao:
             logger.info(f"🔧 Modo manutenção ativo - mensagem de {phone}")
             if message_type == "text":
-                mensagem_manutencao = """🔧 *Sistema em Manutenção*\n\nOlá! Estamos melhorando nosso atendimento.\nEm breve voltaremos! 😊\n\n📞 Para urgências: (contato)"""
+                mensagem_manutencao = """🔧 *Sistema em Manutenção*
+
+Olá! Estamos melhorando nosso atendimento.
+Em breve voltaremos! 😊
+
+📞 Para urgências: (contato)"""
                 await send_whatsapp_message(phone, mensagem_manutencao)
             return JSONResponse({"status": "maintenance"})
         
@@ -405,9 +469,10 @@ async def webhook_whatsapp(request: Request):
         if not ia_enabled:
             logger.info(f"⏸️ IA desabilitada - mensagem de {phone} ignorada")
             return JSONResponse({"status": "ia_disabled"})
-        # ============================================
         
-        # ========== PROCESSAR TEXTO ==========
+        # ============================================
+        # ✅ PROCESSAR MENSAGEM DE TEXTO
+        # ============================================
         if message_type == "text":
             text = data.get("text", {}).get("message", "")
             
@@ -416,24 +481,17 @@ async def webhook_whatsapp(request: Request):
             
             logger.info(f"💬 Texto de {phone}: {text}")
             
-            # ============================================
-            # 🤖 PROCESSAR COM IA (modo normal)
-            # ============================================
-            
-            
             # Processar com IA
             reply = await process_message_with_ai(phone, text)
-            
-            # ============================================
-            # ✅ ENVIAR RESPOSTA
-            # ============================================
             
             # Enviar resposta
             await send_whatsapp_message(phone, reply)
             
             return JSONResponse({"status": "processed", "type": "text"})
         
-        # ========== PROCESSAR IMAGEM ==========
+        # ============================================
+        # ✅ PROCESSAR IMAGEM
+        # ============================================
         elif message_type == "image":
             image_url = data.get("image", {}).get("imageUrl", "")
             caption = data.get("image", {}).get("caption", "")
@@ -453,15 +511,14 @@ async def webhook_whatsapp(request: Request):
             # Analisar com Vision
             analysis = await process_image_with_vision(image_bytes, phone)
             
-            # Montar resposta
-            reply = f"📄 *Análise do Documento*\n\n{analysis}\n\n_Posso ajudar com mais alguma coisa?_"
-            
             # Enviar resposta
-            await send_whatsapp_message(phone, reply)
+            await send_whatsapp_message(phone, analysis)
             
             return JSONResponse({"status": "processed", "type": "image"})
         
-        # ========== PROCESSAR ÁUDIO ==========
+        # ============================================
+        # ✅ PROCESSAR ÁUDIO
+        # ============================================
         elif message_type == "audio":
             audio_url = data.get("audio", {}).get("audioUrl", "")
             
@@ -495,178 +552,97 @@ async def webhook_whatsapp(request: Request):
             return JSONResponse({"status": "processed", "type": "audio"})
         
         else:
-            logger.info(f"⚠️ Tipo não suportado: {message_type}")
-            return JSONResponse({"status": "ignored", "reason": f"unsupported type: {message_type}"})
+            logger.warning(f"⚠️ Tipo de mensagem não suportado: {message_type}")
+            return JSONResponse({"status": "ignored", "reason": "unsupported type"})
             
     except Exception as e:
-        logger.error(f"❌ Erro no webhook: {str(e)}")
+        logger.error(f"❌ ERRO no webhook: {str(e)}")
         logger.error(traceback.format_exc())
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=500)
+
+# ============================================================
+# ROTA: PÁGINA INICIAL
+# ============================================================
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    """Página inicial"""
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>MIA Bot - Legacy Translations</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 50px auto;
+                padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+            }
+            .container {
+                background: rgba(255,255,255,0.1);
+                padding: 40px;
+                border-radius: 20px;
+                backdrop-filter: blur(10px);
+            }
+            h1 { font-size: 2.5em; margin-bottom: 10px; }
+            .status { color: #4ade80; font-weight: bold; }
+            a {
+                display: inline-block;
+                margin: 10px 10px 10px 0;
+                padding: 15px 30px;
+                background: white;
+                color: #667eea;
+                text-decoration: none;
+                border-radius: 10px;
+                font-weight: bold;
+                transition: transform 0.2s;
+            }
+            a:hover { transform: scale(1.05); }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🤖 MIA Bot</h1>
+            <p class="status">✅ Sistema Ativo</p>
+            <p>Assistente virtual inteligente da Legacy Translations</p>
+            
+            <h3>📊 Painel Administrativo:</h3>
+            <a href="/admin">Dashboard</a>
+            <a href="/admin/treinamento">Treinamento IA</a>
+            <a href="/admin/pipeline">Pipeline</a>
+            <a href="/admin/leads">Leads</a>
+            
+            <h3>🔧 Recursos:</h3>
+            <ul>
+                <li>✅ Mensagens de texto (GPT-4)</li>
+                <li>✅ Análise de imagens (GPT-4 Vision)</li>
+                <li>✅ Transcrição de áudio (Whisper)</li>
+                <li>✅ Treinamento dinâmico (MongoDB)</li>
+            </ul>
+        </div>
+    </body>
+    </html>
+    """
 
 # ============================================================
 # ROTA: HEALTH CHECK
 # ============================================================
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    try:
-        # Testar MongoDB
-        await db.command("ping")
-        
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "openai": "✅ Configurado" if os.getenv("OPENAI_API_KEY") else "❌ Não configurado",
-            "mongodb": "✅ Conectado",
-            "zapi_instance": "✅ Configurado" if ZAPI_INSTANCE_ID else "❌ Não configurado",
-            "zapi_token": "✅ Configurado" if ZAPI_TOKEN else "❌ Não configurado"
-        }
-    except Exception as e:
-        return JSONResponse(
-            {"status": "unhealthy", "error": str(e)},
-            status_code=503
-        )
+    """Health check para Render.com"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "MIA Bot",
+        "version": "3.0"
+    }
 
 # ============================================================
-# ROTA RAIZ
+# INICIAR SERVIDOR
 # ============================================================
-@app.get("/")
-async def root():
-    """Redirecionar para painel admin"""
-    return RedirectResponse(url="/admin")
-
-# ============================================================
-# STARTUP
-# ============================================================
-@app.on_event("startup")
-async def startup_event():
-    """Evento de inicialização"""
-    logger.info("=" * 60)
-    logger.info("🚀 WhatsApp AI Platform - Legacy Translations")
-    logger.info("📦 VERSÃO MULTIMÍDIA + ADMIN 2.0")
-    logger.info("=" * 60)
-    logger.info(f"✅ OpenAI: {'Configurado' if os.getenv('OPENAI_API_KEY') else '❌ FALTANDO'}")
-    logger.info(f"✅ MongoDB: {'Configurado' if os.getenv('MONGODB_URI') else '❌ FALTANDO'}")
-    logger.info(f"✅ Z-API Instance: {'Configurado' if ZAPI_INSTANCE_ID else '❌ FALTANDO'}")
-    logger.info(f"✅ Z-API Token: {'Configurado' if ZAPI_TOKEN else '❌ FALTANDO'}")
-    logger.info("=" * 60)
-    logger.info("🎯 FUNCIONALIDADES ATIVAS:")
-    logger.info("   ✅ Mensagens de texto")
-    logger.info("   ✅ Imagens (GPT-4 Vision)")
-    logger.info("   ✅ Áudios (Whisper)")
-    logger.info("   ✅ Painel Admin Completo")
-    logger.info("   ✅ Controle IA vs Humano")
-    logger.info("=" * 60)
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-    # ============================================================
-# ROTA DE DIAGNÓSTICO TEMPORÁRIA
-# ============================================================
-import os
-from pathlib import Path
-from fastapi.responses import HTMLResponse
-
-@app.get("/diagnostic/templates", response_class=HTMLResponse)
-async def diagnostic_templates():
-    """Diagnóstico completo de templates"""
-    
-    html_parts = ["<html><head><style>body{font-family:monospace;padding:20px;background:#1a1a1a;color:#0f0;}pre{background:#000;padding:10px;border:1px solid #0f0;}</style></head><body>"]
-    html_parts.append("<h1>🔍 DIAGNÓSTICO DE TEMPLATES</h1>")
-    
-    # 1. Diretório atual
-    html_parts.append("<h2>📁 Diretório de trabalho:</h2>")
-    html_parts.append(f"<pre>{os.getcwd()}</pre>")
-    
-    # 2. Listar pasta templates
-    html_parts.append("<h2>📂 Conteúdo da pasta templates/:</h2>")
-    templates_path = Path("templates")
-    if templates_path.exists():
-        html_parts.append("<pre>")
-        for file in sorted(templates_path.rglob("*")):
-            if file.is_file():
-                size = file.stat().st_size
-                html_parts.append(f"{file.relative_to('.')} - {size:,} bytes\n")
-        html_parts.append("</pre>")
-    else:
-        html_parts.append("<pre style='color:red;'>❌ PASTA TEMPLATES NÃO EXISTE!</pre>")
-    
-    # 3. Procurar arquivos treinamento
-    html_parts.append("<h2>🔎 Procurando arquivos com 'treinamento' ou 'training':</h2>")
-    html_parts.append("<pre>")
-    for pattern in ["*treinamento*", "*training*"]:
-        for file in Path(".").rglob(pattern):
-            html_parts.append(f"{file} - {'DIR' if file.is_dir() else f'{file.stat().st_size} bytes'}\n")
-    html_parts.append("</pre>")
-    
-    # 4. Listar TODOS arquivos .html no projeto
-    html_parts.append("<h2>📄 TODOS os arquivos .html no projeto:</h2>")
-    html_parts.append("<pre>")
-    for file in Path(".").rglob("*.html"):
-        size = file.stat().st_size
-        html_parts.append(f"{file} - {size:,} bytes\n")
-    html_parts.append("</pre>")
-    
-    html_parts.append("</body></html>")
-    return "".join(html_parts)
-@app.get("/diagnostic/jinja", response_class=HTMLResponse)
-async def diagnostic_jinja():
-    """Diagnóstico configuração Jinja2"""
-    
-    html_parts = ["<html><head><style>body{font-family:monospace;padding:20px;background:#1a1a1a;color:#0f0;}pre{background:#000;padding:10px;border:1px solid #0f0;}</style></head><body>"]
-    html_parts.append("<h1>🔍 DIAGNÓSTICO JINJA2</h1>")
-    
-    # 1. Verificar objeto templates do main
-    html_parts.append("<h2>📦 Objeto 'templates' do main.py:</h2>")
-    try:
-        html_parts.append(f"<pre>Type: {type(templates)}\n")
-        html_parts.append(f"Directory: {templates.directory if hasattr(templates, 'directory') else 'N/A'}\n")
-        if hasattr(templates, 'env') and hasattr(templates.env, 'loader'):
-            loader = templates.env.loader
-            html_parts.append(f"Loader: {type(loader)}\n")
-            if hasattr(loader, 'searchpath'):
-                html_parts.append(f"Searchpath: {loader.searchpath}\n")
-        html_parts.append("</pre>")
-    except Exception as e:
-        html_parts.append(f"<pre style='color:red;'>❌ Erro: {e}</pre>")
-    
-    # 2. Verificar objeto templates do admin_training_routes
-    html_parts.append("<h2>📦 Objeto 'templates' do admin_training_routes.py:</h2>")
-    try:
-        from admin_training_routes import templates as training_templates
-        html_parts.append(f"<pre>Type: {type(training_templates)}\n")
-        html_parts.append(f"Directory: {training_templates.directory if hasattr(training_templates, 'directory') else 'N/A'}\n")
-        if hasattr(training_templates, 'env') and hasattr(training_templates.env, 'loader'):
-            loader = training_templates.env.loader
-            html_parts.append(f"Loader: {type(loader)}\n")
-            if hasattr(loader, 'searchpath'):
-                html_parts.append(f"Searchpath: {loader.searchpath}\n")
-        html_parts.append("</pre>")
-    except Exception as e:
-        html_parts.append(f"<pre style='color:red;'>❌ Erro ao importar: {e}</pre>")
-    
-    # 3. Tentar renderizar manualmente
-    html_parts.append("<h2>🧪 Teste de renderização manual:</h2>")
-    try:
-        from jinja2 import Environment, FileSystemLoader
-        import os
-        
-        template_dir = os.path.join(os.getcwd(), "templates")
-        html_parts.append(f"<pre>Template dir absoluto: {template_dir}\n")
-        html_parts.append(f"Dir existe? {os.path.exists(template_dir)}\n")
-        
-        env = Environment(loader=FileSystemLoader(template_dir))
-        html_parts.append(f"Templates disponíveis: {env.list_templates()[:20]}\n")
-        
-        # Tentar carregar admin_treinamento.html
-        template = env.get_template("admin_treinamento.html")
-        html_parts.append(f"✅ Template carregado com sucesso!\n")
-        html_parts.append(f"Template name: {template.name}\n")
-        html_parts.append("</pre>")
-    except Exception as e:
-        html_parts.append(f"<pre style='color:red;'>❌ Erro: {e}</pre>")
-    
-    html_parts.append("</body></html>")
-    return "".join(html_parts)
-
+    port = int(os.getenv("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
