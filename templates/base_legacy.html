@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Painel Administrativo - Legacy Translations{% endblock %}</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Legacy Theme CSS -->
+    <link rel="stylesheet" href="/static/css/legacy_theme.css">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- ============================================
+         SIDEBAR - MENU LATERAL
+         ============================================ -->
+    <aside class="sidebar">
+        <!-- Logo -->
+        <div class="sidebar-logo">
+            <img src="/static/images/logo_legacy.jpeg" alt="Legacy Translations">
+            <h2>MIA Bot</h2>
+            <p>Sistema Omnichannel</p>
+        </div>
+        
+        <!-- Menu de Navegação -->
+        <nav>
+            <a href="/admin" class="{% if request.url.path == '/admin' or request.url.path == '/admin/' %}active{% endif %}">
+                <i class="fas fa-chart-line"></i>
+                Dashboard
+            </a>
+            
+            <a href="/admin/treinamento/" class="{% if '/treinamento' in request.url.path %}active{% endif %}">
+                <i class="fas fa-brain"></i>
+                Treinamento IA
+            </a>
+            
+            <a href="/admin/pipeline" class="{% if '/pipeline' in request.url.path %}active{% endif %}">
+                <i class="fas fa-filter"></i>
+                Pipeline de Vendas
+            </a>
+            
+            <a href="/admin/leads" class="{% if '/leads' in request.url.path %}active{% endif %}">
+                <i class="fas fa-users"></i>
+                Gestão de Leads
+            </a>
+            
+            <a href="/admin/transfers" class="{% if '/transfers' in request.url.path %}active{% endif %}">
+                <i class="fas fa-exchange-alt"></i>
+                Transferências
+            </a>
+            
+            <a href="/admin/documents" class="{% if '/documents' in request.url.path %}active{% endif %}">
+                <i class="fas fa-file-alt"></i>
+                Documentos
+            </a>
+            
+            <a href="/admin/controle" class="{% if '/controle' in request.url.path %}active{% endif %}">
+                <i class="fas fa-toggle-on"></i>
+                Controle IA/Humano
+            </a>
+            
+            <a href="/admin/config" class="{% if '/config' in request.url.path %}active{% endif %}">
+                <i class="fas fa-cog"></i>
+                Configurações
+            </a>
+        </nav>
+    </aside>
+    
+    <!-- ============================================
+         CONTEÚDO PRINCIPAL
+         ============================================ -->
+    <main class="main-content">
+        <!-- Header do Conteúdo -->
+        <div class="content-header d-flex justify-between align-center">
+            <div>
+                <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+                <p>{% block page_subtitle %}Visão geral do sistema{% endblock %}</p>
+            </div>
+            <div class="header-actions">
+                {% block header_actions %}
+                <span style="color: #6c757d; font-size: 0.9rem;">
+                    <i class="far fa-clock"></i>
+                    Última atualização: {{ now().strftime('%d/%m/%Y, %H:%M:%S') }}
+                </span>
+                {% endblock %}
+            </div>
+        </div>
+        
+        <!-- Container do Conteúdo -->
+        <div class="container">
+            {% block content %}
+            <!-- Conteúdo específico de cada página -->
+            {% endblock %}
+        </div>
+    </main>
+    
+    <!-- ============================================
+         SCRIPTS
+         ============================================ -->
+    <script>
+        // Configuração global do Chart.js
+        Chart.defaults.font.family = "'Inter', 'Segoe UI', sans-serif";
+        Chart.defaults.color = '#6c757d';
+        
+        // Cores da Legacy Translations
+        const legacyColors = {
+            navy: '#1e3a5f',
+            blue: '#3b7bbf',
+            lightBlue: '#5eb3e4',
+            skyBlue: '#a8d8f0',
+            success: '#28a745',
+            warning: '#ffc107',
+            danger: '#dc3545'
+        };
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
