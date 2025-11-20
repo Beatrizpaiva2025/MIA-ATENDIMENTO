@@ -85,6 +85,11 @@ ZAPI_URL = os.getenv("ZAPI_URL", "https://api.z-api.io")
 ATENDENTE_PHONE = "18573167770"  # Número do atendente que pode usar comandos
 NOTIFICACAO_PHONE = "18572081139"  # Número secreto para notificações (nunca revelar)
 
+# Função auxiliar para normalizar número de telefone
+def normalize_phone(phone: str) -> str:
+    """Remove caracteres especiais e normaliza número"""
+    return ''.join(filter(str.isdigit, phone))[-10:]  # Últimos 10 dígitos
+
 # ============================================================
 # MODELOS PYDANTIC
 # ============================================================
@@ -588,9 +593,28 @@ async def webhook_whatsapp(request: Request):
         
         # Extrair informações
         phone = data.get("phone", "")
+        message_id = data.get("messageId", "")
         
         if not phone:
             return JSONResponse({"status": "ignored", "reason": "no phone"})
+        
+        # ============================================
+        # 🛑 CONTROLE ANTI-REPETIÇÃO
+        # ============================================
+        # Verificar se já processamos este messageId
+        if message_id:
+            already_processed = await db.processed_messages.find_one({"messageId": message_id})
+            if already_processed:
+                logger.info(f"⚠️ Mensagem duplicada ignorada: {message_id}")
+                return JSONResponse({"status": "ignored", "reason": "duplicate message"})
+            
+            # Marcar como processada
+            await db.processed_messages.insert_one({
+                "messageId": message_id,
+                "phone": phone,
+                "timestamp": datetime.now()
+            })
+        # ============================================
         
         # ============================================
         # 🔍 DETECTAR TIPO DE MENSAGEM (CORREÇÃO)
@@ -614,7 +638,14 @@ async def webhook_whatsapp(request: Request):
         # ============================================
         # ⚡ COMANDOS ESPECIAIS (APENAS ATENDENTE)
         # ============================================
-        if phone == ATENDENTE_PHONE and message_type == "text":
+        # Normalizar números para comparação
+        phone_normalized = normalize_phone(phone)
+        atendente_normalized = normalize_phone(ATENDENTE_PHONE)
+        
+        logger.info(f"🔍 Phone recebido: {phone} (normalizado: {phone_normalized})")
+        logger.info(f"🔍 Atendente esperado: {ATENDENTE_PHONE} (normalizado: {atendente_normalized})")
+        
+        if phone_normalized == atendente_normalized and message_type == "text":
             
             # Comando: * (Transferir para humano)
             if text.strip() == "*":
