@@ -456,9 +456,9 @@ async def webhook_whatsapp(request: Request):
             
             # Normalizar números para comparação
             atendente_normalizado = normalize_phone("18573167770")
-            remetente_normalizado = normalize_phone(connected_phone)
+            remetente_normalizado = normalize_phone(phone)
             
-            logger.info(f"🔍 Remetente: {connected_phone} (normalizado: {remetente_normalizado})")
+            logger.info(f"🔍 Remetente: {phone} (normalizado: {remetente_normalizado})")
             logger.info(f"🔍 Atendente esperado: 18573167770 (normalizado: {atendente_normalizado})")
             
             # Se é o atendente enviando
@@ -804,4 +804,3 @@ async def diagnostic_jinja():
     
     html_parts.append("</body></html>")
     return "".join(html_parts)
-
