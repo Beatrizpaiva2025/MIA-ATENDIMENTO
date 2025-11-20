@@ -53,6 +53,48 @@ openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Usar mesma conexão do admin
 from admin_training_routes import get_database
 db = get_database()
+# ============================================================
+# CONTROLE DO BOT - LIGAR/DESLIGAR
+# ============================================================
+
+# Estado global do bot (em memória + MongoDB)
+bot_status_cache = {
+    "enabled": True,
+    "last_update": datetime.now()
+}
+
+async def get_bot_status():
+    """Retorna status atual do bot (ativo/inativo)"""
+    try:
+        config = await db.bot_config.find_one({"_id": "global_status"})
+        if config:
+            bot_status_cache["enabled"] = config.get("enabled", True)
+            bot_status_cache["last_update"] = config.get("last_update", datetime.now())
+        return bot_status_cache
+    except Exception as e:
+        logger.error(f"Erro ao buscar status do bot: {e}")
+        return bot_status_cache
+
+async def set_bot_status(enabled: bool):
+    """Ativa ou desativa o bot globalmente"""
+    try:
+        await db.bot_config.update_one(
+            {"_id": "global_status"},
+            {
+                "$set": {
+                    "enabled": enabled,
+                    "last_update": datetime.now()
+                }
+            },
+            upsert=True
+        )
+        bot_status_cache["enabled"] = enabled
+        bot_status_cache["last_update"] = datetime.now()
+        logger.info(f"✅ Bot {'ATIVADO' if enabled else 'DESATIVADO'}")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar status do bot: {e}")
+        return False
 
 # ============================================================
 # INCLUIR ROTAS DO PAINEL ADMIN
@@ -409,6 +451,49 @@ def normalize_phone(phone: str) -> str:
 # ============================================================
 # WEBHOOK: WHATSAPP (Z-API) - INTEGRADO
 # ============================================================
+# ============================================================
+# API: CONTROLE DO BOT
+# ============================================================
+
+@app.get("/admin/api/bot/status")
+async def api_bot_status():
+    """Retorna status atual do bot"""
+    status = await get_bot_status()
+    
+    # Contar conversas por modo
+    ia_ativa = await db.conversas.distinct("phone", {"mode": {"$ne": "human"}})
+    humano = await db.conversas.distinct("phone", {"mode": "human"})
+    
+    return {
+        "enabled": status["enabled"],
+        "last_update": status["last_update"].isoformat(),
+        "stats": {
+            "ia_ativa": len(ia_ativa),
+            "atendimento_humano": len(humano),
+            "ia_desligada": 0 if status["enabled"] else len(ia_ativa),
+            "total": len(ia_ativa) + len(humano)
+        }
+    }
+
+@app.post("/admin/api/bot/toggle")
+async def api_bot_toggle(enabled: bool):
+    """Liga ou desliga o bot globalmente"""
+    success = await set_bot_status(enabled)
+    
+    if success:
+        return {
+            "success": True,
+            "enabled": enabled,
+            "message": f"Bot {'ATIVADO' if enabled else 'DESATIVADO'} com sucesso!"
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Erro ao atualizar status do bot")
+
+
+# ============================================================
+# WEBHOOK: WHATSAPP (Z-API) - INTEGRADO
+# ============================================================
+
 @app.post("/webhook/whatsapp")
 async def webhook_whatsapp(request: Request):
     """
@@ -418,6 +503,88 @@ async def webhook_whatsapp(request: Request):
     try:
         data = await request.json()
         logger.info(f"📨 Webhook recebido: {json.dumps(data, indent=2)}")
+        # ============================================
+        # VERIFICAR STATUS DO BOT
+        # ============================================
+        bot_status = await get_bot_status()
+        phone = data.get("phone", "")
+        
+        # Verificar se conversa está em modo humano
+        conversa = await db.conversas.find_one({"phone": phone}, sort=[("timestamp", -1)])
+        modo_humano = conversa and conversa.get("mode") == "human"
+        
+        # Se bot desligado OU conversa em modo humano, não processar
+        if not bot_status["enabled"] or modo_humano:
+            logger.info(f"⏸️ Bot {'desligado' if not bot_status['enabled'] else 'em modo humano para ' + phone}")
+            
+            # Salvar mensagem mas não responder
+            await db.conversas.insert_one({
+                "phone": phone,
+                "message": data.get("text", {}).get("message", "[MENSAGEM]"),
+                "timestamp": datetime.now(),
+                "role": "user",
+                "type": "text",
+                "mode": "human" if modo_humano else "disabled",
+                "canal": "WhatsApp"
+            })
+            
+            return {"status": "received", "processed": False, "reason": "bot_disabled_or_human_mode"}
+        
+        # ============================================
+        # PROCESSAR COMANDOS ESPECIAIS
+        # ============================================
+        message_text = ""
+        if "text" in data and "message" in data["text"]:
+            message_text = data["text"]["message"].strip()
+        
+        # Comando: * (Transferir para humano)
+        if message_text == "*":
+            await db.conversas.update_many(
+                {"phone": phone},
+                {"$set": {"mode": "human", "transferred_at": datetime.now()}}
+            )
+            await send_whatsapp_message(
+                phone,
+                "✅ Você foi transferido para atendimento humano. Em breve um atendente irá responder."
+            )
+            return {"status": "transferred_to_human"}
+        
+        # Comando: + (Voltar para IA)
+        if message_text == "+":
+            await db.conversas.update_many(
+                {"phone": phone},
+                {"$set": {"mode": "ia", "returned_at": datetime.now()}}
+            )
+            await send_whatsapp_message(
+                phone,
+                "✅ Você voltou para atendimento automático com IA. Como posso ajudar?"
+            )
+            return {"status": "returned_to_ia"}
+        
+        # Comando: ## (Desligar IA para este usuário)
+        if message_text == "##":
+            await db.conversas.update_many(
+                {"phone": phone},
+                {"$set": {"mode": "disabled", "disabled_at": datetime.now()}}
+            )
+            await send_whatsapp_message(
+                phone,
+                "⏸️ Atendimento automático desligado. Digite ++ para religar."
+            )
+            return {"status": "ia_disabled"}
+        
+        # Comando: ++ (Religar IA para este usuário)
+        if message_text == "++":
+            await db.conversas.update_many(
+                {"phone": phone},
+                {"$set": {"mode": "ia", "enabled_at": datetime.now()}}
+            )
+            await send_whatsapp_message(
+                phone,
+                "✅ Atendimento automático religado. Como posso ajudar?"
+            )
+            return {"status": "ia_enabled"}
+
         
         # ============================================
         # 🛑 CONTROLE DE ATIVAÇÃO DA IA
