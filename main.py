@@ -274,32 +274,6 @@ async def process_audio_with_whisper(audio_bytes: bytes, phone: str) -> str:
         logger.error(f"❌ Erro ao transcrever áudio: {str(e)}")
         logger.error(traceback.format_exc())
         return None
-
-# ============================================================
-# FUNÇÃO: ENVIAR MENSAGEM WHATSAPP
-# ============================================================
-async def send_whatsapp_message(phone: str, message: str):
-    """Enviar mensagem via Z-API"""
-    try:
-        url = f"{ZAPI_URL}/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text"
-        
-        payload = {
-            "phone": phone,
-            "message": message
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, json=payload)
-            
-            if response.status_code == 200:
-                logger.info(f"✅ Mensagem enviada para {phone}")
-                return True
-            else:
-                logger.error(f"❌ Erro ao enviar: {response.status_code} - {response.text}")
-                return False
-                
-    except Exception as e:
-        logger.error(f"❌ Erro ao enviar mensagem: {str(e)}")
         return False
 
 
