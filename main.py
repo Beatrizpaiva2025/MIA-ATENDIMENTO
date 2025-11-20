@@ -121,34 +121,44 @@ Certidão de Nascimento, Casamento, Óbito, Diploma, Histórico Escolar, CNH, RG
 # FUNÇÃO: BAIXAR MÍDIA DA Z-API
 # ============================================================
 async def send_whatsapp_message(phone: str, message: str):
-    """Enviar mensagem via Z-API"""
+    """Envia mensagem via Z-API com Client-Token"""
     try:
-        # TESTE 1: URL simples
+        # Construir URL completa
         url = f"https://api.z-api.io/instances/3E4255284F9C20BCBD775E3E11E99CA6/token/4EDA979AE181FE76311C51F5/send-text"
         
+        # Headers COM Client-Token
+        headers = {
+            "Content-Type": "application/json",
+            "Client-Token": os.getenv("ZAPI_CLIENT_TOKEN", "")
+        }
+        
+        # Payload
         payload = {
             "phone": phone,
             "message": message
         }
         
-        logger.info(f"🔍 TESTE - URL: {url}")
-        logger.info(f"🔍 TESTE - Payload: {payload}")
+        # Logs de debug
+        logger.info(f"🔍 Enviando para Z-API: {url}")
+        logger.info(f"🔍 Telefone: {phone}")
+        logger.info(f"🔍 Client-Token configurado: {'Sim' if headers['Client-Token'] else 'Não'}")
         
+        # Enviar requisição COM headers
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, headers=headers, json=payload)
             
-            logger.info(f"🔍 TESTE - Status: {response.status_code}")
-            logger.info(f"🔍 TESTE - Response: {response.text}")
+            logger.info(f"🔍 Status Z-API: {response.status_code}")
+            logger.info(f"🔍 Resposta Z-API: {response.text}")
             
             if response.status_code == 200:
-                logger.info(f"✅ Mensagem enviada para {phone}")
+                logger.info(f"✅ Mensagem enviada com sucesso para {phone}")
                 return True
             else:
-                logger.error(f"❌ Erro: {response.status_code} - {response.text}")
+                logger.error(f"❌ Erro ao enviar: {response.status_code} - {response.text}")
                 return False
                 
     except Exception as e:
-        logger.error(f"❌ Erro ao enviar: {str(e)}")
+        logger.error(f"❌ Exceção ao enviar para Z-API: {e}")
         return False
 
 
