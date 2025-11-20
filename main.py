@@ -6,18 +6,6 @@
 # ✅ Imagens (GPT-4 Vision) - Leitura de documentos
 # ✅ Áudios (Whisper) - Transcrição de voz
 # ✅ Painel Administrativo Completo
-# ✅ Treinamento Dinâmico do Banco de Dados
-# ✅ Comandos Especiais do WhatsApp
-# ✅ Transferência Automática para Atendente
-# ============================================================
-# 🔧 CORREÇÕES APLICADAS:
-# ✅ Removida função send_whatsapp_message duplicada
-# ✅ Corrigida detecção de tipo de mensagem (imagens e áudios)
-# ✅ Adicionada função download_media_from_zapi
-# ✅ Implementado carregamento dinâmico de treinamento do banco
-# ✅ Corrigida conexão MongoDB para usar mesma função do admin
-# ✅ Comandos especiais: *, +, ##, ++ (controle IA/Humano)
-# ✅ Transferência automática quando IA não souber responder
 # ============================================================
 
 from fastapi import FastAPI, Request, HTTPException, Form
@@ -39,8 +27,16 @@ from io import BytesIO
 
 # Importar rotas do admin
 from admin_routes import router as admin_router
-from admin_training_routes import router as training_router, get_database
+from admin_training_routes import router as training_router
 from admin_controle_routes import router as controle_router
+from controle_atendimento import (
+    verificar_estado_conversa,
+    processar_comando_especial,
+    deve_processar_com_ia,
+    forcar_estado,
+    ESTADO_IA,
+    ESTADO_HUMANO
+)
 
 # ============================================================
 # CONFIGURAÇÃO DE LOGGING
@@ -61,7 +57,8 @@ templates = Jinja2Templates(directory="templates")
 
 # Clientes
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-# ✅ CORREÇÃO: Usar mesma função get_database() do admin_training_routes
+# Usar mesma conexão do admin
+from admin_training_routes import get_database
 db = get_database()
 
 # ============================================================
@@ -80,17 +77,6 @@ ZAPI_CLIENT_TOKEN = os.getenv("ZAPI_CLIENT_TOKEN")
 ZAPI_URL = os.getenv("ZAPI_URL", "https://api.z-api.io")
 
 # ============================================================
-# CONFIGURAÇÕES DE CONTROLE
-# ============================================================
-ATENDENTE_PHONE = "18573167770"  # Número do atendente que pode usar comandos
-NOTIFICACAO_PHONE = "18572081139"  # Número secreto para notificações (nunca revelar)
-
-# Função auxiliar para normalizar número de telefone
-def normalize_phone(phone: str) -> str:
-    """Remove caracteres especiais e normaliza número"""
-    return ''.join(filter(str.isdigit, phone))[-10:]  # Últimos 10 dígitos
-
-# ============================================================
 # MODELOS PYDANTIC
 # ============================================================
 class Message(BaseModel):
@@ -101,7 +87,7 @@ class Message(BaseModel):
     message_type: str = "text"
 
 # ============================================================
-# CONTEXTO DA MIA (PERSONALIDADE) - FALLBACK
+# CONTEXTO DA MIA (PERSONALIDADE)
 # ============================================================
 MIA_SYSTEM_PROMPT = """
 Você é a Mia, assistente virtual da Legacy Translations, empresa especializada em traduções juramentadas.
@@ -138,168 +124,21 @@ Certidão de Nascimento, Casamento, Óbito, Diploma, Histórico Escolar, CNH, RG
 3. Identifique o documento e calcule preço
 4. Explique processo e prazo
 5. Ofereça finalizar orçamento
-
-**IMPORTANTE:**
-Se você não souber responder ou não tiver certeza, diga:
-"Deixa eu transferir você para um de nossos especialistas que pode te ajudar melhor com isso! 👤"
 """
 
 # ============================================================
-# FUNÇÃO: BUSCAR TREINAMENTO DINÂMICO DO BANCO
-# ============================================================
-async def get_bot_training() -> str:
-    """
-    Busca treinamento dinâmico do bot Mia no banco de dados.
-    Retorna prompt construído a partir de:
-    - Personalidade (tom, objetivos, restrições)
-    - Base de conhecimento
-    - FAQs
-    
-    Se falhar, retorna MIA_SYSTEM_PROMPT como fallback.
-    """
-    try:
-        logger.info("🔍 Buscando treinamento do bot Mia no banco...")
-        
-        bot = await db.bots.find_one({"name": "Mia"})
-        
-        if not bot:
-            logger.warning("⚠️ Bot Mia não encontrado no banco, usando prompt padrão")
-            return MIA_SYSTEM_PROMPT
-        
-        # Extrair dados
-        personality = bot.get("personality", {})
-        knowledge_base = bot.get("knowledge_base", [])
-        faqs = bot.get("faqs", [])
-        
-        # Construir prompt dinâmico
-        prompt_parts = []
-        
-        # Cabeçalho
-        prompt_parts.append("Você é a Mia, assistente oficial da empresa Legacy Translations.")
-        prompt_parts.append("Especializada em tradução certificada e juramentada.\n")
-        
-        # Tom de voz
-        if personality.get("tone"):
-            prompt_parts.append(f"**TOM DE VOZ:** {personality['tone']}\n")
-        
-        # Objetivos
-        if personality.get("goals"):
-            prompt_parts.append("**OBJETIVOS:**")
-            for goal in personality["goals"]:
-                prompt_parts.append(f"- {goal}")
-            prompt_parts.append("")
-        
-        # Restrições
-        if personality.get("restrictions"):
-            prompt_parts.append("**RESTRIÇÕES DE COMPORTAMENTO:**")
-            for restriction in personality["restrictions"]:
-                prompt_parts.append(f"- {restriction}")
-            prompt_parts.append("")
-        
-        # Base de conhecimento
-        if knowledge_base:
-            prompt_parts.append("**BASE DE CONHECIMENTO:**\n")
-            for item in knowledge_base:
-                prompt_parts.append(f"### {item.get('title', 'Sem título')}")
-                prompt_parts.append(item.get('content', ''))
-                prompt_parts.append("")
-        
-        # FAQs
-        if faqs:
-            prompt_parts.append("**PERGUNTAS FREQUENTES:**\n")
-            for faq in faqs:
-                prompt_parts.append(f"**P:** {faq.get('question', '')}")
-                prompt_parts.append(f"**R:** {faq.get('answer', '')}")
-                prompt_parts.append("")
-        
-        # Instrução de transferência
-        prompt_parts.append("\n**IMPORTANTE:**")
-        prompt_parts.append("Se você não souber responder ou não tiver certeza da informação, diga:")
-        prompt_parts.append('"Deixa eu transferir você para um de nossos especialistas que pode te ajudar melhor com isso! 👤"')
-        
-        # Montar prompt final
-        final_prompt = "\n".join(prompt_parts)
-        
-        logger.info(f"✅ Treinamento dinâmico carregado ({len(final_prompt)} caracteres)")
-        logger.info(f"   - Objetivos: {len(personality.get('goals', []))}")
-        logger.info(f"   - Restrições: {len(personality.get('restrictions', []))}")
-        logger.info(f"   - Conhecimentos: {len(knowledge_base)}")
-        logger.info(f"   - FAQs: {len(faqs)}")
-        
-        return final_prompt
-        
-    except Exception as e:
-        logger.error(f"❌ Erro ao buscar treinamento do banco: {e}")
-        logger.error(traceback.format_exc())
-        logger.warning("⚠️ Usando prompt padrão como fallback")
-        return MIA_SYSTEM_PROMPT
-
-# ============================================================
-# FUNÇÃO: VERIFICAR SE CONVERSA ESTÁ EM MODO HUMANO
-# ============================================================
-async def is_human_mode(phone: str) -> bool:
-    """Verifica se a conversa está em modo atendimento humano"""
-    try:
-        status = await db.conversation_status.find_one({"phone": phone})
-        if status:
-            return status.get("mode") == "human"
-        return False
-    except Exception as e:
-        logger.error(f"❌ Erro ao verificar modo: {e}")
-        return False
-
-# ============================================================
-# FUNÇÃO: DEFINIR MODO DA CONVERSA
-# ============================================================
-async def set_conversation_mode(phone: str, mode: str):
-    """Define o modo da conversa (ai ou human)"""
-    try:
-        await db.conversation_status.update_one(
-            {"phone": phone},
-            {
-                "$set": {
-                    "mode": mode,
-                    "updated_at": datetime.now()
-                }
-            },
-            upsert=True
-        )
-        logger.info(f"✅ Modo alterado para '{mode}' - {phone}")
-    except Exception as e:
-        logger.error(f"❌ Erro ao definir modo: {e}")
-
-# ============================================================
-# FUNÇÃO: NOTIFICAR ATENDENTE
-# ============================================================
-async def notify_attendant(customer_phone: str, customer_message: str):
-    """Notifica o atendente sobre transferência"""
-    try:
-        notification = f"""🔔 *Nova Transferência*
-
-📱 Cliente: {customer_phone}
-💬 Mensagem: {customer_message[:100]}...
-
-⚠️ Cliente aguardando atendimento humano.
-Digite + para retomar IA quando finalizar."""
-
-        await send_whatsapp_message(NOTIFICACAO_PHONE, notification)
-        logger.info(f"✅ Atendente notificado sobre {customer_phone}")
-    except Exception as e:
-        logger.error(f"❌ Erro ao notificar atendente: {e}")
-
-# ============================================================
-# FUNÇÃO: ENVIAR MENSAGEM WHATSAPP
+# FUNÇÃO: BAIXAR MÍDIA DA Z-API
 # ============================================================
 async def send_whatsapp_message(phone: str, message: str):
     """Envia mensagem via Z-API com Client-Token"""
     try:
         # Construir URL completa
-        url = f"{ZAPI_URL}/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text"
+        url = f"https://api.z-api.io/instances/3E4255284F9C20BCBD775E3E11E99CA6/token/4EDA979AE181FE76311C51F5/send-text"
         
         # Headers COM Client-Token
         headers = {
             "Content-Type": "application/json",
-            "Client-Token": ZAPI_CLIENT_TOKEN or ""
+            "Client-Token": os.getenv("ZAPI_CLIENT_TOKEN", "")
         }
         
         # Payload
@@ -331,36 +170,6 @@ async def send_whatsapp_message(phone: str, message: str):
         logger.error(f"❌ Exceção ao enviar para Z-API: {e}")
         return False
 
-# ============================================================
-# FUNÇÃO: BAIXAR MÍDIA DA Z-API
-# ============================================================
-async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
-    """
-    Baixa mídia (imagem ou áudio) da Z-API
-    
-    Args:
-        media_url: URL da mídia fornecida pela Z-API
-    
-    Returns:
-        bytes: Conteúdo da mídia em bytes, ou None se falhar
-    """
-    try:
-        logger.info(f"🔽 Baixando mídia: {media_url[:50]}...")
-        
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.get(media_url)
-            
-            if response.status_code == 200:
-                logger.info(f"✅ Mídia baixada com sucesso ({len(response.content)} bytes)")
-                return response.content
-            else:
-                logger.error(f"❌ Erro ao baixar mídia: {response.status_code}")
-                return None
-                
-    except Exception as e:
-        logger.error(f"❌ Exceção ao baixar mídia: {e}")
-        logger.error(traceback.format_exc())
-        return None
 
 # ============================================================
 # FUNÇÃO: PROCESSAR IMAGEM COM GPT-4 VISION
@@ -475,6 +284,34 @@ async def process_audio_with_whisper(audio_bytes: bytes, phone: str) -> str:
         return None
 
 # ============================================================
+# FUNÇÃO: ENVIAR MENSAGEM WHATSAPP
+# ============================================================
+async def send_whatsapp_message(phone: str, message: str):
+    """Enviar mensagem via Z-API"""
+    try:
+        url = f"{ZAPI_URL}/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text"
+        
+        payload = {
+            "phone": phone,
+            "message": message
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload)
+            
+            if response.status_code == 200:
+                logger.info(f"✅ Mensagem enviada para {phone}")
+                return True
+            else:
+                logger.error(f"❌ Erro ao enviar: {response.status_code} - {response.text}")
+                return False
+                
+    except Exception as e:
+        logger.error(f"❌ Erro ao enviar mensagem: {str(e)}")
+        return False
+
+
+# ============================================================
 # FUNÇÃO: BUSCAR CONTEXTO DA CONVERSA
 # ============================================================
 async def get_conversation_context(phone: str, limit: int = 10) -> List[Dict]:
@@ -499,17 +336,14 @@ async def get_conversation_context(phone: str, limit: int = 10) -> List[Dict]:
 # FUNÇÃO: PROCESSAR MENSAGEM COM IA
 # ============================================================
 async def process_message_with_ai(phone: str, message: str) -> str:
-    """Processar mensagem com GPT-4 usando treinamento dinâmico"""
+    """Processar mensagem com GPT-4"""
     try:
-        # Buscar contexto da conversa
+        # Buscar contexto
         context = await get_conversation_context(phone)
-        
-        # ✅ BUSCAR TREINAMENTO DINÂMICO DO BANCO
-        system_prompt = await get_bot_training()
         
         # Montar mensagens
         messages = [
-            {"role": "system", "content": system_prompt}
+            {"role": "system", "content": MIA_SYSTEM_PROMPT}
         ] + context + [
             {"role": "user", "content": message}
         ]
@@ -523,36 +357,6 @@ async def process_message_with_ai(phone: str, message: str) -> str:
         )
         
         reply = response.choices[0].message.content
-        
-        # ✅ DETECTAR SE IA NÃO SABE RESPONDER
-        transfer_keywords = [
-            "transferir você",
-            "transferir para",
-            "especialista",
-            "não tenho certeza",
-            "não sei",
-            "consultar um especialista"
-        ]
-        
-        should_transfer = any(keyword in reply.lower() for keyword in transfer_keywords)
-        
-        if should_transfer:
-            logger.info(f"🔄 IA detectou necessidade de transferência para {phone}")
-            
-            # Alterar para modo humano
-            await set_conversation_mode(phone, "human")
-            
-            # Notificar atendente
-            await notify_attendant(phone, message)
-            
-            # Mensagem para o cliente
-            reply = """👤 *Transferindo para Atendente Humano*
-
-Vou te conectar com um de nossos especialistas que pode te ajudar melhor!
-
-⏱️ Aguarde um momento, em breve você será atendido.
-
-_Enquanto isso, pode me enviar mais detalhes sobre sua necessidade._"""
         
         # Salvar no banco
         await db.conversas.insert_one({
@@ -579,125 +383,49 @@ _Enquanto isso, pode me enviar mais detalhes sobre sua necessidade._"""
         return "Desculpe, tive um problema. Pode repetir?"
 
 # ============================================================
-# WEBHOOK: WHATSAPP (Z-API) - CORRIGIDO
+# WEBHOOK: WHATSAPP (Z-API)
+# ============================================================
+# ============================================================
+# FUNÇÃO AUXILIAR: NORMALIZAR TELEFONE
+# ============================================================
+def normalize_phone(phone: str) -> str:
+    """Normaliza número de telefone para comparação"""
+    return ''.join(filter(str.isdigit, phone))[-10:]
+
+# ============================================================
+# WEBHOOK: WHATSAPP (Z-API) - INTEGRADO
 # ============================================================
 @app.post("/webhook/whatsapp")
 async def webhook_whatsapp(request: Request):
     """
     Webhook principal para receber mensagens do WhatsApp via Z-API
-    Suporta: texto, imagens, áudios e comandos especiais
+    Suporta: texto, imagens e áudios
     """
     try:
         data = await request.json()
         logger.info(f"📨 Webhook recebido: {json.dumps(data, indent=2)}")
-        
-        # Extrair informações
-        phone = data.get("phone", "")
-        message_id = data.get("messageId", "")
-        
-        if not phone:
-            return JSONResponse({"status": "ignored", "reason": "no phone"})
-        
-        # ============================================
-        # 🛑 CONTROLE ANTI-REPETIÇÃO
-        # ============================================
-        # Verificar se já processamos este messageId
-        if message_id:
-            already_processed = await db.processed_messages.find_one({"messageId": message_id})
-            if already_processed:
-                logger.info(f"⚠️ Mensagem duplicada ignorada: {message_id}")
-                return JSONResponse({"status": "ignored", "reason": "duplicate message"})
-            
-            # Marcar como processada
-            await db.processed_messages.insert_one({
-                "messageId": message_id,
-                "phone": phone,
-                "timestamp": datetime.now()
-            })
-        # ============================================
-        
-        # ============================================
-        # 🔍 DETECTAR TIPO DE MENSAGEM (CORREÇÃO)
-        # ============================================
-        if "text" in data and data["text"].get("message"):
-            message_type = "text"
-            text = data["text"]["message"]
-        elif "image" in data and data["image"].get("imageUrl"):
-            message_type = "image"
-            text = ""
-        elif "audio" in data and data["audio"].get("audioUrl"):
-            message_type = "audio"
-            text = ""
-        else:
-            message_type = "unknown"
-            logger.warning(f"⚠️ Tipo de mensagem desconhecido: {list(data.keys())}")
-            return JSONResponse({"status": "ignored", "reason": "unknown message type"})
-        
-        logger.info(f"🔍 Tipo detectado: {message_type}")
-        
-        # ============================================
-        # ⚡ COMANDOS ESPECIAIS (APENAS ATENDENTE)
-        # ============================================
-        # Normalizar números para comparação
-        phone_normalized = normalize_phone(phone)
-        atendente_normalized = normalize_phone(ATENDENTE_PHONE)
-        
-        logger.info(f"🔍 Phone recebido: {phone} (normalizado: {phone_normalized})")
-        logger.info(f"🔍 Atendente esperado: {ATENDENTE_PHONE} (normalizado: {atendente_normalized})")
-        
-        if phone_normalized == atendente_normalized and message_type == "text":
-            
-            # Comando: * (Transferir para humano)
-            if text.strip() == "*":
-                logger.info(f"⚡ Comando * recebido de atendente")
-                # Pegar última conversa ativa
-                last_conversation = await db.conversas.find_one(
-                    {"phone": {"$ne": ATENDENTE_PHONE}},
-                    sort=[("timestamp", -1)]
-                )
-                if last_conversation:
-                    customer_phone = last_conversation["phone"]
-                    await set_conversation_mode(customer_phone, "human")
-                    await send_whatsapp_message(ATENDENTE_PHONE, f"✅ Conversa com {customer_phone} transferida para modo HUMANO")
-                else:
-                    await send_whatsapp_message(ATENDENTE_PHONE, "⚠️ Nenhuma conversa ativa encontrada")
-                return JSONResponse({"status": "command_executed", "command": "*"})
-            
-            # Comando: + (Voltar para IA)
-            elif text.strip() == "+":
-                logger.info(f"⚡ Comando + recebido de atendente")
-                last_conversation = await db.conversas.find_one(
-                    {"phone": {"$ne": ATENDENTE_PHONE}},
-                    sort=[("timestamp", -1)]
-                )
-                if last_conversation:
-                    customer_phone = last_conversation["phone"]
-                    await set_conversation_mode(customer_phone, "ai")
-                    await send_whatsapp_message(ATENDENTE_PHONE, f"✅ Conversa com {customer_phone} retomada pela IA")
-                    await send_whatsapp_message(customer_phone, "🤖 Voltei! Como posso te ajudar agora?")
-                else:
-                    await send_whatsapp_message(ATENDENTE_PHONE, "⚠️ Nenhuma conversa ativa encontrada")
-                return JSONResponse({"status": "command_executed", "command": "+"})
-            
-            # Comando: ## (Desligar IA globalmente)
-            elif text.strip() == "##":
-                logger.info(f"⚡ Comando ## recebido de atendente")
-                os.environ["IA_ENABLED"] = "false"
-                await send_whatsapp_message(ATENDENTE_PHONE, "🔴 IA DESLIGADA globalmente")
-                return JSONResponse({"status": "command_executed", "command": "##"})
-            
-            # Comando: ++ (Religar IA globalmente)
-            elif text.strip() == "++":
-                logger.info(f"⚡ Comando ++ recebido de atendente")
-                os.environ["IA_ENABLED"] = "true"
-                await send_whatsapp_message(ATENDENTE_PHONE, "🟢 IA RELIGADA globalmente")
-                return JSONResponse({"status": "command_executed", "command": "++"})
         
         # ============================================
         # 🛑 CONTROLE DE ATIVAÇÃO DA IA
         # ============================================
         ia_enabled = os.getenv("IA_ENABLED", "true").lower() == "true"
         em_manutencao = os.getenv("MANUTENCAO", "false").lower() == "true"
+        
+        # Extrair informações
+        phone = data.get("phone", "")
+        message_id = data.get("messageId", "")
+        connected_phone = data.get("connectedPhone", "")
+        is_group = data.get("isGroup", False)
+        
+        # 🚫 FILTRO: Ignorar mensagens de grupos
+        if is_group:
+            logger.info(f"🚫 Mensagem de grupo ignorada")
+            return JSONResponse({"status": "ignored", "reason": "group message"})
+        
+        message_type = data.get("messageType", "text")
+        
+        if not phone:
+            return JSONResponse({"status": "ignored", "reason": "no phone"})
         
         # Se em manutenção, responder e sair
         if em_manutencao:
@@ -707,22 +435,6 @@ async def webhook_whatsapp(request: Request):
                 await send_whatsapp_message(phone, mensagem_manutencao)
             return JSONResponse({"status": "maintenance"})
         
-        # ============================================
-        # 👤 VERIFICAR SE ESTÁ EM MODO HUMANO
-        # ============================================
-        if await is_human_mode(phone):
-            logger.info(f"👤 Conversa em modo HUMANO - {phone}")
-            # Não processar com IA, apenas logar
-            await db.conversas.insert_one({
-                "phone": phone,
-                "message": text if text else f"[{message_type}]",
-                "role": "user",
-                "timestamp": datetime.now(),
-                "canal": "WhatsApp",
-                "mode": "human"
-            })
-            return JSONResponse({"status": "human_mode"})
-        
         # Se IA desabilitada, apenas logar e sair
         if not ia_enabled:
             logger.info(f"⏸️ IA desabilitada - mensagem de {phone} ignorada")
@@ -731,18 +443,130 @@ async def webhook_whatsapp(request: Request):
         
         # ========== PROCESSAR TEXTO ==========
         if message_type == "text":
+            text = data.get("text", {}).get("message", "")
+            
             if not text:
                 return JSONResponse({"status": "ignored", "reason": "empty text"})
+            
+            logger.info(f"💬 Texto de {phone}: {text}")
+            
+            # ============================================
+            # ⚡ COMANDOS ESPECIAIS DO ATENDENTE
+            # ============================================
+            
+            # Normalizar números para comparação
+            atendente_normalizado = normalize_phone("18573167770")
+            remetente_normalizado = normalize_phone(connected_phone)
+            
+            logger.info(f"🔍 Remetente: {connected_phone} (normalizado: {remetente_normalizado})")
+            logger.info(f"🔍 Atendente esperado: 18573167770 (normalizado: {atendente_normalizado})")
+            
+            # Se é o atendente enviando
+            if remetente_normalizado == atendente_normalizado:
+                logger.info("⚡ Mensagem do ATENDENTE detectada")
+                
+                # Processar comando especial (* + ## ++)
+                resultado = await processar_comando_especial(phone, text, "Atendente")
+                
+                if resultado:
+                    logger.info(f"⚡ Comando processado: {resultado['acao']}")
+                    
+                    # Enviar resposta do comando para o cliente
+                    await send_whatsapp_message(phone, resultado["resposta"])
+                    
+                    # Se foi comando de transferência (*), notificar atendente
+                    if resultado["acao"] == "transferir_humano":
+                        mensagem_atendente = f"""🔔 Transferência Confirmada
+
+📱 Cliente: {phone}
+✅ Modo: HUMANO ATIVO
+
+Você assumiu o atendimento.
+Digite + para retomar IA."""
+                        
+                        await send_whatsapp_message("18573167770", mensagem_atendente)
+                    
+                    return JSONResponse({
+                        "status": "comando_processado",
+                        "acao": resultado["acao"],
+                        "estado": resultado["estado_novo"]
+                    })
+            
+            # ============================================
+            # 👤 VERIFICAR MODO DA CONVERSA
+            # ============================================
+            
+            # Se não é comando, verificar se deve processar com IA
+            deve_processar = await deve_processar_com_ia(phone, text)
+            
+            if not deve_processar:
+                logger.info(f"👤 Conversa em modo HUMANO - {phone}")
+                
+                # Salvar mensagem no banco (para histórico)
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": text,
+                    "role": "user",
+                    "timestamp": datetime.now(),
+                    "canal": "WhatsApp",
+                    "mode": "human"
+                })
+                
+                return JSONResponse({"status": "human_mode"})
+            
+            # ============================================
+            # 🤖 PROCESSAR COM IA (modo normal)
+            # ============================================
             
             logger.info(f"💬 Texto de {phone}: {text}")
             
             # Processar com IA
             reply = await process_message_with_ai(phone, text)
             
+            # ============================================
+            # 🔔 TRANSFERÊNCIA AUTOMÁTICA
+            # ============================================
+            
+            # Verificar se IA não sabe responder (palavras-chave)
+            palavras_transferencia = ["não sei", "não posso", "não consigo", "transferir", "especialista", "atendente humano"]
+            
+            deve_transferir = any(palavra in reply.lower() for palavra in palavras_transferencia)
+            
+            if deve_transferir:
+                logger.info(f"🔔 IA não sabe responder - Transferindo para humano")
+                
+                # Marcar conversa como modo humano
+                await forcar_estado(phone, ESTADO_HUMANO, "IA")
+                
+                # Notificar atendente (número secreto)
+                mensagem_atendente = f"""🔔 Nova Transferência Automática
+
+📱 Cliente: {phone}
+💬 Mensagem: {text}
+
+⚠️ Cliente aguardando atendimento.
+Digite + para retomar IA."""
+                
+                await send_whatsapp_message("18572081139", mensagem_atendente)
+                
+                # Avisar cliente
+                mensagem_cliente = """🔔 Transferindo para Especialista
+
+Vou te conectar com um atendente humano que poderá te ajudar melhor!
+Aguarde um momento... 😊"""
+                
+                await send_whatsapp_message(phone, mensagem_cliente)
+                
+                return JSONResponse({"status": "transferred", "reason": "ai_cannot_answer"})
+            
+            # ============================================
+            # ✅ ENVIAR RESPOSTA NORMAL
+            # ============================================
+            
             # Enviar resposta
             await send_whatsapp_message(phone, reply)
             
-            return JSONResponse({"status": "processed", "type": "text"})
+            return JSONResponse({"status": "processed", "type": "text"}
         
         # ========== PROCESSAR IMAGEM ==========
         elif message_type == "image":
@@ -805,10 +629,9 @@ async def webhook_whatsapp(request: Request):
             
             return JSONResponse({"status": "processed", "type": "audio"})
         
-        # ========== TIPO DESCONHECIDO ==========
         else:
-            logger.warning(f"⚠️ Tipo de mensagem não suportado: {message_type}")
-            return JSONResponse({"status": "ignored", "reason": "unsupported type"})
+            logger.info(f"⚠️ Tipo não suportado: {message_type}")
+            return JSONResponse({"status": "ignored", "reason": f"unsupported type: {message_type}"})
             
     except Exception as e:
         logger.error(f"❌ Erro no webhook: {str(e)}")
@@ -831,8 +654,7 @@ async def health_check():
             "openai": "✅ Configurado" if os.getenv("OPENAI_API_KEY") else "❌ Não configurado",
             "mongodb": "✅ Conectado",
             "zapi_instance": "✅ Configurado" if ZAPI_INSTANCE_ID else "❌ Não configurado",
-            "zapi_token": "✅ Configurado" if ZAPI_TOKEN else "❌ Não configurado",
-            "zapi_client_token": "✅ Configurado" if ZAPI_CLIENT_TOKEN else "❌ Não configurado"
+            "zapi_token": "✅ Configurado" if ZAPI_TOKEN else "❌ Não configurado"
         }
     except Exception as e:
         return JSONResponse(
@@ -856,13 +678,12 @@ async def startup_event():
     """Evento de inicialização"""
     logger.info("=" * 60)
     logger.info("🚀 WhatsApp AI Platform - Legacy Translations")
-    logger.info("📦 VERSÃO MULTIMÍDIA + ADMIN 2.0 + COMANDOS ESPECIAIS")
+    logger.info("📦 VERSÃO MULTIMÍDIA + ADMIN 2.0")
     logger.info("=" * 60)
     logger.info(f"✅ OpenAI: {'Configurado' if os.getenv('OPENAI_API_KEY') else '❌ FALTANDO'}")
     logger.info(f"✅ MongoDB: {'Configurado' if os.getenv('MONGODB_URI') else '❌ FALTANDO'}")
     logger.info(f"✅ Z-API Instance: {'Configurado' if ZAPI_INSTANCE_ID else '❌ FALTANDO'}")
     logger.info(f"✅ Z-API Token: {'Configurado' if ZAPI_TOKEN else '❌ FALTANDO'}")
-    logger.info(f"✅ Z-API Client-Token: {'Configurado' if ZAPI_CLIENT_TOKEN else '❌ FALTANDO'}")
     logger.info("=" * 60)
     logger.info("🎯 FUNCIONALIDADES ATIVAS:")
     logger.info("   ✅ Mensagens de texto")
@@ -870,20 +691,117 @@ async def startup_event():
     logger.info("   ✅ Áudios (Whisper)")
     logger.info("   ✅ Painel Admin Completo")
     logger.info("   ✅ Controle IA vs Humano")
-    logger.info("   ✅ Treinamento Dinâmico do Banco")
-    logger.info("   ✅ Comandos Especiais WhatsApp")
-    logger.info("   ✅ Transferência Automática")
-    logger.info("=" * 60)
-    logger.info("⚡ COMANDOS ESPECIAIS (Atendente):")
-    logger.info(f"   * → Transferir para humano")
-    logger.info(f"   + → Voltar para IA")
-    logger.info(f"   ## → Desligar IA")
-    logger.info(f"   ++ → Religar IA")
-    logger.info("=" * 60)
-    logger.info(f"📱 Atendente: {ATENDENTE_PHONE}")
-    logger.info(f"🔔 Notificações: {NOTIFICACAO_PHONE}")
     logger.info("=" * 60)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # ============================================================
+# ROTA DE DIAGNÓSTICO TEMPORÁRIA
+# ============================================================
+import os
+from pathlib import Path
+from fastapi.responses import HTMLResponse
+
+@app.get("/diagnostic/templates", response_class=HTMLResponse)
+async def diagnostic_templates():
+    """Diagnóstico completo de templates"""
+    
+    html_parts = ["<html><head><style>body{font-family:monospace;padding:20px;background:#1a1a1a;color:#0f0;}pre{background:#000;padding:10px;border:1px solid #0f0;}</style></head><body>"]
+    html_parts.append("<h1>🔍 DIAGNÓSTICO DE TEMPLATES</h1>")
+    
+    # 1. Diretório atual
+    html_parts.append("<h2>📁 Diretório de trabalho:</h2>")
+    html_parts.append(f"<pre>{os.getcwd()}</pre>")
+    
+    # 2. Listar pasta templates
+    html_parts.append("<h2>📂 Conteúdo da pasta templates/:</h2>")
+    templates_path = Path("templates")
+    if templates_path.exists():
+        html_parts.append("<pre>")
+        for file in sorted(templates_path.rglob("*")):
+            if file.is_file():
+                size = file.stat().st_size
+                html_parts.append(f"{file.relative_to('.')} - {size:,} bytes\n")
+        html_parts.append("</pre>")
+    else:
+        html_parts.append("<pre style='color:red;'>❌ PASTA TEMPLATES NÃO EXISTE!</pre>")
+    
+    # 3. Procurar arquivos treinamento
+    html_parts.append("<h2>🔎 Procurando arquivos com 'treinamento' ou 'training':</h2>")
+    html_parts.append("<pre>")
+    for pattern in ["*treinamento*", "*training*"]:
+        for file in Path(".").rglob(pattern):
+            html_parts.append(f"{file} - {'DIR' if file.is_dir() else f'{file.stat().st_size} bytes'}\n")
+    html_parts.append("</pre>")
+    
+    # 4. Listar TODOS arquivos .html no projeto
+    html_parts.append("<h2>📄 TODOS os arquivos .html no projeto:</h2>")
+    html_parts.append("<pre>")
+    for file in Path(".").rglob("*.html"):
+        size = file.stat().st_size
+        html_parts.append(f"{file} - {size:,} bytes\n")
+    html_parts.append("</pre>")
+    
+    html_parts.append("</body></html>")
+    return "".join(html_parts)
+@app.get("/diagnostic/jinja", response_class=HTMLResponse)
+async def diagnostic_jinja():
+    """Diagnóstico configuração Jinja2"""
+    
+    html_parts = ["<html><head><style>body{font-family:monospace;padding:20px;background:#1a1a1a;color:#0f0;}pre{background:#000;padding:10px;border:1px solid #0f0;}</style></head><body>"]
+    html_parts.append("<h1>🔍 DIAGNÓSTICO JINJA2</h1>")
+    
+    # 1. Verificar objeto templates do main
+    html_parts.append("<h2>📦 Objeto 'templates' do main.py:</h2>")
+    try:
+        html_parts.append(f"<pre>Type: {type(templates)}\n")
+        html_parts.append(f"Directory: {templates.directory if hasattr(templates, 'directory') else 'N/A'}\n")
+        if hasattr(templates, 'env') and hasattr(templates.env, 'loader'):
+            loader = templates.env.loader
+            html_parts.append(f"Loader: {type(loader)}\n")
+            if hasattr(loader, 'searchpath'):
+                html_parts.append(f"Searchpath: {loader.searchpath}\n")
+        html_parts.append("</pre>")
+    except Exception as e:
+        html_parts.append(f"<pre style='color:red;'>❌ Erro: {e}</pre>")
+    
+    # 2. Verificar objeto templates do admin_training_routes
+    html_parts.append("<h2>📦 Objeto 'templates' do admin_training_routes.py:</h2>")
+    try:
+        from admin_training_routes import templates as training_templates
+        html_parts.append(f"<pre>Type: {type(training_templates)}\n")
+        html_parts.append(f"Directory: {training_templates.directory if hasattr(training_templates, 'directory') else 'N/A'}\n")
+        if hasattr(training_templates, 'env') and hasattr(training_templates.env, 'loader'):
+            loader = training_templates.env.loader
+            html_parts.append(f"Loader: {type(loader)}\n")
+            if hasattr(loader, 'searchpath'):
+                html_parts.append(f"Searchpath: {loader.searchpath}\n")
+        html_parts.append("</pre>")
+    except Exception as e:
+        html_parts.append(f"<pre style='color:red;'>❌ Erro ao importar: {e}</pre>")
+    
+    # 3. Tentar renderizar manualmente
+    html_parts.append("<h2>🧪 Teste de renderização manual:</h2>")
+    try:
+        from jinja2 import Environment, FileSystemLoader
+        import os
+        
+        template_dir = os.path.join(os.getcwd(), "templates")
+        html_parts.append(f"<pre>Template dir absoluto: {template_dir}\n")
+        html_parts.append(f"Dir existe? {os.path.exists(template_dir)}\n")
+        
+        env = Environment(loader=FileSystemLoader(template_dir))
+        html_parts.append(f"Templates disponíveis: {env.list_templates()[:20]}\n")
+        
+        # Tentar carregar admin_treinamento.html
+        template = env.get_template("admin_treinamento.html")
+        html_parts.append(f"✅ Template carregado com sucesso!\n")
+        html_parts.append(f"Template name: {template.name}\n")
+        html_parts.append("</pre>")
+    except Exception as e:
+        html_parts.append(f"<pre style='color:red;'>❌ Erro: {e}</pre>")
+    
+    html_parts.append("</body></html>")
+    return "".join(html_parts)
+
