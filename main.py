@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 # INICIALIZAÇÃO
 # ============================================================
 app = FastAPI(title="WhatsApp AI Platform - Legacy Translations")
-app.mount("/static", StaticFiles(directory="static"), name="static")  ← ADICIONE AQUI
+app.mount("/static", StaticFiles(directory="static"), name="static")  
 
 # Templates
 templates = Jinja2Templates(directory="templates")
@@ -99,6 +99,102 @@ async def set_bot_status(enabled: bool):
         return True
     except Exception as e:
         logger.error(f"Erro ao atualizar status do bot: {e}")
+        return False
+
+
+
+# ============================================================
+# TRANSFERÊNCIA PARA ATENDENTE HUMANO
+# ============================================================
+
+# Número do atendente para notificações
+ATENDENTE_PHONE = "5518572081139"  # Formato internacional
+
+async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
+    """Envia notificação para atendente com resumo da conversa"""
+    try:
+        # Buscar últimas 10 mensagens da conversa
+        mensagens = await db.conversas.find(
+            {"phone": phone}
+        ).sort("timestamp", -1).limit(10).to_list(length=10)
+        
+        # Inverter para ordem cronológica
+        mensagens.reverse()
+        
+        # Montar resumo
+        resumo_linhas = []
+        for msg in mensagens:
+            role = "👤 Cliente" if msg.get("role") == "user" else "🤖 IA"
+            texto = msg.get("message", "")[:100]
+            resumo_linhas.append(f"{role}: {texto}")
+        
+        resumo = "\n".join(resumo_linhas) if resumo_linhas else "Sem histórico"
+        
+        # Montar mensagem de notificação
+        mensagem_atendente = f"""🔔 *TRANSFERÊNCIA DE ATENDIMENTO*
+
+📱 *Cliente:* {phone}
+⚠️ *Motivo:* {motivo}
+
+📝 *Resumo da Conversa:*
+{resumo}
+
+---
+✅ Para assumir o atendimento, responda ao cliente diretamente.
+🤖 Cliente digitando *+* volta para IA automaticamente.
+"""
+        
+        # Enviar notificação
+        await send_whatsapp_message(ATENDENTE_PHONE, mensagem_atendente)
+        logger.info(f"✅ Notificação enviada para atendente: {phone}")
+        
+        return True
+    except Exception as e:
+        logger.error(f"❌ Erro ao notificar atendente: {e}")
+        return False
+
+
+async def detectar_solicitacao_humano(message: str) -> bool:
+    """Detecta se cliente está pedindo atendente humano"""
+    palavras_chave = [
+        "atendente", "humano", "pessoa", "falar com alguem",
+        "falar com alguém", "operador", "atendimento humano",
+        "quero falar", "preciso falar", "transferir"
+    ]
+    
+    message_lower = message.lower()
+    return any(palavra in message_lower for palavra in palavras_chave)
+
+
+async def transferir_para_humano(phone: str, motivo: str):
+    """Transfere conversa para atendente humano"""
+    try:
+        # Atualizar status no banco
+        await db.conversas.update_many(
+            {"phone": phone},
+            {
+                "$set": {
+                    "mode": "human",
+                    "transferred_at": datetime.now(),
+                    "transfer_reason": motivo
+                }
+            }
+        )
+        
+        # Notificar atendente
+        await notificar_atendente(phone, motivo)
+        
+        # Enviar mensagem ao cliente
+        await send_whatsapp_message(
+            phone,
+            "✅ Você foi transferido para um atendente humano. Em breve alguém irá te atender.\n\n💡 Para voltar ao atendimento automático, digite: +"
+        )
+        
+        logger.info(f"✅ Conversa transferida para humano: {phone} (Motivo: {motivo})")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao transferir para humano: {e}")
         return False
 
 # ============================================================
@@ -399,6 +495,12 @@ async def get_conversation_context(phone: str, limit: int = 10) -> List[Dict]:
 async def process_message_with_ai(phone: str, message: str) -> str:
     """Processar mensagem com GPT-4 usando treinamento dinâmico"""
     try:
+
+        # Detectar se cliente quer falar com humano
+        if await detectar_solicitacao_humano(user_message):
+            await transferir_para_humano(phone, "Cliente solicitou atendente")
+            return None
+        
         # Buscar treinamento dinâmico do MongoDB
         system_prompt = await get_bot_training()
         
@@ -544,26 +646,29 @@ async def webhook_whatsapp(request: Request):
         
         # Comando: * (Transferir para humano)
         if message_text == "*":
-            await db.conversas.update_many(
-                {"phone": phone},
-                {"$set": {"mode": "human", "transferred_at": datetime.now()}}
-            )
-            await send_whatsapp_message(
-                phone,
-                "✅ Você foi transferido para atendimento humano. Em breve um atendente irá responder."
-            )
+            await transferir_para_humano(phone, "Cliente digitou *")
             return {"status": "transferred_to_human"}
         
         # Comando: + (Voltar para IA)
         if message_text == "+":
             await db.conversas.update_many(
                 {"phone": phone},
-                {"$set": {"mode": "ia", "returned_at": datetime.now()}}
+                {
+                    "$set": {
+                        "mode": "ia",
+                        "returned_at": datetime.now()
+                    },
+                    "$unset": {
+                        "transfer_reason": "",
+                        "transferred_at": ""
+                    }
+                }
             )
             await send_whatsapp_message(
                 phone,
-                "✅ Você voltou para atendimento automático com IA. Como posso ajudar?"
+                "✅ Você voltou para o atendimento automático com IA. Como posso ajudar?"
             )
+            logger.info(f"✅ Cliente voltou para IA: {phone}")
             return {"status": "returned_to_ia"}
         
         # Comando: ## (Desligar IA para este usuário)
