@@ -1,205 +1,67 @@
-{% extends "admin_base.html" %}
-
-{% block title %}Treinamento da IA - Painel Administrativo{% endblock %}
-
-{% block page_title %}🧠 Treinamento da IA{% endblock %}
-{% block page_subtitle %}Configure a personalidade, conhecimentos e respostas da assistente virtual.{% endblock %}
-
-{% block header_actions %}
-    <div class="stat-card p-2 text-center">
-        <h3 class="m-0">Conhecimentos</h3>
-        <div class="stat-value" id="knowledge_count_header">{{ knowledge_count }}</div>
-    </div>
-{% endblock %}
-
 {% block content %}
-<input type="hidden" id="bot-id" value="{{ bot_id }}">
-
-<div class="row">
-    <!-- Coluna da Esquerda: Personalidade e Conhecimentos -->
-    <div class="col-lg-8">
-        <!-- Card de Personalidade -->
-        <div class="card">
-            <div class="card-header">
-                <h2>Personalidade da Mia</h2>
-                <p>Defina como a assistente deve se comportar e responder aos clientes.</p>
-            </div>
-            <div class="card-body">
-                <form id="formPersonalidade">
-                    <div class="form-group">
-                        <label for="personality-tone">Tom de Voz</label>
-                        <input type="text" class="form-control" id="personality-tone" 
-                               value="{{ personality.tone if personality else 'Profissional e acolhedor' }}" 
-                               placeholder="Ex: Profissional e amigável">
-                    </div>
-                    <div class="form-group">
-                        <label for="personality-goals">Objetivos da IA (um por linha)</label>
-                        <textarea class="form-control" id="personality-goals" rows="4" 
-                                  placeholder="Ex: Qualificar o lead para o time de vendas">{{ personality.goals|join('\n') if personality and personality.goals else '' }}</textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="personality-restrictions">Restrições de Comportamento (uma por linha)</label>
-                        <textarea class="form-control" id="personality-restrictions" rows="4" 
-                                  placeholder="Ex: Não fornecer opiniões pessoais">{{ personality.restrictions|join('\n') if personality and personality.restrictions else '' }}</textarea>
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Salvar Personalidade
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Card da Base de Conhecimentos -->
-        <div class="card mt-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <div>
-                    <h2>Base de Conhecimentos</h2>
-                    <p>Adicione serviços, preços, políticas e informações da empresa.</p>
-                </div>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoConhecimento">
-                    <i class="fas fa-plus"></i> Adicionar
-                </button>
-            </div>
-            <div class="card-body p-0">
-                <div id="listaConhecimentos" class="knowledge-list p-3">
-                    <div class="text-center p-4"><p class="text-muted">Carregando...</p></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Coluna da Direita: FAQs -->
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <div>
-                    <h2>FAQ</h2>
-                    <p>Perguntas e respostas rápidas.</p>
-                </div>
-                <button class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoFAQ">
-                    <i class="fas fa-plus"></i> Adicionar
-                </button>
-            </div>
-            <div class="card-body p-0">
-                <div id="listaFAQs" class="faq-list p-3">
-                     <div class="text-center p-4"><p class="text-muted">Carregando...</p></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<!-- Modal: Adicionar Conhecimento -->
-<div class="modal fade" id="modalNovoConhecimento" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Adicionar Novo Conhecimento</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="formNovoConhecimento">
-                    <div class="form-group">
-                        <label for="knowledge-category">Categoria</label>
-                        <input type="text" class="form-control" id="knowledge-category" placeholder="Ex: Serviços" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="knowledge-title">Título</label>
-                        <input type="text" class="form-control" id="knowledge-title" placeholder="Ex: Tradução Juramentada" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="knowledge-content">Conteúdo</label>
-                        <textarea class="form-control" id="knowledge-content" rows="5" placeholder="Descreva as informações completas..." required></textarea>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" form="formNovoConhecimento" class="btn btn-primary">Salvar Conhecimento</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal: Adicionar FAQ -->
-<div class="modal fade" id="modalNovoFAQ" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Adicionar Nova FAQ</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="formNovoFAQ">
-                    <div class="form-group">
-                        <label for="faq-category">Categoria</label>
-                        <input type="text" class="form-control" id="faq-category" placeholder="Ex: Pagamentos" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="faq-question">Pergunta</label>
-                        <input type="text" class="form-control" id="faq-question" placeholder="Ex: Quais formas de pagamento vocês aceitam?" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="faq-answer">Resposta</label>
-                        <textarea class="form-control" id="faq-answer" rows="4" placeholder="Digite a resposta completa..." required></textarea>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" form="formNovoFAQ" class="btn btn-primary">Salvar FAQ</button>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<!-- Seu JavaScript existente pode ser mantido. Apenas certifique-se de que os IDs dos elementos
-     correspondem aos do novo HTML. O código abaixo é um exemplo de como renderizar
-     os itens nas novas listas. -->
-<script>
-    // Suas funções de `fetch`, `submit` e `delete` podem ser mantidas.
-    // Apenas as funções de renderização precisam ser adaptadas.
-
-    function renderizarConhecimentos(knowledgeList) {
-        const container = document.getElementById('listaConhecimentos');
-        if (!knowledgeList || knowledgeList.length === 0) {
-            container.innerHTML = '<div class="text-center p-4"><p class="text-muted">Nenhum conhecimento cadastrado.</p></div>';
-            return;
-        }
-        container.innerHTML = knowledgeList.map(item => `
-            <div class="knowledge-item">
-                <h4>
-                    <span class="badge badge-primary">${item.category || 'Geral'}</span>
-                    ${item.title}
-                </h4>
-                <p>${item.content}</p>
-                <div class="actions">
-                    <button class="btn btn-danger btn-sm" onclick="deleteKnowledge('${item.id}')">
-                        <i class="fas fa-trash"></i> Excluir
-                    </button>
-                </div>
-            </div>
-        `).join('');
+<style>
+    /* Fix layout issues - Treinamento */
+    .container-fluid, .row {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
     }
-
-    function renderizarFAQs(faqList) {
-        const container = document.getElementById('listaFAQs');
-        if (!faqList || faqList.length === 0) {
-            container.innerHTML = '<div class="text-center p-4"><p class="text-muted">Nenhuma FAQ cadastrada.</p></div>';
-            return;
-        }
-        container.innerHTML = faqList.map(item => `
-            <div class="faq-item">
-                <h4>${item.question}</h4>
-                <p>${item.answer}</p>
-            </div>
-        `).join('');
+    
+    .col-lg-8, .col-lg-4 {
+        padding-left: 15px !important;
+        padding-right: 15px !important;
     }
-
-    // Adapte suas funções `loadKnowledge` e `loadFAQs` para chamar estas novas funções de renderização.
-    // Ex: fetch(...).then(data => renderizarConhecimentos(data.knowledge));
-</script>
-{% endblock %}
+    
+    .card {
+        margin-bottom: 20px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        border: none !important;
+    }
+    
+    .card-header {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%) !important;
+        color: white !important;
+        padding: 20px !important;
+        border-radius: 8px 8px 0 0 !important;
+    }
+    
+    .card-header h2 {
+        color: white !important;
+        margin: 0 0 5px 0 !important;
+        font-size: 1.5rem !important;
+    }
+    
+    .card-header p {
+        color: rgba(255,255,255,0.9) !important;
+        margin: 0 !important;
+        font-size: 0.9rem !important;
+    }
+    
+    .card-body {
+        padding: 25px !important;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem !important;
+    }
+    
+    textarea.form-control {
+        min-height: 120px !important;
+    }
+    
+    .knowledge-item, .faq-item {
+        background: #f8f9fa !important;
+        padding: 15px !important;
+        margin-bottom: 15px !important;
+        border-radius: 8px !important;
+        border-left: 4px solid #3b82f6 !important;
+    }
+    
+    /* Responsive */
+    @media (max-width: 991px) {
+        .col-lg-8, .col-lg-4 {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+        }
+    }
+</style>
