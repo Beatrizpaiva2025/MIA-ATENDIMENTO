@@ -474,6 +474,13 @@ async def admin_config(request: Request):
             "webhooks": webhooks
         })
         
+    except Exception as e:
+        logger.error(f"Erro nas configurações: {e}")
+        return templates.TemplateResponse("admin_config.html", {
+            "request": request,
+            "error": str(e)
+        })
+
 # ============================================
 # CONTROLE IA/HUMANO
 # ============================================
