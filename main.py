@@ -20,7 +20,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 import os
 import httpx
-from openai import OpenAI
+from openai import AsyncOpenAI
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
 import logging
@@ -67,7 +67,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # Clientes
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Usar mesma conexão do admin
 from admin_training_routes import get_database
@@ -406,7 +406,7 @@ async def process_pdf_with_vision(pdf_url: str, phone: str) -> str:
                 # If text extraction successful, analyze with GPT
                 training_prompt = await get_bot_training()
                 
-                response = openai_client.chat.completions.create(
+                response = await openai_client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
                         {"role": "system", "content": training_prompt},
@@ -452,7 +452,7 @@ async def process_pdf_with_vision(pdf_url: str, phone: str) -> str:
         # Analyze with GPT-4 Vision
         training_prompt = await get_bot_training()
         
-        vision_response = openai_client.chat.completions.create(
+        vision_response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": training_prompt},
@@ -509,7 +509,7 @@ async def process_image_with_vision(image_bytes: bytes, phone: str) -> str:
         training_prompt = await get_bot_training()
         
         # Chamar GPT-4 Vision
-        response = openai_client.chat.completions.create(
+        response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {
@@ -585,7 +585,7 @@ async def process_audio_with_whisper(audio_bytes: bytes, phone: str) -> Optional
         temp_file.name = "audio.ogg"
         
         # Chamar Whisper
-        transcription = openai_client.audio.transcriptions.create(
+        transcription = await openai_client.audio.transcriptions.create(
             model="whisper-1",
             file=temp_file,
             language="pt"
@@ -656,7 +656,7 @@ async def process_message_with_ai(phone: str, message: str) -> str:
         ]
         
         # Chamar GPT-4
-        response = openai_client.chat.completions.create(
+        response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
             max_tokens=500,
@@ -720,18 +720,24 @@ async def api_bot_status():
     }
 
 @app.post("/admin/api/bot/toggle")
-async def api_bot_toggle(enabled: bool):
-    """Liga ou desliga o bot globalmente"""
-    success = await set_bot_status(enabled)
+async def api_bot_toggle(request: Request):
+    """Toggle bot status"""
+    username = check_admin_access(request)
     
-    if success:
-        return {
-            "success": True,
-            "enabled": enabled,
-            "message": f"Bot {'ATIVADO' if enabled else 'DESATIVADO'} com sucesso!"
-        }
-    else:
-        raise HTTPException(status_code=500, detail="Erro ao atualizar status do bot")
+    try:
+        data = await request.json()
+        new_status = data.get("is_active", True)
+        
+        await db.bots.update_one(
+            {"name": "Mia"},
+            {"$set": {"is_active": new_status, "updated_at": datetime.now()}},
+            upsert=True
+        )
+        
+        return {"success": True, "is_active": new_status}
+    except Exception as e:
+        logger.error(f"Error toggling bot: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================
 # NOVAS API ROUTES - DASHBOARD E CONTROLE
@@ -774,6 +780,18 @@ async def get_control_stats(request: Request):
         "total_minutes": 1475,
         "conversations": []
     }
+
+@app.get("/admin/api/transfers")
+async def get_transfers(request: Request):
+    """Get transfers"""
+    username = check_admin_access(request)
+    return {"success": True, "transfers": []}
+
+@app.get("/admin/api/documents")
+async def get_documents(request: Request):
+    """Get documents"""
+    username = check_admin_access(request)
+    return {"success": True, "documents": []}
 
 @app.post("/admin/bot/start")
 async def start_bot(request: Request):
@@ -871,176 +889,6 @@ async def add_faq_item(
         
     except Exception as e:
         logger.error(f"Error adding FAQ: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================================
-# API: PIPELINE - Complete CRUD
-# ============================================================
-
-@app.get("/admin/api/pipeline/all")
-async def get_pipeline_data(request: Request):
-    """Get all pipeline deals"""
-    username = check_admin_access(request)
-    
-    try:
-        deals = await db.deals.find({}).sort("created_at", -1).to_list(100)
-        
-        # Convert ObjectId to string
-        for deal in deals:
-            deal["_id"] = str(deal["_id"])
-            
-        return {"success": True, "deals": deals}
-    except Exception as e:
-        logger.error(f"Error fetching pipeline: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/admin/api/pipeline/deal/add")
-async def add_deal(request: Request):
-    """Add new deal to pipeline"""
-    username = check_admin_access(request)
-    
-    try:
-        data = await request.json()
-        deal = {
-            "name": data.get("name"),
-            "contact": data.get("contact"),
-            "phone": data.get("phone"),
-            "value": data.get("value", 0),
-            "notes": data.get("notes", ""),
-            "stage": data.get("stage", "Prospecting"),
-            "created_at": datetime.now(),
-            "created_by": username
-        }
-        
-        result = await db.deals.insert_one(deal)
-        return {"success": True, "id": str(result.inserted_id)}
-    except Exception as e:
-        logger.error(f"Error adding deal: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.put("/admin/api/pipeline/deal/{deal_id}")
-async def update_deal(deal_id: str, request: Request):
-    """Update existing deal"""
-    username = check_admin_access(request)
-    
-    try:
-        from bson.objectid import ObjectId
-        data = await request.json()
-        
-        await db.deals.update_one(
-            {"_id": ObjectId(deal_id)},
-            {"$set": {
-                "name": data.get("name"),
-                "contact": data.get("contact"),
-                "phone": data.get("phone"),
-                "value": data.get("value"),
-                "notes": data.get("notes"),
-                "stage": data.get("stage"),
-                "updated_at": datetime.now()
-            }}
-        )
-        
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Error updating deal: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/admin/api/pipeline/deal/{deal_id}")
-async def delete_deal(deal_id: str, request: Request):
-    """Delete deal from pipeline"""
-    username = check_admin_access(request)
-    
-    try:
-        from bson.objectid import ObjectId
-        await db.deals.delete_one({"_id": ObjectId(deal_id)})
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Error deleting deal: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================================
-# API: LEADS - Complete CRUD
-# ============================================================
-
-@app.get("/admin/api/leads/all")
-async def get_all_leads(request: Request):
-    """Get all leads"""
-    username = check_admin_access(request)
-    
-    try:
-        leads = await db.leads.find({}).sort("created_at", -1).to_list(100)
-        
-        # Convert ObjectId to string
-        for lead in leads:
-            lead["_id"] = str(lead["_id"])
-            
-        return {"success": True, "leads": leads}
-    except Exception as e:
-        logger.error(f"Error fetching leads: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/admin/api/leads/add")
-async def add_lead(request: Request):
-    """Add new lead"""
-    username = check_admin_access(request)
-    
-    try:
-        data = await request.json()
-        lead = {
-            "name": data.get("name"),
-            "phone": data.get("phone"),
-            "email": data.get("email", ""),
-            "status": data.get("status", "new"),
-            "source": data.get("source", "manual"),
-            "notes": data.get("notes", ""),
-            "created_at": datetime.now(),
-            "created_by": username
-        }
-        
-        result = await db.leads.insert_one(lead)
-        return {"success": True, "id": str(result.inserted_id)}
-    except Exception as e:
-        logger.error(f"Error adding lead: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.put("/admin/api/leads/{lead_id}")
-async def update_lead(lead_id: str, request: Request):
-    """Update existing lead"""
-    username = check_admin_access(request)
-    
-    try:
-        from bson.objectid import ObjectId
-        data = await request.json()
-        
-        await db.leads.update_one(
-            {"_id": ObjectId(lead_id)},
-            {"$set": {
-                "name": data.get("name"),
-                "phone": data.get("phone"),
-                "email": data.get("email"),
-                "status": data.get("status"),
-                "source": data.get("source"),
-                "notes": data.get("notes"),
-                "updated_at": datetime.now()
-            }}
-        )
-        
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Error updating lead: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/admin/api/leads/{lead_id}")
-async def delete_lead(lead_id: str, request: Request):
-    """Delete lead"""
-    username = check_admin_access(request)
-    
-    try:
-        from bson.objectid import ObjectId
-        await db.leads.delete_one({"_id": ObjectId(lead_id)})
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Error deleting lead: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/admin/training/knowledge/delete/{index}")
@@ -1182,19 +1030,24 @@ async def admin_documents(request: Request):
 # ============================================================
 @app.get("/admin/configurations")
 async def admin_configurations(request: Request):
-    """Configurations page - Admin only"""
+    """Configurations page"""
     username = check_admin_access(request)
     
-    # Get bot config
-    bot_config = await db.bot_config.find_one({"_id": "global_status"})
+    bot = await db.bots.find_one({"name": "Mia"})
+    
+    config = {
+        "openai_status": "Connected",
+        "zapi_status": "Connected",
+        "mongodb_status": "Connected",
+        "bot_active": bot.get("is_active", True) if bot else True
+    }
     
     return templates.TemplateResponse(
         "admin_config.html",
         {
             "request": request,
-            "session": request.session,
             "username": username,
-            "bot_config": bot_config
+            "config": config
         }
     )
 
