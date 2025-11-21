@@ -2,269 +2,192 @@
 
 {% block title %}Dashboard - Painel Administrativo{% endblock %}
 
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Visão geral e indicadores de performance do sistema.{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>📊 Dashboard</h2>
-        <div class="text-muted">
-            <i class="bi bi-calendar"></i> Última atualização: <span id="lastUpdate"></span>
-        </div>
+
+<!-- 1. Cards de Métricas Principais (KPIs) -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3><i class="fas fa-dollar-sign"></i> Receita Total</h3>
+        <div class="stat-value" id="kpi-receita-total">R$ 0,00</div>
+        <div class="stat-icon"><i class="fas fa-wallet"></i></div>
     </div>
+    <div class="stat-card">
+        <h3><i class="fas fa-users"></i> Novos Leads</h3>
+        <div class="stat-value" id="kpi-novos-leads">0</div>
+        <div class="stat-icon"><i class="fas fa-user-plus"></i></div>
+    </div>
+    <div class="stat-card">
+        <h3><i class="fas fa-chart-line"></i> Taxa de Conversão</h3>
+        <div class="stat-value" id="kpi-taxa-conversao">0%</div>
+        <div class="stat-icon"><i class="fas fa-percentage"></i></div>
+    </div>
+    <div class="stat-card">
+        <h3><i class="fas fa-brain"></i> Conhecimentos na IA</h3>
+        <div class="stat-value" id="kpi-conhecimentos">{{ knowledge_count }}</div>
+        <div class="stat-icon"><i class="fas fa-book"></i></div>
+    </div>
+</div>
 
-    <!-- Cards de Estatísticas -->
-    <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Conversas Hoje</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="conversasHoje">-</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-chat-dots fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
+<!-- 2. Gráficos Principais -->
+<div class="row">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header">
+                <h2>Relatório de Vendas Mensal</h2>
+                <p>Evolução da receita nos últimos meses.</p>
             </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Leads Qualificados</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="leadsQualificados">-</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-person-check fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Taxa de Conversão</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="taxaConversao">-</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-graph-up fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Tempo Médio Resposta</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="tempoMedio">-</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-clock fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
+            <div class="card-body">
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="salesChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Gráficos -->
-    <div class="row">
-        <div class="col-xl-8 col-lg-7">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Conversas por Dia (Últimos 7 dias)</h6>
-                </div>
-                <div class="card-body">
-                    <canvas id="conversasChart"></canvas>
-                </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">
+                <h2>Divisão de Receita</h2>
+                <p>Receita por categoria de serviço.</p>
             </div>
-        </div>
-
-        <div class="col-xl-4 col-lg-5">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Status das Conversas</h6>
-                </div>
-                <div class="card-body">
-                    <canvas id="statusChart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Tabela de Conversas Recentes -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Conversas Recentes</h6>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover" id="conversasTable">
-                            <thead>
-                                <tr>
-                                    <th>Cliente</th>
-                                    <th>Telefone</th>
-                                    <th>Última Mensagem</th>
-                                    <th>Status</th>
-                                    <th>Data/Hora</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="conversasTableBody">
-                                <tr>
-                                    <td colspan="6" class="text-center">
-                                        <div class="spinner-border text-primary" role="status">
-                                            <span class="visually-hidden">Carregando...</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+            <div class="card-body">
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="revenueBreakdownChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- 3. Tabela de Atividades Recentes (Exemplo) -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h2>Atividades Recentes</h2>
+        <p>Últimas ações e eventos no sistema.</p>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Descrição</th>
+                        <th>Data</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="recentActivitiesBody">
+                    <!-- Linhas serão preenchidas via JS -->
+                    <tr><td colspan="4" class="text-center p-4">Carregando atividades...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js já está no seu admin_base.html, então podemos usá-lo aqui -->
 <script>
-// Atualizar timestamp
-document.getElementById('lastUpdate').textContent = new Date().toLocaleString('pt-BR');
+document.addEventListener('DOMContentLoaded', function() {
+    // Cores do tema para os gráficos
+    const legacyColors = {
+        navy: '#1e3a5f',
+        blue: '#3b7bbf',
+        lightBlue: '#5eb3e4',
+        skyBlue: '#a8d8f0',
+        success: '#28a745',
+    };
 
-// Função para buscar dados do dashboard
-async function carregarDashboard() {
-    try {
-        const response = await fetch('/admin/api/dashboard-data');
-        const data = await response.json();
-        
-        // Atualizar cards
-        document.getElementById('conversasHoje').textContent = data.conversas_hoje || 0;
-        document.getElementById('leadsQualificados').textContent = data.leads_qualificados || 0;
-        document.getElementById('taxaConversao').textContent = (data.taxa_conversao || 0) + '%';
-        document.getElementById('tempoMedio').textContent = (data.tempo_medio || 0) + 's';
-        
-        // Atualizar tabela
-        atualizarTabelaConversas(data.conversas_recentes || []);
-        
-        // Criar gráficos
-        criarGraficoConversas(data.conversas_por_dia || []);
-        criarGraficoStatus(data.status_conversas || {});
-        
-    } catch (error) {
-        console.error('Erro ao carregar dashboard:', error);
-    }
-}
-
-function atualizarTabelaConversas(conversas) {
-    const tbody = document.getElementById('conversasTableBody');
-    if (conversas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhuma conversa encontrada</td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = conversas.map(conv => `
-        <tr>
-            <td>${conv.nome || 'Sem nome'}</td>
-            <td>${conv.telefone}</td>
-            <td>${conv.ultima_mensagem ? conv.ultima_mensagem.substring(0, 50) + '...' : '-'}</td>
-            <td><span class="badge bg-${conv.status === 'ativo' ? 'success' : 'secondary'}">${conv.status}</span></td>
-            <td>${new Date(conv.data_hora).toLocaleString('pt-BR')}</td>
-            <td>
-                <button class="btn btn-sm btn-primary" onclick="verConversa('${conv.telefone}')">
-                    <i class="bi bi-eye"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-function criarGraficoConversas(dados) {
-    const ctx = document.getElementById('conversasChart');
-    new Chart(ctx, {
+    // --- Gráfico de Linhas: Relatório de Vendas ---
+    const salesCtx = document.getElementById('salesChart').getContext('2d');
+    new Chart(salesCtx, {
         type: 'line',
         data: {
-            labels: dados.map(d => d.data),
+            labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'], // Exemplo de dados
             datasets: [{
-                label: 'Conversas',
-                data: dados.map(d => d.total),
-                borderColor: 'rgb(108, 92, 231)',
-                backgroundColor: 'rgba(108, 92, 231, 0.1)',
-                tension: 0.4
+                label: 'Receita',
+                data: [12000, 19000, 15000, 22000, 18000, 25000], // Exemplo de dados
+                backgroundColor: 'rgba(59, 123, 191, 0.1)',
+                borderColor: legacyColors.blue,
+                tension: 0.4,
+                fill: true,
             }]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true } }
         }
     });
-}
 
-function criarGraficoStatus(dados) {
-    const ctx = document.getElementById('statusChart');
-    new Chart(ctx, {
+    // --- Gráfico de Doughnut: Divisão de Receita ---
+    const revenueCtx = document.getElementById('revenueBreakdownChart').getContext('2d');
+    new Chart(revenueCtx, {
         type: 'doughnut',
         data: {
-            labels: Object.keys(dados),
+            labels: ['Tradução Juramentada', 'Tradução Simples', 'Revisão', 'Outros'], // Exemplo
             datasets: [{
-                data: Object.values(dados),
+                label: 'Receita por Serviço',
+                data: [15000, 8000, 5000, 2000], // Exemplo
                 backgroundColor: [
-                    'rgba(108, 92, 231, 0.8)',
-                    'rgba(162, 155, 254, 0.8)',
-                    'rgba(99, 102, 241, 0.8)'
-                ]
+                    legacyColors.navy,
+                    legacyColors.blue,
+                    legacyColors.lightBlue,
+                    legacyColors.skyBlue
+                ],
+                borderWidth: 2
             }]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false
+            maintainAspectRatio: false,
         }
     });
-}
 
-function verConversa(telefone) {
-    window.location.href = `/admin/conversas/${telefone}`;
-}
+    // --- Função para carregar dados do dashboard (KPIs, Tabela) ---
+    async function loadDashboardData() {
+        // Aqui você faria uma chamada à sua API para buscar os dados reais
+        // Ex: const response = await fetch('/admin/api/dashboard');
+        // const data = await response.json();
+        
+        // Simulando dados recebidos:
+        const data = {
+            receita_total: 45760.50,
+            novos_leads: 125,
+            taxa_conversao: 15.3,
+            atividades: [
+                { tipo: 'NOVO LEAD', descricao: 'Cliente "Global Corp" entrou no funil.', data: '2025-11-21 10:30', status: 'contato_inicial' },
+                { tipo: 'VENDA', descricao: 'Oportunidade "Tech Solutions" ganha.', data: '2025-11-21 09:45', status: 'ganho' },
+                { tipo: 'TREINAMENTO', descricao: 'Novo conhecimento sobre "Preços" adicionado à IA.', data: '2025-11-20 18:00', status: 'concluido' }
+            ]
+        };
 
-// Carregar dados ao iniciar
-carregarDashboard();
+        // Preencher KPIs
+        document.getElementById('kpi-receita-total').textContent = `R$ ${data.receita_total.toLocaleString('pt-BR')}`;
+        document.getElementById('kpi-novos-leads').textContent = data.novos_leads;
+        document.getElementById('kpi-taxa-conversao').textContent = `${data.taxa_conversao}%`;
 
-// Atualizar a cada 30 segundos
-setInterval(carregarDashboard, 30000);
+        // Preencher tabela de atividades
+        const activitiesBody = document.getElementById('recentActivitiesBody');
+        if (data.atividades && data.atividades.length > 0) {
+            activitiesBody.innerHTML = data.atividades.map(act => `
+                <tr>
+                    <td><span class="badge badge-primary">${act.tipo}</span></td>
+                    <td>${act.descricao}</td>
+                    <td>${act.data}</td>
+                    <td><span class="badge badge-success">${act.status}</span></td>
+                </tr>
+            `).join('');
+        } else {
+            activitiesBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">Nenhuma atividade recente.</td></tr>';
+        }
+    }
+
+    loadDashboardData();
+});
 </script>
-
-<style>
-.border-left-primary {
-    border-left: 0.25rem solid #6c5ce7 !important;
-}
-.border-left-success {
-    border-left: 0.25rem solid #28a745 !important;
-}
-.border-left-info {
-    border-left: 0.25rem solid #17a2b8 !important;
-}
-.border-left-warning {
-    border-left: 0.25rem solid #ffc107 !important;
-}
-#conversasChart, #statusChart {
-    max-height: 300px;
-}
-</style>
 {% endblock %}
