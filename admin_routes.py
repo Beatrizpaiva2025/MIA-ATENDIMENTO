@@ -473,7 +473,7 @@ async def admin_config(request: Request):
             "config": config,
             "webhooks": webhooks
         })
-        @router.get("/controle", response_class=HTMLResponse)
+       @router.get("/controle", response_class=HTMLResponse)
 async def admin_controle(request: Request):
     """Controle de atendimento IA/Humano"""
     return templates.TemplateResponse("admin_controle.html", {
