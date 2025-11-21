@@ -473,23 +473,25 @@ async def admin_config(request: Request):
             "config": config,
             "webhooks": webhooks
         })
-      @router.get("/controle", response_class=HTMLResponse)
+        
+# ============================================
+# CONTROLE IA/HUMANO
+# ============================================
+
+@router.get("/controle", response_class=HTMLResponse)
 async def admin_controle(request: Request):
     """Controle de atendimento IA/Humano"""
-    return templates.TemplateResponse("admin_controle.html", {
-        "request": request
-    })
-        
+    try:
+        return templates.TemplateResponse("admin_controle.html", {
+            "request": request
+        })
     except Exception as e:
-        logger.error(f"Erro nas configurações: {e}")
-        return templates.TemplateResponse("admin_config.html", {
+        logger.error(f"Erro no controle: {e}")
+        return templates.TemplateResponse("admin_controle.html", {
             "request": request,
             "error": str(e)
         })
 
-# ============================================
-# API ENDPOINTS (JSON)
-# ============================================
 # ============================================
 # API ENDPOINTS (JSON)
 # ============================================
