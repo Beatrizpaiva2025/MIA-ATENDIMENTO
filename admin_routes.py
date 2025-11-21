@@ -490,6 +490,9 @@ async def admin_controle(request: Request):
 # ============================================
 # API ENDPOINTS (JSON)
 # ============================================
+# ============================================
+# API ENDPOINTS (JSON)
+# ============================================
 
 @router.get("/api/stats")
 async def api_stats():
