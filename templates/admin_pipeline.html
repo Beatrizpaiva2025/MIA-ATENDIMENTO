@@ -122,67 +122,17 @@
 
 {% block extra_css %}
 <style>
-    .kanban-board {
-        display: flex;
-        gap: 20px;
-        overflow-x: auto;
-        padding: 10px;
-        min-height: 400px;
-        background-color: var(--gray-50);
-        border-radius: 8px;
-    }
-    .kanban-column {
-        flex: 0 0 300px;
-        background-color: var(--gray-100);
-        border-radius: 8px;
-        padding: 15px;
-    }
-    .kanban-column-header {
-        padding-bottom: 15px;
-        margin-bottom: 15px;
-        border-bottom: 2px solid var(--gray-200);
-    }
-    .kanban-column-header h3 {
-        font-size: 1rem;
-        font-weight: 600;
-        color: var(--legacy-navy);
-    }
-    .kanban-column-header .etapa-total {
-        font-size: 0.8rem;
-        color: var(--gray-500);
-    }
-    .kanban-cards {
-        min-height: 200px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-    .kanban-card {
-        background: var(--white);
-        border-radius: 8px;
-        padding: 15px;
-        box-shadow: var(--shadow-sm);
-        border-left: 4px solid var(--legacy-blue);
-        cursor: grab;
-    }
-    .kanban-card:hover {
-        box-shadow: var(--shadow-md);
-        transform: translateY(-2px);
-    }
-    .kanban-card h4 {
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: var(--gray-700);
-    }
-    .kanban-card .card-valor {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--success);
-    }
-    .kanban-card .card-info {
-        font-size: 0.8rem;
-        color: var(--gray-500);
-    }
+    .kanban-board { display: flex; gap: 20px; overflow-x: auto; padding: 10px; min-height: 400px; background-color: var(--gray-50); border-radius: 8px; }
+    .kanban-column { flex: 0 0 300px; background-color: var(--gray-100); border-radius: 8px; padding: 15px; }
+    .kanban-column-header { padding-bottom: 15px; margin-bottom: 15px; border-bottom: 2px solid var(--gray-200); }
+    .kanban-column-header h3 { font-size: 1rem; font-weight: 600; color: var(--legacy-navy); }
+    .kanban-column-header .etapa-total { font-size: 0.8rem; color: var(--gray-500); }
+    .kanban-cards { min-height: 200px; display: flex; flex-direction: column; gap: 10px; }
+    .kanban-card { background: var(--white); border-radius: 8px; padding: 15px; box-shadow: var(--shadow-sm); border-left: 4px solid var(--legacy-blue); cursor: grab; }
+    .kanban-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    .kanban-card h4 { font-size: 0.95rem; font-weight: 600; color: var(--gray-700); }
+    .kanban-card .card-valor { font-size: 1.1rem; font-weight: 700; color: var(--success); }
+    .kanban-card .card-info { font-size: 0.8rem; color: var(--gray-500); }
 </style>
 {% endblock %}
 
@@ -191,8 +141,8 @@
 <script>
 // Adapte seu JS para preencher este novo layout
 document.addEventListener('DOMContentLoaded', function( ) {
-    // Simulação de inicialização
     console.log("Pipeline inicializado com novo layout.");
+    // Aqui você deve chamar sua função original `carregarDados()` para preencher a página.
 });
 </script>
 {% endblock %}
