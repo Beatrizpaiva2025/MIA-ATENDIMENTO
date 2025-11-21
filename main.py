@@ -873,6 +873,176 @@ async def add_faq_item(
         logger.error(f"Error adding FAQ: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============================================================
+# API: PIPELINE - Complete CRUD
+# ============================================================
+
+@app.get("/admin/api/pipeline/all")
+async def get_pipeline_data(request: Request):
+    """Get all pipeline deals"""
+    username = check_admin_access(request)
+    
+    try:
+        deals = await db.deals.find({}).sort("created_at", -1).to_list(100)
+        
+        # Convert ObjectId to string
+        for deal in deals:
+            deal["_id"] = str(deal["_id"])
+            
+        return {"success": True, "deals": deals}
+    except Exception as e:
+        logger.error(f"Error fetching pipeline: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/api/pipeline/deal/add")
+async def add_deal(request: Request):
+    """Add new deal to pipeline"""
+    username = check_admin_access(request)
+    
+    try:
+        data = await request.json()
+        deal = {
+            "name": data.get("name"),
+            "contact": data.get("contact"),
+            "phone": data.get("phone"),
+            "value": data.get("value", 0),
+            "notes": data.get("notes", ""),
+            "stage": data.get("stage", "Prospecting"),
+            "created_at": datetime.now(),
+            "created_by": username
+        }
+        
+        result = await db.deals.insert_one(deal)
+        return {"success": True, "id": str(result.inserted_id)}
+    except Exception as e:
+        logger.error(f"Error adding deal: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/admin/api/pipeline/deal/{deal_id}")
+async def update_deal(deal_id: str, request: Request):
+    """Update existing deal"""
+    username = check_admin_access(request)
+    
+    try:
+        from bson.objectid import ObjectId
+        data = await request.json()
+        
+        await db.deals.update_one(
+            {"_id": ObjectId(deal_id)},
+            {"$set": {
+                "name": data.get("name"),
+                "contact": data.get("contact"),
+                "phone": data.get("phone"),
+                "value": data.get("value"),
+                "notes": data.get("notes"),
+                "stage": data.get("stage"),
+                "updated_at": datetime.now()
+            }}
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error updating deal: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/admin/api/pipeline/deal/{deal_id}")
+async def delete_deal(deal_id: str, request: Request):
+    """Delete deal from pipeline"""
+    username = check_admin_access(request)
+    
+    try:
+        from bson.objectid import ObjectId
+        await db.deals.delete_one({"_id": ObjectId(deal_id)})
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error deleting deal: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================
+# API: LEADS - Complete CRUD
+# ============================================================
+
+@app.get("/admin/api/leads/all")
+async def get_all_leads(request: Request):
+    """Get all leads"""
+    username = check_admin_access(request)
+    
+    try:
+        leads = await db.leads.find({}).sort("created_at", -1).to_list(100)
+        
+        # Convert ObjectId to string
+        for lead in leads:
+            lead["_id"] = str(lead["_id"])
+            
+        return {"success": True, "leads": leads}
+    except Exception as e:
+        logger.error(f"Error fetching leads: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/api/leads/add")
+async def add_lead(request: Request):
+    """Add new lead"""
+    username = check_admin_access(request)
+    
+    try:
+        data = await request.json()
+        lead = {
+            "name": data.get("name"),
+            "phone": data.get("phone"),
+            "email": data.get("email", ""),
+            "status": data.get("status", "new"),
+            "source": data.get("source", "manual"),
+            "notes": data.get("notes", ""),
+            "created_at": datetime.now(),
+            "created_by": username
+        }
+        
+        result = await db.leads.insert_one(lead)
+        return {"success": True, "id": str(result.inserted_id)}
+    except Exception as e:
+        logger.error(f"Error adding lead: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/admin/api/leads/{lead_id}")
+async def update_lead(lead_id: str, request: Request):
+    """Update existing lead"""
+    username = check_admin_access(request)
+    
+    try:
+        from bson.objectid import ObjectId
+        data = await request.json()
+        
+        await db.leads.update_one(
+            {"_id": ObjectId(lead_id)},
+            {"$set": {
+                "name": data.get("name"),
+                "phone": data.get("phone"),
+                "email": data.get("email"),
+                "status": data.get("status"),
+                "source": data.get("source"),
+                "notes": data.get("notes"),
+                "updated_at": datetime.now()
+            }}
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error updating lead: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/admin/api/leads/{lead_id}")
+async def delete_lead(lead_id: str, request: Request):
+    """Delete lead"""
+    username = check_admin_access(request)
+    
+    try:
+        from bson.objectid import ObjectId
+        await db.leads.delete_one({"_id": ObjectId(lead_id)})
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error deleting lead: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/admin/training/knowledge/delete/{index}")
 async def delete_knowledge_item(index: int, request: Request):
     """Delete knowledge item by index"""
