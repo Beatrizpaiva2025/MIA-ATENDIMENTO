@@ -1341,14 +1341,6 @@ async def show_login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 # ============================================================
-# ROTA: PÁGINA DE LOGIN (GET)
-# ============================================================
-@app.get("/login", response_class=HTMLResponse)
-async def show_login_form(request: Request):
-    """Renderiza a página de login quando acessada via GET"""
-    return templates.TemplateResponse("login.html", {"request": request})
-
-# ============================================================
 # ROTA: PROCESSAMENTO DO LOGIN
 # ============================================================
 @app.post("/login")
