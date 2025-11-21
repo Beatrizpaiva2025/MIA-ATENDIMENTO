@@ -838,33 +838,34 @@ Em breve voltaremos! 😊
         return JSONResponse({"status": "error", "error": str(e)}, status_code=500)
 
 # ============================================================
-# ROTA: PÁGINA INICIAL (AGORA REDIRECIONA PARA O PAINEL)
+# ROTA: PÁGINA INICIAL (AGORA MOSTRA O LOGIN)
 # ============================================================
 @app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
+async def show_login_page(request: Request):
     """
-    Página inicial que redireciona para o painel administrativo.
+    Renderiza a página de login do sistema.
     """
-    return RedirectResponse(url="/admin")
+    return templates.TemplateResponse("login.html", {"request": request})
 
 
 # ============================================================
-# ROTA: LOGIN (A SER IMPLEMENTADA NO FUTURO)
+# ROTA: PROCESSAMENTO DO LOGIN
 # ============================================================
 @app.post("/login")
 async def handle_login(username: Annotated[str, Form()], password: Annotated[str, Form()]):
     """
     Processa os dados do formulário de login.
-    (Lógica de autenticação a ser adicionada aqui)
     """
     print(f"Tentativa de login com usuário: {username}")
     
     # Lógica de verificação de exemplo:
     if username == "admin" and password == "admin":
+        # Se o login for bem-sucedido, redireciona para o dashboard
         return RedirectResponse(url="/admin", status_code=303)
     else:
-        # Futuramente, redirecionará de volta para o login com erro
-        return {"status": "Credenciais inválidas"}
+        # Se falhar, redireciona de volta para a página de login
+        # (No futuro, podemos adicionar uma mensagem de erro)
+        return RedirectResponse(url="/", status_code=303)
 
 # ============================================================
 # INICIAR SERVIDOR
