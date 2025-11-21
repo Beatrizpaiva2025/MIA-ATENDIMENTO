@@ -3,481 +3,343 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Admin Panel - MIA Customer Service{% endblock %}</title>
-    
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Bootstrap 5.3 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    
+    <title>{% block title %}Admin Panel{% endblock %} - MIA Customer Service</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
     <style>
+        :root {
+            --sidebar-width: 280px;
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --danger-color: #e74c3c;
+            --text-light: #ecf0f1;
+            --border-color: #465a6b;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: 'Inter', sans-serif;
-            background: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             overflow-x: hidden;
         }
-        
-        /* ==================== SIDEBAR ==================== */
+
+        /* SIDEBAR FIXA */
         .sidebar {
             position: fixed;
-            top: 0;
             left: 0;
-            width: 280px;
+            top: 0;
+            width: var(--sidebar-width);
             height: 100vh;
-            background: linear-gradient(180deg, #0a3d62 0%, #1e5a7d 100%);
-            padding: 0;
-            z-index: 1000;
-            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1);
+            background: var(--primary-color);
+            color: var(--text-light);
             overflow-y: auto;
+            overflow-x: hidden;
+            z-index: 1000;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
         }
-        
-        /* Logo Section */
-        .sidebar-logo {
-            padding: 30px 25px;
-            background: rgba(0, 0, 0, 0.2);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
         }
-        
-        .sidebar-logo h3 {
-            color: white;
-            font-size: 1.5rem;
-            font-weight: 700;
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--accent-color);
+            border-radius: 3px;
+        }
+
+        /* HEADER DO SIDEBAR */
+        .sidebar-header {
+            padding: 25px 20px;
+            background: linear-gradient(135deg, var(--accent-color), #2980b9);
+            border-bottom: 2px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .sidebar-header h4 {
             margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        /* USER PROFILE */
+        .user-profile {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 15px;
+            background: rgba(255,255,255,0.05);
+            flex-shrink: 0;
         }
-        
-        .sidebar-logo h3 i {
-            font-size: 1.8rem;
-            color: #4fc3f7;
-        }
-        
-        .sidebar-logo p {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 0.85rem;
-            margin: 5px 0 0 0;
-            font-weight: 300;
-        }
-        
-        /* User Info */
-        .user-info {
-            padding: 20px 25px;
-            background: rgba(0, 0, 0, 0.15);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .user-info .user-avatar {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(135deg, #4fc3f7 0%, #2196f3 100%);
+
+        .user-avatar {
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
+            background: var(--accent-color);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.3rem;
+            font-size: 24px;
+            font-weight: bold;
             color: white;
-            font-weight: 700;
-            float: left;
-            margin-right: 12px;
+            flex-shrink: 0;
         }
-        
-        .user-info .user-details {
-            overflow: hidden;
-        }
-        
-        .user-info .user-name {
-            color: white;
-            font-size: 0.95rem;
-            font-weight: 600;
+
+        .user-info h5 {
             margin: 0;
-            line-height: 1.3;
-        }
-        
-        .user-info .user-role {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 0.75rem;
-            margin: 2px 0 0 0;
-        }
-        
-        .user-info .user-role.admin {
-            color: #4fc3f7;
+            font-size: 16px;
             font-weight: 600;
         }
-        
-        /* Navigation Menu */
-        .sidebar-nav {
-            padding: 20px 0;
-        }
-        
-        .nav-section-title {
-            color: rgba(255, 255, 255, 0.5);
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            padding: 15px 25px 10px 25px;
+
+        .user-info p {
             margin: 0;
-        }
-        
-        .nav-item {
-            list-style: none;
-        }
-        
-        .nav-link {
+            font-size: 12px;
+            color: #95a5a6;
             display: flex;
             align-items: center;
-            padding: 14px 25px;
-            color: rgba(255, 255, 255, 0.85);
+            gap: 5px;
+        }
+
+        /* MENU SECTIONS */
+        .menu-section {
+            padding: 20px 15px 10px;
+            flex-grow: 1;
+        }
+
+        .menu-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #95a5a6;
+            margin-bottom: 10px;
+            padding-left: 15px;
+        }
+
+        /* MENU ITEMS */
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            color: var(--text-light);
             text-decoration: none;
-            transition: all 0.3s ease;
-            font-size: 0.95rem;
-            font-weight: 500;
-            border-left: 3px solid transparent;
-        }
-        
-        .nav-link i {
-            font-size: 1.3rem;
-            margin-right: 15px;
-            width: 25px;
-            text-align: center;
-        }
-        
-        .nav-link:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border-left-color: #4fc3f7;
-        }
-        
-        .nav-link.active {
-            background: rgba(79, 195, 247, 0.2);
-            color: white;
-            border-left-color: #4fc3f7;
-            font-weight: 600;
-        }
-        
-        .nav-link.active i {
-            color: #4fc3f7;
-        }
-        
-        /* Logout Button */
-        .logout-section {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            padding: 20px 25px;
-            background: rgba(0, 0, 0, 0.2);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .btn-logout {
-            width: 100%;
-            padding: 12px;
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-            color: white;
             border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.3s;
+            margin-bottom: 5px;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            gap: 12px;
+        }
+
+        .menu-item i {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .menu-item:hover {
+            background: rgba(52, 152, 219, 0.2);
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .menu-item.active {
+            background: var(--accent-color);
+            color: white;
+            box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+        }
+
+        /* LOGOUT BUTTON - SEMPRE NO FINAL */
+        .sidebar-footer {
+            padding: 15px;
+            border-top: 1px solid var(--border-color);
+            background: rgba(0,0,0,0.2);
+            flex-shrink: 0;
+            margin-top: auto;
+        }
+
+        .logout-btn {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
-        }
-        
-        .btn-logout:hover {
-            background: #ef4444;
-            border-color: #ef4444;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-        }
-        
-        /* ==================== MAIN CONTENT ==================== */
-        .main-content {
-            margin-left: 280px;
-            padding: 0;
-            min-height: 100vh;
-            background: #f8fafc;
-        }
-        
-        /* Top Header */
-        .top-header {
-            background: white;
-            padding: 20px 40px;
-            border-bottom: 1px solid #e2e8f0;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        
-        .top-header h1 {
-            color: #1e293b;
-            font-size: 1.8rem;
-            font-weight: 700;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .top-header h1 i {
-            color: #3b82f6;
-        }
-        
-        .breadcrumb {
-            background: none;
-            padding: 8px 0 0 0;
-            margin: 0;
-            font-size: 0.85rem;
-        }
-        
-        .breadcrumb-item {
-            color: #64748b;
-        }
-        
-        .breadcrumb-item.active {
-            color: #1e293b;
+            padding: 12px;
+            background: var(--danger-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
             font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+            border: none;
+            cursor: pointer;
         }
-        
-        .breadcrumb-item + .breadcrumb-item::before {
-            content: "›";
-            color: #94a3b8;
+
+        .logout-btn:hover {
+            background: #c0392b;
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
         }
-        
-        /* Content Area */
-        .content-area {
-            padding: 30px 40px;
+
+        .logout-btn i {
+            font-size: 18px;
         }
-        
-        /* Mobile Responsive */
-        @media (max-width: 992px) {
-            .sidebar {
-                transform: translateX(-280px);
-                transition: transform 0.3s;
+
+        /* MAIN CONTENT */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+            padding: 30px;
+        }
+
+        /* CONTENT CARD */
+        .content-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            :root {
+                --sidebar-width: 70px;
             }
-            
-            .sidebar.active {
+
+            .sidebar-header h4,
+            .user-info,
+            .menu-section-title,
+            .menu-item span,
+            .logout-btn span {
+                display: none;
+            }
+
+            .user-profile {
+                justify-content: center;
+                padding: 15px 10px;
+            }
+
+            .menu-item {
+                justify-content: center;
+                padding: 12px 10px;
+            }
+
+            .logout-btn {
+                padding: 12px 10px;
+            }
+
+            .main-content {
+                padding: 15px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.show {
                 transform: translateX(0);
             }
-            
+
             .main-content {
                 margin-left: 0;
             }
-            
-            .mobile-toggle {
-                display: block !important;
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                width: 60px;
-                height: 60px;
-                background: #3b82f6;
-                color: white;
-                border-radius: 50%;
-                border: none;
-                font-size: 1.5rem;
-                cursor: pointer;
-                z-index: 1001;
-                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-            }
-        }
-        
-        .mobile-toggle {
-            display: none;
-        }
-        
-        /* Scrollbar styling */
-        .sidebar::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .sidebar::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.1);
-        }
-        
-        .sidebar::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 3px;
-        }
-        
-        .sidebar::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.5);
         }
     </style>
-    
-    {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Mobile Menu Toggle -->
-    <button class="mobile-toggle" onclick="toggleSidebar()">
-        <i class="bi bi-list"></i>
-    </button>
-    
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <!-- Logo -->
-        <div class="sidebar-logo">
-            <h3>
-                <i class="bi bi-translate"></i>
-                Legacy Translations
-            </h3>
-            <p>Intelligent Customer Service</p>
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <!-- HEADER -->
+        <div class="sidebar-header">
+            <h4><i class="bi bi-robot"></i> Intelligent Customer Service</h4>
         </div>
-        
-        <!-- User Info -->
-        <div class="user-info">
+
+        <!-- USER PROFILE -->
+        <div class="user-profile">
             <div class="user-avatar">
-                {{ session.get('username', 'U')[0].upper() }}
+                {{ username[0].upper() if username else 'L' }}
             </div>
-            <div class="user-details">
-                <p class="user-name">{{ session.get('username', 'User') }}</p>
-                <p class="user-role {% if session.get('user_role') == 'admin' %}admin{% endif %}">
-                    {% if session.get('user_role') == 'admin' %}
-                        <i class="bi bi-shield-check"></i> Administrator
-                    {% else %}
-                        <i class="bi bi-person"></i> User
-                    {% endif %}
-                </p>
+            <div class="user-info">
+                <h5>{{ username or 'legacy' }}</h5>
+                <p><i class="bi bi-person-circle"></i> User</p>
             </div>
         </div>
-        
-        <!-- Navigation Menu -->
-        <nav class="sidebar-nav">
-            <p class="nav-section-title">Main Menu</p>
-            <ul style="padding: 0; margin: 0;">
-                <li class="nav-item">
-                    <a href="/admin/dashboard" class="nav-link {% if request.path == '/admin/dashboard' %}active{% endif %}">
-                        <i class="bi bi-speedometer2"></i>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/training" class="nav-link {% if request.path == '/admin/training' %}active{% endif %}">
-                        <i class="bi bi-brain"></i>
-                        <span>AI Training</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/pipeline" class="nav-link {% if request.path == '/admin/pipeline' %}active{% endif %}">
-                        <i class="bi bi-funnel"></i>
-                        <span>Sales Pipeline</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/leads" class="nav-link {% if request.path == '/admin/leads' %}active{% endif %}">
-                        <i class="bi bi-people"></i>
-                        <span>Lead Management</span>
-                    </a>
-                </li>
-            </ul>
-            
-            <p class="nav-section-title">Operations</p>
-            <ul style="padding: 0; margin: 0;">
-                <li class="nav-item">
-                    <a href="/admin/transfers" class="nav-link {% if request.path == '/admin/transfers' %}active{% endif %}">
-                        <i class="bi bi-arrow-left-right"></i>
-                        <span>Transfers</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/documents" class="nav-link {% if request.path == '/admin/documents' %}active{% endif %}">
-                        <i class="bi bi-file-earmark-text"></i>
-                        <span>Documents</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/control" class="nav-link {% if request.path == '/admin/control' %}active{% endif %}">
-                        <i class="bi bi-gear"></i>
-                        <span>AI/Human Control</span>
-                    </a>
-                </li>
-            </ul>
-            
-            <p class="nav-section-title">Settings</p>
-            <ul style="padding: 0; margin: 0;">
-                <li class="nav-item">
-                    <a href="/admin/config" class="nav-link {% if request.path == '/admin/config' %}active{% endif %}">
-                        <i class="bi bi-sliders"></i>
-                        <span>Configurations</span>
-                    </a>
-                </li>
-            </ul>
-        </nav>
-        
-        <!-- Logout Button -->
-        <div class="logout-section">
-            <a href="/logout" class="btn-logout">
+
+        <!-- MENU SECTIONS -->
+        <div class="menu-section">
+            <!-- MAIN MENU -->
+            <div class="menu-section-title">MAIN MENU</div>
+            <a href="/admin/dashboard" class="menu-item {% if request.url.path == '/admin/dashboard' %}active{% endif %}">
+                <i class="bi bi-speedometer2"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="/admin/training" class="menu-item {% if request.url.path == '/admin/training' %}active{% endif %}">
+                <i class="bi bi-mortarboard"></i>
+                <span>AI Training</span>
+            </a>
+            <a href="/admin/pipeline" class="menu-item {% if request.url.path == '/admin/pipeline' %}active{% endif %}">
+                <i class="bi bi-funnel"></i>
+                <span>Sales Pipeline</span>
+            </a>
+            <a href="/admin/leads" class="menu-item {% if request.url.path == '/admin/leads' %}active{% endif %}">
+                <i class="bi bi-people"></i>
+                <span>Lead Management</span>
+            </a>
+
+            <!-- OPERATIONS -->
+            <div class="menu-section-title" style="margin-top: 20px;">OPERATIONS</div>
+            <a href="/admin/transfers" class="menu-item {% if request.url.path == '/admin/transfers' %}active{% endif %}">
+                <i class="bi bi-arrow-left-right"></i>
+                <span>Transfers</span>
+            </a>
+            <a href="/admin/documents" class="menu-item {% if request.url.path == '/admin/documents' %}active{% endif %}">
+                <i class="bi bi-file-earmark-text"></i>
+                <span>Documents</span>
+            </a>
+            <a href="/admin/control" class="menu-item {% if request.url.path == '/admin/control' %}active{% endif %}">
+                <i class="bi bi-sliders"></i>
+                <span>AI/Human Control</span>
+            </a>
+
+            <!-- SETTINGS -->
+            <div class="menu-section-title" style="margin-top: 20px;">SETTINGS</div>
+            <a href="/admin/configurations" class="menu-item {% if request.url.path == '/admin/configurations' %}active{% endif %}">
+                <i class="bi bi-gear"></i>
+                <span>Configurations</span>
+            </a>
+        </div>
+
+        <!-- LOGOUT - SEMPRE NO FINAL -->
+        <div class="sidebar-footer">
+            <a href="/logout" class="logout-btn">
                 <i class="bi bi-box-arrow-right"></i>
                 <span>Logout</span>
             </a>
         </div>
-    </aside>
-    
-    <!-- Main Content -->
-    <main class="main-content">
-        <!-- Top Header -->
-        <div class="top-header">
-            <h1>
-                {% block page_icon %}<i class="bi bi-speedometer2"></i>{% endblock %}
-                {% block page_title %}Dashboard{% endblock %}
-            </h1>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/admin/dashboard">Home</a></li>
-                    {% block breadcrumb %}
-                    <li class="breadcrumb-item active">Dashboard</li>
-                    {% endblock %}
-                </ol>
-            </nav>
-        </div>
-        
-        <!-- Content Area -->
-        <div class="content-area">
-            {% block content %}
-            <!-- Page content goes here -->
-            {% endblock %}
-        </div>
-    </main>
-    
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Mobile Toggle Script -->
-    <script>
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('active');
-        }
-        
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(event) {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.querySelector('.mobile-toggle');
-            
-            if (window.innerWidth <= 992 && 
-                !sidebar.contains(event.target) && 
-                !toggle.contains(event.target) &&
-                sidebar.classList.contains('active')) {
-                sidebar.classList.remove('active');
-            }
-        });
-    </script>
-    
-    {% block extra_js %}{% endblock %}
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+        {% block content %}
+        {% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
