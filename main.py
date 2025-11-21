@@ -838,83 +838,33 @@ Em breve voltaremos! 😊
         return JSONResponse({"status": "error", "error": str(e)}, status_code=500)
 
 # ============================================================
-# ROTA: PÁGINA INICIAL
+# ROTA: PÁGINA INICIAL (AGORA REDIRECIONA PARA O PAINEL)
 # ============================================================
 @app.get("/", response_class=HTMLResponse)
-async def root():
-    """Página inicial"""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>MIA Bot - Legacy Translations</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                max-width: 800px;
-                margin: 50px auto;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-            }
-            .container {
-                background: rgba(255,255,255,0.1);
-                padding: 40px;
-                border-radius: 20px;
-                backdrop-filter: blur(10px);
-            }
-            h1 { font-size: 2.5em; margin-bottom: 10px; }
-            .status { color: #4ade80; font-weight: bold; }
-            a {
-                display: inline-block;
-                margin: 10px 10px 10px 0;
-                padding: 15px 30px;
-                background: white;
-                color: #667eea;
-                text-decoration: none;
-                border-radius: 10px;
-                font-weight: bold;
-                transition: transform 0.2s;
-            }
-            a:hover { transform: scale(1.05); }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🤖 MIA Bot</h1>
-            <p class="status">✅ Sistema Ativo</p>
-            <p>Assistente virtual inteligente da Legacy Translations</p>
-            
-            <h3>📊 Painel Administrativo:</h3>
-            <a href="/admin">Dashboard</a>
-            <a href="/admin/treinamento">Treinamento IA</a>
-            <a href="/admin/pipeline">Pipeline</a>
-            <a href="/admin/leads">Leads</a>
-            
-            <h3>🔧 Recursos:</h3>
-            <ul>
-                <li>✅ Mensagens de texto (GPT-4)</li>
-                <li>✅ Análise de imagens (GPT-4 Vision)</li>
-                <li>✅ Transcrição de áudio (Whisper)</li>
-                <li>✅ Treinamento dinâmico (MongoDB)</li>
-            </ul>
-        </div>
-    </body>
-    </html>
+async def root(request: Request):
     """
+    Página inicial que redireciona para o painel administrativo.
+    """
+    return RedirectResponse(url="/admin")
+
 
 # ============================================================
-# ROTA: HEALTH CHECK
+# ROTA: LOGIN (A SER IMPLEMENTADA NO FUTURO)
 # ============================================================
-@app.get("/health")
-async def health_check():
-    """Health check para Render.com"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "MIA Bot",
-        "version": "3.0"
-    }
+@app.post("/login")
+async def handle_login(username: Annotated[str, Form()], password: Annotated[str, Form()]):
+    """
+    Processa os dados do formulário de login.
+    (Lógica de autenticação a ser adicionada aqui)
+    """
+    print(f"Tentativa de login com usuário: {username}")
+    
+    # Lógica de verificação de exemplo:
+    if username == "admin" and password == "admin":
+        return RedirectResponse(url="/admin", status_code=303)
+    else:
+        # Futuramente, redirecionará de volta para o login com erro
+        return {"status": "Credenciais inválidas"}
 
 # ============================================================
 # INICIAR SERVIDOR
