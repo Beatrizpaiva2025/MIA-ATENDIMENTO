@@ -1,86 +1,325 @@
 {% extends "admin_base.html" %}
 
-{% block title %}Dashboard - Painel Administrativo{% endblock %}
-
-{% block page_title %}Dashboard{% endblock %}
-{% block page_subtitle %}Visão geral e indicadores de performance do sistema.{% endblock %}
+{% block title %}Dashboard - MIA Customer Service{% endblock %}
 
 {% block content %}
+<style>
+    /* Compact layout - no empty spaces */
+    .container-fluid {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
+    
+    /* KPI Cards */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 25px;
+    }
+    
+    .stat-card {
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-left: 4px solid;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.3s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    
+    .stat-card.blue { border-left-color: #2563eb; }
+    .stat-card.green { border-left-color: #10b981; }
+    .stat-card.orange { border-left-color: #f59e0b; }
+    .stat-card.purple { border-left-color: #8b5cf6; }
+    
+    .stat-card h3 {
+        color: #64748b;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin: 0 0 10px 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stat-card h3 i {
+        margin-right: 8px;
+    }
+    
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0;
+    }
+    
+    .stat-icon {
+        position: absolute;
+        right: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 3rem;
+        opacity: 0.1;
+    }
+    
+    /* Compact charts */
+    .charts-row {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 20px;
+        margin-bottom: 25px;
+    }
+    
+    @media (max-width: 992px) {
+        .charts-row {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    .card {
+        margin-bottom: 0 !important;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .card-header {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        color: white;
+        padding: 18px 24px;
+        border-radius: 12px 12px 0 0 !important;
+        border: none;
+    }
+    
+    .card-header h2 {
+        color: white;
+        margin: 0 0 5px 0;
+        font-size: 1.3rem;
+        font-weight: 700;
+    }
+    
+    .card-header p {
+        color: rgba(255,255,255,0.9);
+        margin: 0;
+        font-size: 0.85rem;
+    }
+    
+    .card-body {
+        padding: 20px;
+    }
+    
+    .chart-container {
+        position: relative;
+        height: 280px;
+    }
+    
+    /* Activity table */
+    .table {
+        margin: 0;
+    }
+    
+    .table thead th {
+        background-color: #f8fafc;
+        color: #1e3a8a;
+        font-weight: 600;
+        border: none;
+        padding: 15px;
+    }
+    
+    .table tbody td {
+        padding: 15px;
+        vertical-align: middle;
+    }
+    
+    .badge {
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 0.85rem;
+    }
+    
+    .badge-primary { background: #3b82f6; color: white; }
+    .badge-success { background: #10b981; color: white; }
+    .badge-warning { background: #f59e0b; color: white; }
+    .badge-info { background: #06b6d4; color: white; }
+    
+    /* ACCESS CONTROL - Restriction for Legacy user */
+    .restricted-content {
+        position: relative;
+        min-height: 200px;
+    }
+    
+    .access-denied-overlay {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(239, 68, 68, 0.1) 100%);
+        backdrop-filter: blur(8px);
+        border-radius: 12px;
+        z-index: 10;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 40px;
+    }
+    
+    .access-denied-overlay.active {
+        display: flex;
+    }
+    
+    .access-denied-icon {
+        font-size: 4rem;
+        color: #ef4444;
+        margin-bottom: 20px;
+        animation: shake 0.5s;
+    }
+    
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+    }
+    
+    .access-denied-text {
+        color: #1e293b;
+        font-size: 1.3rem;
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+    
+    .access-denied-subtext {
+        color: #64748b;
+        font-size: 0.95rem;
+        max-width: 400px;
+    }
+</style>
 
-<!-- 1. Cards de Métricas Principais (KPIs) -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <h3><i class="fas fa-dollar-sign"></i> Receita Total</h3>
-        <div class="stat-value" id="kpi-receita-total">R$ 0,00</div>
-        <div class="stat-icon"><i class="fas fa-wallet"></i></div>
+<!-- Main KPIs -->
+<div class="stats-grid restricted-content" id="kpi-section">
+    <div class="access-denied-overlay" id="kpi-overlay">
+        <div class="access-denied-icon">
+            <i class="bi bi-lock-fill"></i>
+        </div>
+        <div class="access-denied-text">Restricted Access</div>
+        <div class="access-denied-subtext">
+            This section contains confidential financial data.<br>
+            Only <strong>Administrator</strong> profile can view this information.
+        </div>
     </div>
-    <div class="stat-card">
-        <h3><i class="fas fa-users"></i> Novos Leads</h3>
+    
+    <div class="stat-card blue">
+        <h3><i class="bi bi-cash-stack"></i> Total Revenue</h3>
+        <div class="stat-value" id="kpi-receita-total">$0.00</div>
+        <div class="stat-icon"><i class="bi bi-currency-dollar"></i></div>
+    </div>
+    <div class="stat-card green">
+        <h3><i class="bi bi-person-plus"></i> New Leads</h3>
         <div class="stat-value" id="kpi-novos-leads">0</div>
-        <div class="stat-icon"><i class="fas fa-user-plus"></i></div>
+        <div class="stat-icon"><i class="bi bi-people"></i></div>
     </div>
-    <div class="stat-card">
-        <h3><i class="fas fa-chart-line"></i> Taxa de Conversão</h3>
+    <div class="stat-card orange">
+        <h3><i class="bi bi-graph-up"></i> Conversion Rate</h3>
         <div class="stat-value" id="kpi-taxa-conversao">0%</div>
-        <div class="stat-icon"><i class="fas fa-percentage"></i></div>
+        <div class="stat-icon"><i class="bi bi-percent"></i></div>
     </div>
-    <div class="stat-card">
-        <h3><i class="fas fa-brain"></i> Conhecimentos na IA</h3>
-        <div class="stat-value" id="kpi-conhecimentos">{{ knowledge_count }}</div>
-        <div class="stat-icon"><i class="fas fa-book"></i></div>
-    </div>
-</div>
-
-<!-- 2. Gráficos Principais -->
-<div class="row">
-    <div class="col-lg-7">
-        <div class="card">
-            <div class="card-header">
-                <h2>Relatório de Vendas Mensal</h2>
-                <p>Evolução da receita nos últimos meses.</p>
-            </div>
-            <div class="card-body">
-                <div class="chart-container" style="height: 300px;">
-                    <canvas id="salesChart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-5">
-        <div class="card">
-            <div class="card-header">
-                <h2>Divisão de Receita</h2>
-                <p>Receita por categoria de serviço.</p>
-            </div>
-            <div class="card-body">
-                <div class="chart-container" style="height: 300px;">
-                    <canvas id="revenueBreakdownChart"></canvas>
-                </div>
-            </div>
-        </div>
+    <div class="stat-card purple">
+        <h3><i class="bi bi-book"></i> AI Knowledge Base</h3>
+        <div class="stat-value" id="kpi-conhecimentos">{{ knowledge_count or 0 }}</div>
+        <div class="stat-icon"><i class="bi bi-lightbulb"></i></div>
     </div>
 </div>
 
-<!-- 3. Tabela de Atividades Recentes (Exemplo) -->
-<div class="card mt-4">
+<!-- Charts -->
+<div class="charts-row">
+    <div class="card restricted-content" id="sales-chart-section">
+        <div class="access-denied-overlay" id="sales-overlay">
+            <div class="access-denied-icon">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <div class="access-denied-text">Restricted Financial Data</div>
+            <div class="access-denied-subtext">
+                Sales chart available only for <strong>Administrator</strong>
+            </div>
+        </div>
+        
+        <div class="card-header">
+            <h2><i class="bi bi-bar-chart"></i> Monthly Sales</h2>
+            <p>Revenue evolution in the last 6 months</p>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card restricted-content" id="revenue-chart-section">
+        <div class="access-denied-overlay" id="revenue-overlay">
+            <div class="access-denied-icon">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <div class="access-denied-text">Restricted Financial Data</div>
+            <div class="access-denied-subtext">
+                Revenue breakdown available only for <strong>Administrator</strong>
+            </div>
+        </div>
+        
+        <div class="card-header">
+            <h2><i class="bi bi-pie-chart"></i> Revenue Breakdown</h2>
+            <p>By translation type</p>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="revenueChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activities -->
+<div class="card mt-3 restricted-content" id="activities-section">
+    <div class="access-denied-overlay" id="activities-overlay">
+        <div class="access-denied-icon">
+            <i class="bi bi-shield-lock-fill"></i>
+        </div>
+        <div class="access-denied-text">Restricted Activities</div>
+        <div class="access-denied-subtext">
+            Activity history available only for <strong>Administrator</strong>
+        </div>
+    </div>
+    
     <div class="card-header">
-        <h2>Atividades Recentes</h2>
-        <p>Últimas ações e eventos no sistema.</p>
+        <h2><i class="bi bi-clock-history"></i> Recent Activities</h2>
+        <p>Latest system actions</p>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table">
+            <table class="table table-hover">
                 <thead>
                     <tr>
-                        <th>Tipo</th>
-                        <th>Descrição</th>
-                        <th>Data</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Date</th>
                         <th>Status</th>
                     </tr>
                 </thead>
-                <tbody id="recentActivitiesBody">
-                    <!-- Linhas serão preenchidas via JS -->
-                    <tr><td colspan="4" class="text-center p-4">Carregando atividades...</td></tr>
+                <tbody id="activitiesTable">
+                    <tr>
+                        <td colspan="4" class="text-center p-4" style="color: #94a3b8;">
+                            <i class="bi bi-hourglass-split" style="font-size: 2rem; display: block; margin-bottom: 10px;"></i>
+                            Loading activities...
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -90,104 +329,210 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Chart.js já está no seu admin_base.html, então podemos usá-lo aqui -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Cores do tema para os gráficos
-    const legacyColors = {
-        navy: '#1e3a5f',
-        blue: '#3b7bbf',
-        lightBlue: '#5eb3e4',
-        skyBlue: '#a8d8f0',
-        success: '#28a745',
+    // ========================================
+    // ACCESS CONTROL BY USER LEVEL
+    // ========================================
+    
+    // Get logged user information (username comes from backend via session)
+    const currentUser = "{{ session.get('username', 'legacy') }}"; // Backend returns 'admin' or 'legacy'
+    
+    console.log('Logged user:', currentUser);
+    
+    // If Legacy user, block access to Dashboard data
+    if (currentUser.toLowerCase() === 'legacy') {
+        // Activate blocking overlays
+        document.getElementById('kpi-overlay').classList.add('active');
+        document.getElementById('sales-overlay').classList.add('active');
+        document.getElementById('revenue-overlay').classList.add('active');
+        document.getElementById('activities-overlay').classList.add('active');
+        
+        console.log('⛔ ACCESS DENIED - Legacy user cannot see Dashboard data');
+        
+        // Do not load data or charts
+        return;
+    }
+    
+    console.log('✅ ACCESS GRANTED - Admin user can see all data');
+    
+    // ========================================
+    // NORMAL DASHBOARD CODE (ADMIN ONLY)
+    // ========================================
+    
+    // Theme colors
+    const colors = {
+        blue: '#3b82f6',
+        green: '#10b981',
+        orange: '#f59e0b',
+        purple: '#8b5cf6',
+        red: '#ef4444',
+        cyan: '#06b6d4'
     };
-
-    // --- Gráfico de Linhas: Relatório de Vendas ---
+    
+    // Sales Chart (Line)
     const salesCtx = document.getElementById('salesChart').getContext('2d');
     new Chart(salesCtx, {
         type: 'line',
         data: {
-            labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'], // Exemplo de dados
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
             datasets: [{
-                label: 'Receita',
-                data: [12000, 19000, 15000, 22000, 18000, 25000], // Exemplo de dados
-                backgroundColor: 'rgba(59, 123, 191, 0.1)',
-                borderColor: legacyColors.blue,
+                label: 'Revenue ($)',
+                data: [15000, 23000, 18000, 31000, 25000, 38000],
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderColor: colors.blue,
+                borderWidth: 3,
                 tension: 0.4,
                 fill: true,
+                pointRadius: 5,
+                pointHoverRadius: 7
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true } }
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(context) {
+                            return '$' + context.parsed.y.toLocaleString('en-US');
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString('en-US');
+                        }
+                    }
+                }
+            }
         }
     });
-
-    // --- Gráfico de Doughnut: Divisão de Receita ---
-    const revenueCtx = document.getElementById('revenueBreakdownChart').getContext('2d');
+    
+    // Revenue Chart (Doughnut) - UPDATED CATEGORIES
+    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
     new Chart(revenueCtx, {
         type: 'doughnut',
         data: {
-            labels: ['Tradução Juramentada', 'Tradução Simples', 'Revisão', 'Outros'], // Exemplo
+            labels: [
+                'Sworn Translation\n(English → Portuguese)',
+                'Certified Translation\n(Portuguese → English)', 
+                'Certified Translation\n(Spanish → English)',
+                'Other Languages'
+            ],
             datasets: [{
-                label: 'Receita por Serviço',
-                data: [15000, 8000, 5000, 2000], // Exemplo
-                backgroundColor: [
-                    legacyColors.navy,
-                    legacyColors.blue,
-                    legacyColors.lightBlue,
-                    legacyColors.skyBlue
-                ],
-                borderWidth: 2
+                data: [45, 28, 18, 9],
+                backgroundColor: [colors.blue, colors.green, colors.orange, colors.purple],
+                borderWidth: 0,
+                hoverOffset: 10
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 12,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': ' + context.parsed + '%';
+                        }
+                    }
+                }
+            }
         }
     });
-
-    // --- Função para carregar dados do dashboard (KPIs, Tabela) ---
+    
+    // Load real dashboard data via API
     async function loadDashboardData() {
-        // Aqui você faria uma chamada à sua API para buscar os dados reais
-        // Ex: const response = await fetch('/admin/api/dashboard');
-        // const data = await response.json();
-        
-        // Simulando dados recebidos:
-        const data = {
-            receita_total: 45760.50,
-            novos_leads: 125,
-            taxa_conversao: 15.3,
-            atividades: [
-                { tipo: 'NOVO LEAD', descricao: 'Cliente "Global Corp" entrou no funil.', data: '2025-11-21 10:30', status: 'contato_inicial' },
-                { tipo: 'VENDA', descricao: 'Oportunidade "Tech Solutions" ganha.', data: '2025-11-21 09:45', status: 'ganho' },
-                { tipo: 'TREINAMENTO', descricao: 'Novo conhecimento sobre "Preços" adicionado à IA.', data: '2025-11-20 18:00', status: 'concluido' }
-            ]
-        };
-
-        // Preencher KPIs
-        document.getElementById('kpi-receita-total').textContent = `R$ ${data.receita_total.toLocaleString('pt-BR')}`;
-        document.getElementById('kpi-novos-leads').textContent = data.novos_leads;
-        document.getElementById('kpi-taxa-conversao').textContent = `${data.taxa_conversao}%`;
-
-        // Preencher tabela de atividades
-        const activitiesBody = document.getElementById('recentActivitiesBody');
-        if (data.atividades && data.atividades.length > 0) {
-            activitiesBody.innerHTML = data.atividades.map(act => `
+        try {
+            const response = await fetch('/admin/api/stats');
+            const data = await response.json();
+            
+            // Update KPIs
+            if (data.receita_total !== undefined) {
+                document.getElementById('kpi-receita-total').textContent = 
+                    '$' + data.receita_total.toLocaleString('en-US', {minimumFractionDigits: 2});
+            }
+            if (data.novos_leads !== undefined) {
+                document.getElementById('kpi-novos-leads').textContent = data.novos_leads;
+            }
+            if (data.taxa_conversao !== undefined) {
+                document.getElementById('kpi-taxa-conversao').textContent = data.taxa_conversao + '%';
+            }
+            
+            // Fill activities table
+            const tbody = document.getElementById('activitiesTable');
+            if (data.atividades && data.atividades.length > 0) {
+                tbody.innerHTML = data.atividades.map(a => {
+                    let badgeClass = 'badge-info';
+                    if (a.status === 'won' || a.status === 'completed') badgeClass = 'badge-success';
+                    if (a.status === 'pending') badgeClass = 'badge-warning';
+                    
+                    return `
+                        <tr>
+                            <td><span class="badge badge-primary">${a.tipo}</span></td>
+                            <td>${a.descricao}</td>
+                            <td style="white-space: nowrap;">${a.data}</td>
+                            <td><span class="badge ${badgeClass}">${a.status}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4" style="color: #94a3b8;">No recent activities</td></tr>';
+            }
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+            // Example data in case of error
+            const tbody = document.getElementById('activitiesTable');
+            tbody.innerHTML = `
                 <tr>
-                    <td><span class="badge badge-primary">${act.tipo}</span></td>
-                    <td>${act.descricao}</td>
-                    <td>${act.data}</td>
-                    <td><span class="badge badge-success">${act.status}</span></td>
+                    <td><span class="badge badge-primary">NEW LEAD</span></td>
+                    <td>Client "Tech Solutions" entered the funnel</td>
+                    <td>11/21/2025 2:30 PM</td>
+                    <td><span class="badge badge-info">new</span></td>
                 </tr>
-            `).join('');
-        } else {
-            activitiesBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">Nenhuma atividade recente.</td></tr>';
+                <tr>
+                    <td><span class="badge badge-primary">SALE</span></td>
+                    <td>Sworn Translation - $8,500</td>
+                    <td>11/21/2025 11:15 AM</td>
+                    <td><span class="badge badge-success">won</span></td>
+                </tr>
+                <tr>
+                    <td><span class="badge badge-primary">TRAINING</span></td>
+                    <td>New knowledge: "Translation Prices 2025"</td>
+                    <td>11/20/2025 4:45 PM</td>
+                    <td><span class="badge badge-success">completed</span></td>
+                </tr>
+            `;
         }
     }
-
+    
     loadDashboardData();
+    // Update every 30 seconds
+    setInterval(loadDashboardData, 30000);
 });
 </script>
 {% endblock %}
