@@ -7,12 +7,14 @@
 # ✅ Áudios (Whisper) - Transcrição de voz
 # ✅ Painel Administrativo Completo
 # ✅ TREINAMENTO DINÂMICO DO MONGODB
+# ✅ CONTROLE DE ACESSO (Admin vs Legacy)
 # ============================================================
 
 from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 import os
 import httpx
 from openai import OpenAI
@@ -44,20 +46,49 @@ logger = logging.getLogger(__name__)
 # INICIALIZAÇÃO
 # ============================================================
 app = FastAPI(title="WhatsApp AI Platform - Legacy Translations")
+
+# IMPORTANTE: Adicionar middleware de sessão
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET_KEY", "your-secret-key-change-in-production")
+)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")  
-
-# Templates
-templates = Jinja2Templates(directory="templates")
-
 
 # Templates
 templates = Jinja2Templates(directory="templates")
 
 # Clientes
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 # Usar mesma conexão do admin
 from admin_training_routes import get_database
 db = get_database()
+
+# ============================================
+# ACCESS CONTROL HELPER FUNCTIONS
+# ============================================
+
+def get_current_user(request: Request):
+    """Get the currently logged-in user from session"""
+    username = request.session.get('username')
+    if not username:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated"
+        )
+    return username
+
+def check_admin_access(request: Request):
+    """Check if the current user has admin privileges"""
+    username = get_current_user(request)
+    if username.lower() != 'admin':
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied - Administrator privileges required"
+        )
+    return username
+
 # ============================================================
 # CONTROLE DO BOT - LIGAR/DESLIGAR
 # ============================================================
@@ -100,8 +131,6 @@ async def set_bot_status(enabled: bool):
     except Exception as e:
         logger.error(f"Erro ao atualizar status do bot: {e}")
         return False
-
-
 
 # ============================================================
 # TRANSFERÊNCIA PARA ATENDENTE HUMANO
@@ -153,7 +182,6 @@ async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
         logger.error(f"❌ Erro ao notificar atendente: {e}")
         return False
 
-
 async def detectar_solicitacao_humano(message: str) -> bool:
     """Detecta se cliente está pedindo atendente humano"""
     palavras_chave = [
@@ -164,7 +192,6 @@ async def detectar_solicitacao_humano(message: str) -> bool:
     
     message_lower = message.lower()
     return any(palavra in message_lower for palavra in palavras_chave)
-
 
 async def transferir_para_humano(phone: str, motivo: str):
     """Transfere conversa para atendente humano"""
@@ -495,9 +522,8 @@ async def get_conversation_context(phone: str, limit: int = 10) -> List[Dict]:
 async def process_message_with_ai(phone: str, message: str) -> str:
     """Processar mensagem com GPT-4 usando treinamento dinâmico"""
     try:
-
         # Detectar se cliente quer falar com humano
-        if await detectar_solicitacao_humano(user_message):
+        if await detectar_solicitacao_humano(message):
             await transferir_para_humano(phone, "Cliente solicitou atendente")
             return None
         
@@ -556,9 +582,6 @@ def normalize_phone(phone: str) -> str:
     return ''.join(filter(str.isdigit, phone))[-10:]
 
 # ============================================================
-# WEBHOOK: WHATSAPP (Z-API) - INTEGRADO
-# ============================================================
-# ============================================================
 # API: CONTROLE DO BOT
 # ============================================================
 
@@ -596,6 +619,131 @@ async def api_bot_toggle(enabled: bool):
     else:
         raise HTTPException(status_code=500, detail="Erro ao atualizar status do bot")
 
+# ============================================================
+# NOVAS API ROUTES - DASHBOARD E CONTROLE
+# ============================================================
+
+@app.get("/admin/api/stats")
+async def get_dashboard_stats(request: Request):
+    """Get dashboard statistics - Admin only"""
+    username = check_admin_access(request)
+    
+    return {
+        "receita_total": 150000.00,
+        "novos_leads": 42,
+        "taxa_conversao": 35,
+        "atividades": [
+            {
+                "tipo": "NEW LEAD",
+                "descricao": "Client 'Tech Solutions' entered the funnel",
+                "data": "11/21/2025 2:30 PM",
+                "status": "new"
+            },
+            {
+                "tipo": "SALE",
+                "descricao": "Sworn Translation - $8,500",
+                "data": "11/21/2025 11:15 AM",
+                "status": "won"
+            },
+            {
+                "tipo": "TRAINING",
+                "descricao": "New knowledge: 'Translation Prices 2025'",
+                "data": "11/20/2025 4:45 PM",
+                "status": "completed"
+            }
+        ]
+    }
+
+@app.get("/admin/api/control-stats")
+async def get_control_stats(request: Request):
+    """Get control page statistics"""
+    username = get_current_user(request)
+    
+    return {
+        "ai_active_minutes": 1250,
+        "human_service_minutes": 180,
+        "ai_disabled_minutes": 45,
+        "total_minutes": 1475,
+        "conversations": []
+    }
+
+@app.post("/admin/bot/start")
+async def start_bot(request: Request):
+    """Start the AI bot - Admin only"""
+    username = check_admin_access(request)
+    success = await set_bot_status(True)
+    return {"success": success, "message": "Bot started successfully"}
+
+@app.post("/admin/bot/stop")
+async def stop_bot(request: Request):
+    """Stop the AI bot - Admin only"""
+    username = check_admin_access(request)
+    success = await set_bot_status(False)
+    return {"success": success, "message": "Bot stopped successfully"}
+
+@app.post("/admin/knowledge/add")
+async def add_knowledge(
+    request: Request,
+    category: str = Form(...),
+    title: str = Form(...),
+    content: str = Form(...)
+):
+    """Add new knowledge item"""
+    username = get_current_user(request)
+    
+    result = await db.knowledge.insert_one({
+        "category": category,
+        "title": title,
+        "content": content,
+        "created_by": username,
+        "created_at": datetime.now()
+    })
+    
+    return RedirectResponse(url="/admin/training", status_code=303)
+
+@app.delete("/admin/knowledge/delete/{knowledge_id}")
+async def delete_knowledge(knowledge_id: str, request: Request):
+    """Delete knowledge item - Admin only"""
+    username = check_admin_access(request)
+    
+    from bson import ObjectId
+    result = await db.knowledge.delete_one({"_id": ObjectId(knowledge_id)})
+    
+    if result.deleted_count == 1:
+        return {"success": True}
+    else:
+        raise HTTPException(status_code=404, detail="Knowledge item not found")
+
+@app.post("/admin/faq/add")
+async def add_faq(
+    request: Request,
+    question: str = Form(...),
+    answer: str = Form(...)
+):
+    """Add new FAQ item"""
+    username = get_current_user(request)
+    
+    result = await db.faqs.insert_one({
+        "question": question,
+        "answer": answer,
+        "created_by": username,
+        "created_at": datetime.now()
+    })
+    
+    return RedirectResponse(url="/admin/training", status_code=303)
+
+@app.delete("/admin/faq/delete/{faq_id}")
+async def delete_faq(faq_id: str, request: Request):
+    """Delete FAQ item - Admin only"""
+    username = check_admin_access(request)
+    
+    from bson import ObjectId
+    result = await db.faqs.delete_one({"_id": ObjectId(faq_id)})
+    
+    if result.deleted_count == 1:
+        return {"success": True}
+    else:
+        raise HTTPException(status_code=404, detail="FAQ not found")
 
 # ============================================================
 # WEBHOOK: WHATSAPP (Z-API) - INTEGRADO
@@ -610,6 +758,7 @@ async def webhook_whatsapp(request: Request):
     try:
         data = await request.json()
         logger.info(f"📨 Webhook recebido: {json.dumps(data, indent=2)}")
+        
         # ============================================
         # VERIFICAR STATUS DO BOT
         # ============================================
@@ -695,7 +844,6 @@ async def webhook_whatsapp(request: Request):
             )
             return {"status": "ia_enabled"}
 
-        
         # ============================================
         # 🛑 CONTROLE DE ATIVAÇÃO DA IA
         # ============================================
@@ -714,7 +862,6 @@ async def webhook_whatsapp(request: Request):
             return JSONResponse({"status": "ignored", "reason": "group message"})
         
         # ✅ DETECÇÃO CORRETA DE TIPO DE MENSAGEM
-        # Z-API não envia "messageType", detectar pela presença dos campos
         message_type = "text"  # padrão
         
         if "image" in data and data.get("image"):
@@ -762,7 +909,8 @@ Em breve voltaremos! 😊
             reply = await process_message_with_ai(phone, text)
             
             # Enviar resposta
-            await send_whatsapp_message(phone, reply)
+            if reply:
+                await send_whatsapp_message(phone, reply)
             
             return JSONResponse({"status": "processed", "type": "text"})
         
@@ -824,7 +972,8 @@ Em breve voltaremos! 😊
             reply = await process_message_with_ai(phone, transcription)
             
             # Enviar resposta
-            await send_whatsapp_message(phone, reply)
+            if reply:
+                await send_whatsapp_message(phone, reply)
             
             return JSONResponse({"status": "processed", "type": "audio"})
         
@@ -838,34 +987,116 @@ Em breve voltaremos! 😊
         return JSONResponse({"status": "error", "error": str(e)}, status_code=500)
 
 # ============================================================
-# ROTA: PÁGINA INICIAL (AGORA MOSTRA O LOGIN)
+# ROTA: PÁGINA INICIAL (LOGIN)
 # ============================================================
 @app.get("/", response_class=HTMLResponse)
 async def show_login_page(request: Request):
-    """
-    Renderiza a página de login do sistema.
-    """
+    """Renderiza a página de login do sistema."""
     return templates.TemplateResponse("login.html", {"request": request})
-
 
 # ============================================================
 # ROTA: PROCESSAMENTO DO LOGIN
 # ============================================================
 @app.post("/login")
-async def handle_login(username: Annotated[str, Form()], password: Annotated[str, Form()]):
-    """
-    Processa os dados do formulário de login.
-    """
-    print(f"Tentativa de login com usuário: {username}")
+async def handle_login(request: Request, username: str = Form(...), password: str = Form(...)):
+    """Handle login with session management"""
     
-    # Lógica de verificação de exemplo:
-    if username == "admin" and password == "admin":
-        # Se o login for bem-sucedido, redireciona para o dashboard
-        return RedirectResponse(url="/admin", status_code=303)
+    # Validate credentials
+    valid_credentials = {
+        "admin": "admin123",
+        "legacy": "legacy2025"
+    }
+    
+    if username in valid_credentials and valid_credentials[username] == password:
+        # Set session
+        request.session['username'] = username
+        request.session['user_role'] = 'admin' if username.lower() == 'admin' else 'legacy'
+        
+        # Redirect to admin dashboard
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
     else:
-        # Se falhar, redireciona de volta para a página de login
-        # (No futuro, podemos adicionar uma mensagem de erro)
-        return RedirectResponse(url="/", status_code=303)
+        # Invalid credentials
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "error": "Invalid username or password"
+            }
+        )
+
+# ============================================================
+# ROTA: LOGOUT
+# ============================================================
+@app.get("/logout")
+async def logout(request: Request):
+    """Logout and clear session"""
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=303)
+
+# ============================================================
+# ROTA: DASHBOARD (COM CONTROLE DE ACESSO)
+# ============================================================
+@app.get("/admin/dashboard")
+async def admin_dashboard(request: Request):
+    """Dashboard page with access control"""
+    # Verify user is logged in
+    username = get_current_user(request)
+    
+    # Get knowledge count
+    knowledge_count = await db.knowledge.count_documents({})
+    
+    # Render dashboard with user information
+    return templates.TemplateResponse(
+        "admin_dashboard.html",
+        {
+            "request": request,
+            "session": request.session,  # IMPORTANTE!
+            "username": username,
+            "knowledge_count": knowledge_count
+        }
+    )
+
+# ============================================================
+# ROTA: TRAINING (COM CONTROLE DE ACESSO)
+# ============================================================
+@app.get("/admin/training")
+async def admin_training(request: Request):
+    """AI Training page"""
+    username = get_current_user(request)
+    
+    # Get knowledge items
+    knowledge_items = await db.knowledge.find().to_list(length=100)
+    
+    # Get FAQ items
+    faq_items = await db.faqs.find().to_list(length=100)
+    
+    return templates.TemplateResponse(
+        "admin_training.html",
+        {
+            "request": request,
+            "session": request.session,
+            "username": username,
+            "knowledge_items": knowledge_items,
+            "faq_items": faq_items
+        }
+    )
+
+# ============================================================
+# ROTA: CONTROL (COM CONTROLE DE ACESSO)
+# ============================================================
+@app.get("/admin/control")
+async def admin_control(request: Request):
+    """AI/Human Control page"""
+    username = get_current_user(request)
+    
+    return templates.TemplateResponse(
+        "admin_control.html",
+        {
+            "request": request,
+            "session": request.session,
+            "username": username
+        }
+    )
 
 # ============================================================
 # INICIAR SERVIDOR
