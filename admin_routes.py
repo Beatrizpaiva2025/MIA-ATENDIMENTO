@@ -479,8 +479,6 @@ async def admin_controle(request: Request):
     return templates.TemplateResponse("admin_controle.html", {
         "request": request
     })
-
-
         
     except Exception as e:
         logger.error(f"Erro nas configurações: {e}")
