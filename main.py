@@ -19,7 +19,7 @@ from openai import OpenAI
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Annotated 
 from pydantic import BaseModel
 import traceback
 import json
