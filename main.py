@@ -5,6 +5,7 @@
 # ✅ Mensagens de texto
 # ✅ Imagens (GPT-4 Vision) - Leitura de documentos
 # ✅ Áudios (Whisper) - Transcrição de voz
+# ✅ PDFs (Extração de texto + Vision)
 # ✅ Painel Administrativo Completo
 # ✅ TREINAMENTO DINÂMICO DO MONGODB
 # ✅ CONTROLE DE ACESSO (Admin vs Legacy)
@@ -27,6 +28,11 @@ import traceback
 import json
 import base64
 from io import BytesIO
+
+# PDF Support imports
+from PyPDF2 import PdfReader
+from pdf2image import convert_from_bytes
+from PIL import Image
 
 # Importar rotas do admin
 from admin_routes import router as admin_router
@@ -359,7 +365,7 @@ async def send_whatsapp_message(phone: str, message: str):
 # FUNÇÃO: BAIXAR MÍDIA DA Z-API
 # ============================================================
 async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
-    """Baixa mídia (imagem/áudio) da Z-API"""
+    """Baixa mídia (imagem/áudio/pdf) da Z-API"""
     try:
         logger.info(f"⬇️ Baixando mídia: {media_url[:100]}")
         
@@ -376,6 +382,124 @@ async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
     except Exception as e:
         logger.error(f"❌ Erro ao baixar mídia: {str(e)}")
         return None
+
+# ============================================================
+# FUNÇÃO: PROCESSAR PDF COM GPT-4 VISION
+# ============================================================
+async def process_pdf_with_vision(pdf_url: str, phone: str) -> str:
+    """
+    Process PDF documents using GPT-4 Vision
+    - Extracts text if available
+    - Converts to images for visual analysis
+    """
+    try:
+        logger.info(f"📄 Processando PDF: {pdf_url[:100]}")
+        
+        # Download the PDF
+        pdf_bytes = await download_media_from_zapi(pdf_url)
+        
+        if not pdf_bytes:
+            return "⚠️ Não consegui baixar o PDF. Pode enviar novamente?"
+        
+        # Try to extract text first
+        try:
+            pdf_reader = PdfReader(BytesIO(pdf_bytes))
+            extracted_text = ""
+            for page in pdf_reader.pages:
+                extracted_text += page.extract_text() + "\n"
+            
+            if extracted_text.strip():
+                # If text extraction successful, analyze with GPT
+                training_prompt = await get_bot_training()
+                
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": training_prompt},
+                        {"role": "user", "content": f"Analise este documento PDF e forneça orçamento de tradução:\n\n{extracted_text[:3000]}"}
+                    ],
+                    max_tokens=800
+                )
+                
+                analysis = response.choices[0].message.content
+                
+                # Save to database
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": "[PDF ENVIADO - Texto extraído]",
+                    "role": "user",
+                    "timestamp": datetime.now(),
+                    "type": "pdf",
+                    "canal": "WhatsApp"
+                })
+                
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": analysis,
+                    "role": "assistant",
+                    "timestamp": datetime.now(),
+                    "canal": "WhatsApp"
+                })
+                
+                logger.info(f"✅ PDF analisado (texto extraído)")
+                return analysis
+                
+        except Exception as text_error:
+            logger.warning(f"⚠️ Extração de texto falhou, usando Vision: {text_error}")
+        
+        # If text extraction fails, convert to images
+        images = convert_from_bytes(pdf_bytes, first_page=1, last_page=3)
+        
+        # Convert first page to base64 for GPT-4 Vision
+        buffered = BytesIO()
+        images[0].save(buffered, format="JPEG")
+        img_base64 = base64.b64encode(buffered.getvalue()).decode()
+        
+        # Analyze with GPT-4 Vision
+        training_prompt = await get_bot_training()
+        
+        vision_response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": training_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Analise este documento PDF e forneça orçamento de tradução:"},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}}
+                    ]
+                }
+            ],
+            max_tokens=1000
+        )
+        
+        analysis = vision_response.choices[0].message.content
+        
+        # Save to database
+        await db.conversas.insert_one({
+            "phone": phone,
+            "message": "[PDF ENVIADO - Análise visual]",
+            "role": "user",
+            "timestamp": datetime.now(),
+            "type": "pdf",
+            "canal": "WhatsApp"
+        })
+        
+        await db.conversas.insert_one({
+            "phone": phone,
+            "message": analysis,
+            "role": "assistant",
+            "timestamp": datetime.now(),
+            "canal": "WhatsApp"
+        })
+        
+        logger.info(f"✅ PDF analisado (Vision)")
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao processar PDF: {str(e)}")
+        logger.error(traceback.format_exc())
+        return "⚠️ Desculpe, não consegui analisar o PDF. Pode me enviar como imagem ou me dizer quantas páginas tem?"
 
 # ============================================================
 # FUNÇÃO: PROCESSAR IMAGEM COM GPT-4 VISION
@@ -746,14 +870,14 @@ async def delete_faq(faq_id: str, request: Request):
         raise HTTPException(status_code=404, detail="FAQ not found")
 
 # ============================================================
-# WEBHOOK: WHATSAPP (Z-API) - INTEGRADO
+# WEBHOOK: WHATSAPP (Z-API) - INTEGRADO COM PDF SUPPORT
 # ============================================================
 
 @app.post("/webhook/whatsapp")
 async def webhook_whatsapp(request: Request):
     """
     Webhook principal para receber mensagens do WhatsApp via Z-API
-    Suporta: texto, imagens e áudios
+    Suporta: texto, imagens, áudios e PDFs
     """
     try:
         data = await request.json()
@@ -851,7 +975,6 @@ async def webhook_whatsapp(request: Request):
         em_manutencao = os.getenv("MANUTENCAO", "false").lower() == "true"
         
         # Extrair dados básicos
-        phone = data.get("phone", "")
         message_id = data.get("messageId", "")
         connected_phone = data.get("connectedPhone", "")
         is_group = data.get("isGroup", False)
@@ -861,13 +984,15 @@ async def webhook_whatsapp(request: Request):
             logger.info(f"🚫 Mensagem de grupo ignorada")
             return JSONResponse({"status": "ignored", "reason": "group message"})
         
-        # ✅ DETECÇÃO CORRETA DE TIPO DE MENSAGEM
+        # ✅ DETECÇÃO CORRETA DE TIPO DE MENSAGEM (INCLUDING PDF)
         message_type = "text"  # padrão
         
         if "image" in data and data.get("image"):
             message_type = "image"
         elif "audio" in data and data.get("audio"):
             message_type = "audio"
+        elif "document" in data and data.get("document"):
+            message_type = "document"
         elif "text" in data and data.get("text"):
             message_type = "text"
         
@@ -976,6 +1101,40 @@ Em breve voltaremos! 😊
                 await send_whatsapp_message(phone, reply)
             
             return JSONResponse({"status": "processed", "type": "audio"})
+        
+        # ============================================
+        # ✅ PROCESSAR DOCUMENTO (PDF)
+        # ============================================
+        elif message_type == "document":
+            document_data = data.get("document", {})
+            pdf_url = document_data.get("url") or document_data.get("link") or document_data.get("documentUrl")
+            mime_type = document_data.get("mimeType", "")
+            file_name = document_data.get("fileName", "")
+            
+            logger.info(f"📎 Documento recebido: {file_name} ({mime_type})")
+            
+            # Verificar se é PDF
+            if "pdf" in mime_type.lower() or file_name.lower().endswith(".pdf"):
+                if not pdf_url:
+                    await send_whatsapp_message(phone, "⚠️ Não consegui acessar o PDF. Pode tentar enviar novamente?")
+                    return JSONResponse({"status": "error", "reason": "no pdf url"})
+                
+                logger.info(f"📄 Processando PDF de {phone}: {pdf_url[:50]}")
+                
+                # Processar PDF
+                analysis = await process_pdf_with_vision(pdf_url, phone)
+                
+                # Enviar resposta
+                await send_whatsapp_message(phone, analysis)
+                
+                return JSONResponse({"status": "processed", "type": "pdf"})
+            else:
+                # Documento não é PDF
+                await send_whatsapp_message(
+                    phone,
+                    "📎 Documento recebido, mas apenas arquivos PDF são suportados no momento.\n\n💡 Pode enviar como imagem ou PDF?"
+                )
+                return JSONResponse({"status": "ignored", "reason": "unsupported document type"})
         
         else:
             logger.warning(f"⚠️ Tipo de mensagem não suportado: {message_type}")
