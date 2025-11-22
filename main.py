@@ -815,21 +815,35 @@ async def update_personality(request: Request):
     username = check_admin_access(request)
     
     try:
-        data = await request.json()
+        # Tentar ler JSON
+        try:
+            data = await request.json()
+        except:
+            # Se falhar, tentar form data
+            form = await request.form()
+            data = dict(form)
+        
+        personality_data = data.get("personality", "")
+        
+        # Se personality_data for string, manter assim. Se for dict, converter para string
+        if isinstance(personality_data, dict):
+            personality_data = str(personality_data)
         
         await db.bots.update_one(
             {"name": "Mia"},
             {"$set": {
-                "personality": data.get("personality", ""),
+                "personality": personality_data,
                 "updated_at": datetime.now()
             }},
             upsert=True
         )
         
-        return {"success": True}
+        logger.info(f"✅ Personality updated: {personality_data[:100]}")
+        return {"success": True, "message": "Personality updated"}
+        
     except Exception as e:
-        logger.error(f"Error updating personality: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Error updating personality: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 # Alias routes for training (for compatibility with HTML forms)
 @app.post("/admin/knowledge/add")
@@ -1085,25 +1099,25 @@ async def admin_configurations(request: Request):
     
     bot = await db.bots.find_one({"name": "Mia"})
     
+    # URL do webhook WhatsApp
+    base_url = str(request.base_url).rstrip('/')
+    whatsapp_webhook_url = f"{base_url}/webhook/whatsapp"
+    
     config = {
         "openai_status": "Connected",
         "zapi_status": "Connected",
         "mongodb_status": "Connected",
-        "bot_active": bot.get("is_active", True) if bot else True
+        "instagram_status": "Not Configured",
+        "bot_active": bot.get("is_active", True) if bot else True,
+        "whatsapp_webhook": whatsapp_webhook_url
     }
     
-    # Obter webhooks
-    webhooks = []
-    try:
-        webhooks_cursor = db.webhooks.find().limit(5)
-        async for webhook in webhooks_cursor:
-            webhooks.append({
-                "name": webhook.get("name", "Webhook"),
-                "url": webhook.get("url", "N/A"),
-                "status": webhook.get("status", "Active")
-            })
-    except:
-        pass
+    # URLs dos webhooks
+    base_url = str(request.base_url).rstrip('/')
+    webhooks = {
+        "whatsapp": f"{base_url}/webhook/whatsapp",
+        "instagram": f"{base_url}/webhook/instagram"
+    }
     
     return templates.TemplateResponse(
         "admin_config.html",
