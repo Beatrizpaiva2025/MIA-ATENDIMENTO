@@ -127,18 +127,16 @@ async def get_bot_status():
 async def set_bot_status(enabled: bool):
     """Ativa ou desativa o bot globalmente"""
     try:
-        await db.bot_config.update_one(
-            {"_id": "global_status"},
+        await db.bots.update_one(
+            {"name": "Mia"},
             {
                 "$set": {
-                    "enabled": enabled,
-                    "last_update": datetime.now()
+                    "is_active": enabled,
+                    "updated_at": datetime.now()
                 }
             },
             upsert=True
         )
-        bot_status_cache["enabled"] = enabled
-        bot_status_cache["last_update"] = datetime.now()
         logger.info(f"✅ Bot {'ATIVADO' if enabled else 'DESATIVADO'}")
         return True
     except Exception as e:
@@ -700,24 +698,24 @@ def normalize_phone(phone: str) -> str:
 # ============================================================
 
 @app.get("/admin/api/bot/status")
-async def api_bot_status():
-    """Retorna status atual do bot"""
-    status = await get_bot_status()
+async def api_bot_status(request: Request):
+    """Get current bot status"""
+    username = check_admin_access(request)
     
-    # Contar conversas por modo
-    ia_ativa = await db.conversas.distinct("phone", {"mode": {"$ne": "human"}})
-    humano = await db.conversas.distinct("phone", {"mode": "human"})
-    
-    return {
-        "enabled": status["enabled"],
-        "last_update": status["last_update"].isoformat(),
-        "stats": {
-            "ia_ativa": len(ia_ativa),
-            "atendimento_humano": len(humano),
-            "ia_desligada": 0 if status["enabled"] else len(ia_ativa),
-            "total": len(ia_ativa) + len(humano)
+    try:
+        bot = await db.bots.find_one({"name": "Mia"})
+        is_active = bot.get("is_active", True) if bot else True
+        
+        return {
+            "success": True,
+            "is_active": is_active
         }
-    }
+    except Exception as e:
+        logger.error(f"Error getting bot status: {str(e)}")
+        return {
+            "success": True,
+            "is_active": True
+        }
 
 @app.post("/admin/api/bot/toggle")
 async def api_bot_toggle(request: Request):
@@ -810,6 +808,58 @@ async def stop_bot(request: Request):
 # ============================================================
 # API: TRAINING - FIX SAVE FUNCTIONALITY
 # ============================================================
+
+@app.post("/admin/config/personality")
+async def update_personality(request: Request):
+    """Update bot personality"""
+    username = check_admin_access(request)
+    
+    try:
+        data = await request.json()
+        
+        await db.bots.update_one(
+            {"name": "Mia"},
+            {"$set": {
+                "personality": data.get("personality", ""),
+                "updated_at": datetime.now()
+            }},
+            upsert=True
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error updating personality: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Alias routes for training (for compatibility with HTML forms)
+@app.post("/admin/knowledge/add")
+async def add_knowledge_alias(
+    request: Request,
+    category: str = Form(...),
+    title: str = Form(...),
+    content: str = Form(...)
+):
+    """Alias for /admin/training/knowledge/add"""
+    return await add_knowledge_item(request, category, title, content)
+
+@app.post("/admin/faq/add")
+async def add_faq_alias(
+    request: Request,
+    question: str = Form(...),
+    answer: str = Form(...)
+):
+    """Alias for /admin/training/faq/add"""
+    return await add_faq_item(request, question, answer)
+
+@app.delete("/admin/knowledge/delete/{index}")
+async def delete_knowledge_alias(index: int, request: Request):
+    """Alias for /admin/training/knowledge/delete"""
+    return await delete_knowledge_item(index, request)
+
+@app.delete("/admin/faq/delete/{index}")
+async def delete_faq_alias(index: int, request: Request):
+    """Alias for /admin/training/faq/delete"""
+    return await delete_faq_item(index, request)
 
 @app.post("/admin/training/knowledge/add")
 async def add_knowledge_item(
@@ -1057,12 +1107,239 @@ async def admin_configurations(request: Request):
 
 @app.post("/webhook/whatsapp")
 async def webhook_whatsapp(request: Request):
-    """Webhook principal para receber mensagens do WhatsApp"""
+    """Webhook para receber mensagens do WhatsApp"""
     try:
         data = await request.json()
-        logger.info(f"📨 Webhook recebido: {json.dumps(data, indent=2)}")
+        logger.info(f"📨 Webhook recebido: {data}")
+        
+        # Extrair dados
+        phone = data.get("phone", "")
+        message_type = data.get("type", "text")
+        
+        if not phone:
+            return JSONResponse({"status": "ignored", "reason": "no phone"})
         
         # ============================================
+        # VERIFICAR SE BOT ESTÁ ATIVO
+        # ============================================
+        bot = await db.bots.find_one({"name": "Mia"})
+        is_active = bot.get("is_active", True) if bot else True
+        
+        if not is_active:
+            logger.info(f"🔴 Bot desligado - ignorando mensagem de {phone}")
+            return JSONResponse({"status": "bot_disabled"})
+        
+        logger.info(f"📞 Mensagem de {phone} - Tipo: {message_type}")
+        
+        # ============================================
+        # PROCESSAR MENSAGEM DE TEXTO
+        # ============================================
+        if message_type == "text":
+            text = data.get("text", {}).get("message", "")
+            
+            if not text:
+                return JSONResponse({"status": "ignored", "reason": "empty text"})
+            
+            logger.info(f"💬 Texto: {text}")
+            
+            # Processar com IA (SEM verificar comandos * e +)
+            reply = await process_message_with_ai(phone, text)
+            
+            # Enviar resposta
+            if reply:
+                await send_whatsapp_message(phone, reply)
+            
+            return JSONResponse({"status": "processed", "type": "text"})
+        
+        # ============================================
+        # PROCESSAR IMAGEM
+        # ============================================
+        elif message_type == "image":
+            image_url = data.get("image", {}).get("imageUrl", "")
+            
+            if not image_url:
+                return JSONResponse({"status": "ignored", "reason": "no image url"})
+            
+            logger.info(f"🖼️ Imagem recebida")
+            
+            image_bytes = await download_media_from_zapi(image_url)
+            
+            if not image_bytes:
+                await send_whatsapp_message(phone, "Desculpe, não consegui baixar a imagem. Pode tentar enviar novamente?")
+                return JSONResponse({"status": "error", "reason": "download failed"})
+            
+            analysis = await process_image_with_vision(image_bytes, phone)
+            await send_whatsapp_message(phone, analysis)
+            
+            return JSONResponse({"status": "processed", "type": "image"})
+        
+        # ============================================
+        # PROCESSAR ÁUDIO
+        # ============================================
+        elif message_type == "audio":
+            audio_url = data.get("audio", {}).get("audioUrl", "")
+            
+            if not audio_url:
+                return JSONResponse({"status": "ignored", "reason": "no audio url"})
+            
+            logger.info(f"🎤 Áudio recebido")
+            
+            audio_bytes = await download_media_from_zapi(audio_url)
+            
+            if not audio_bytes:
+                await send_whatsapp_message(phone, "Desculpe, não consegui baixar o áudio. Pode tentar enviar novamente?")
+                return JSONResponse({"status": "error", "reason": "download failed"})
+            
+            transcribed_text = await process_audio_with_whisper(audio_bytes, phone)
+            
+            if transcribed_text:
+                # Processar texto transcrito com IA
+                reply = await process_message_with_ai(phone, transcribed_text)
+                if reply:
+                    await send_whatsapp_message(phone, f"🎤 Entendi seu áudio:\n\n{reply}")
+            else:
+                await send_whatsapp_message(phone, "Desculpe, não consegui entender o áudio. Pode escrever ou enviar novamente?")
+            
+            return JSONResponse({"status": "processed", "type": "audio"})
+        
+        # ============================================
+        # PROCESSAR DOCUMENTO (PDF)
+        # ============================================
+        elif message_type == "document":
+            document_data = data.get("document", {})
+            pdf_url = document_data.get("url") or document_data.get("link") or document_data.get("documentUrl")
+            mime_type = document_data.get("mimeType", "")
+            file_name = document_data.get("fileName", "")
+            
+            logger.info(f"📎 Documento: {file_name}")
+            
+            if "pdf" in mime_type.lower() or file_name.lower().endswith(".pdf"):
+                if not pdf_url:
+                    await send_whatsapp_message(phone, "⚠️ Não consegui acessar o PDF. Pode enviar novamente?")
+                    return JSONResponse({"status": "error", "reason": "no pdf url"})
+                
+                analysis = await process_pdf_with_vision(pdf_url, phone)
+                await send_whatsapp_message(phone, analysis)
+                
+                return JSONResponse({"status": "processed", "type": "pdf"})
+            else:
+                await send_whatsapp_message(phone, "⚠️ Por favor, envie apenas arquivos PDF, imagens ou áudios.")
+                return JSONResponse({"status": "unsupported_document"})
+        
+        return JSONResponse({"status": "unknown_type"})
+        
+    except Exception as e:
+        logger.error(f"❌ ERRO no webhook: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=500)
+
+
+# ============================================
+        # PROCESSAR MENSAGEM DE TEXTO
+        # ============================================
+        if message_type == "text":
+            text = data.get("text", {}).get("message", "")
+            
+            if not text:
+                return JSONResponse({"status": "ignored", "reason": "empty text"})
+            
+            logger.info(f"💬 Texto: {text}")
+            
+            # Processar com IA
+            reply = await process_message_with_ai(phone, text)
+            
+            # Enviar resposta
+            if reply:
+                await send_whatsapp_message(phone, reply)
+            
+            return JSONResponse({"status": "processed", "type": "text"})
+        
+        # ============================================
+        # PROCESSAR IMAGEM
+        # ============================================
+        elif message_type == "image":
+            image_url = data.get("image", {}).get("imageUrl", "")
+            
+            if not image_url:
+                return JSONResponse({"status": "ignored", "reason": "no image url"})
+            
+            logger.info(f"🖼️ Imagem recebida")
+            
+            image_bytes = await download_media_from_zapi(image_url)
+            
+            if not image_bytes:
+                await send_whatsapp_message(phone, "Desculpe, não consegui baixar a imagem. Pode tentar enviar novamente?")
+                return JSONResponse({"status": "error", "reason": "download failed"})
+            
+            analysis = await process_image_with_vision(image_bytes, phone)
+            await send_whatsapp_message(phone, analysis)
+            
+            return JSONResponse({"status": "processed", "type": "image"})
+        
+        # ============================================
+        # PROCESSAR ÁUDIO
+        # ============================================
+        elif message_type == "audio":
+            audio_url = data.get("audio", {}).get("audioUrl", "")
+            
+            if not audio_url:
+                return JSONResponse({"status": "ignored", "reason": "no audio url"})
+            
+            logger.info(f"🎤 Áudio recebido")
+            
+            audio_bytes = await download_media_from_zapi(audio_url)
+            
+            if not audio_bytes:
+                await send_whatsapp_message(phone, "Desculpe, não consegui baixar o áudio. Pode tentar enviar novamente?")
+                return JSONResponse({"status": "error", "reason": "download failed"})
+            
+            transcribed_text = await process_audio_with_whisper(audio_bytes, phone)
+            
+            if transcribed_text:
+                # Processar texto transcrito com IA
+                reply = await process_message_with_ai(phone, transcribed_text)
+                if reply:
+                    await send_whatsapp_message(phone, f"🎤 Entendi seu áudio:\n\n{reply}")
+            else:
+                await send_whatsapp_message(phone, "Desculpe, não consegui entender o áudio. Pode escrever ou enviar novamente?")
+            
+            return JSONResponse({"status": "processed", "type": "audio"})
+        
+        # ============================================
+        # PROCESSAR DOCUMENTO (PDF)
+        # ============================================
+        elif message_type == "document":
+            document_data = data.get("document", {})
+            pdf_url = document_data.get("url") or document_data.get("link") or document_data.get("documentUrl")
+            mime_type = document_data.get("mimeType", "")
+            file_name = document_data.get("fileName", "")
+            
+            logger.info(f"📎 Documento: {file_name}")
+            
+            if "pdf" in mime_type.lower() or file_name.lower().endswith(".pdf"):
+                if not pdf_url:
+                    await send_whatsapp_message(phone, "⚠️ Não consegui acessar o PDF. Pode enviar novamente?")
+                    return JSONResponse({"status": "error", "reason": "no pdf url"})
+                
+                analysis = await process_pdf_with_vision(pdf_url, phone)
+                await send_whatsapp_message(phone, analysis)
+                
+                return JSONResponse({"status": "processed", "type": "pdf"})
+            else:
+                await send_whatsapp_message(phone, "⚠️ Por favor, envie apenas arquivos PDF, imagens ou áudios.")
+                return JSONResponse({"status": "unsupported_document"})
+        
+        return JSONResponse({"status": "unknown_type"})
+        
+    except Exception as e:
+        logger.error(f"❌ ERRO no webhook: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=500)
+
+
+# ============================================
         # VERIFICAR STATUS DO BOT
         # ============================================
         bot_status = await get_bot_status()
