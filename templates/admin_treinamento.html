@@ -64,6 +64,7 @@
     </div>
     <div class="card-body">
         <form id="knowledge-form">
+            <input type="hidden" id="knowledge-edit-index" value="">
             <div class="form-group">
                 <label for="knowledge-title">Título</label>
                 <input type="text" id="knowledge-title" name="title" class="form-control" placeholder="Ex: Serviços de Tradução Juramentada">
@@ -74,8 +75,11 @@
                 <textarea id="knowledge-content" name="content" class="form-control" rows="6" placeholder="Descreva as informações que a IA deve saber sobre este tópico..."></textarea>
             </div>
 
-            <button type="submit" class="btn btn-secondary">
-                <i class="fas fa-plus"></i> Adicionar Conhecimento
+            <button type="submit" class="btn btn-secondary" id="knowledge-submit-btn">
+                <i class="fas fa-plus"></i> <span id="knowledge-btn-text">Adicionar Conhecimento</span>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="knowledge-cancel-btn" style="display: none;" onclick="cancelEditKnowledge()">
+                <i class="fas fa-times"></i> Cancelar
             </button>
         </form>
 
@@ -94,6 +98,7 @@
     </div>
     <div class="card-body">
         <form id="faq-form">
+            <input type="hidden" id="faq-edit-index" value="">
             <div class="form-group">
                 <label for="faq-question">Pergunta</label>
                 <input type="text" id="faq-question" name="question" class="form-control" placeholder="Ex: Quanto tempo leva uma tradução?">
@@ -104,8 +109,11 @@
                 <textarea id="faq-answer" name="answer" class="form-control" rows="4" placeholder="Resposta que a IA deve dar..."></textarea>
             </div>
 
-            <button type="submit" class="btn btn-secondary">
-                <i class="fas fa-plus"></i> Adicionar FAQ
+            <button type="submit" class="btn btn-secondary" id="faq-submit-btn">
+                <i class="fas fa-plus"></i> <span id="faq-btn-text">Adicionar FAQ</span>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="faq-cancel-btn" style="display: none;" onclick="cancelEditFAQ()">
+                <i class="fas fa-times"></i> Cancelar
             </button>
         </form>
 
@@ -164,6 +172,7 @@ $('#personality-form').on('submit', async function(e) {
 $('#knowledge-form').on('submit', async function(e) {
     e.preventDefault();
     
+    const editIndex = $('#knowledge-edit-index').val();
     const data = {
         title: $('#knowledge-title').val(),
         content: $('#knowledge-content').val()
@@ -175,8 +184,17 @@ $('#knowledge-form').on('submit', async function(e) {
     }
     
     try {
-        const response = await fetch(`/admin/treinamento/api/knowledge/${BOT_ID}`, {
-            method: 'POST',
+        let url = `/admin/treinamento/api/knowledge/${BOT_ID}`;
+        let method = 'POST';
+        
+        // Se está editando
+        if (editIndex !== '') {
+            url = `/admin/treinamento/api/knowledge/${BOT_ID}/${editIndex}`;
+            method = 'PUT';
+        }
+        
+        const response = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
@@ -184,9 +202,13 @@ $('#knowledge-form').on('submit', async function(e) {
         const result = await response.json();
         
         if (result.success) {
-            alert('✅ Conhecimento adicionado!');
+            alert(editIndex !== '' ? '✅ Conhecimento atualizado!' : '✅ Conhecimento adicionado!');
             $('#knowledge-title').val('');
             $('#knowledge-content').val('');
+            $('#knowledge-edit-index').val('');
+            $('#knowledge-btn-text').text('Adicionar Conhecimento');
+            $('#knowledge-submit-btn i').attr('class', 'fas fa-plus');
+            $('#knowledge-cancel-btn').hide();
             loadKnowledge();
             updateCounts();
         } else {
@@ -194,9 +216,43 @@ $('#knowledge-form').on('submit', async function(e) {
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('❌ Erro ao adicionar conhecimento');
+        alert('❌ Erro ao salvar conhecimento');
     }
 });
+
+function editKnowledge(index) {
+    fetch(`/admin/treinamento/api/knowledge/${BOT_ID}`)
+        .then(res => res.json())
+        .then(result => {
+            if (result.success && result.knowledge[index]) {
+                const item = result.knowledge[index];
+                $('#knowledge-title').val(item.title);
+                $('#knowledge-content').val(item.content);
+                $('#knowledge-edit-index').val(index);
+                $('#knowledge-btn-text').text('Atualizar Conhecimento');
+                $('#knowledge-submit-btn i').attr('class', 'fas fa-save');
+                $('#knowledge-cancel-btn').show();
+                
+                // Scroll para o formulário
+                $('html, body').animate({
+                    scrollTop: $('#knowledge-form').offset().top - 100
+                }, 500);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('❌ Erro ao carregar conhecimento');
+        });
+}
+
+function cancelEditKnowledge() {
+    $('#knowledge-title').val('');
+    $('#knowledge-content').val('');
+    $('#knowledge-edit-index').val('');
+    $('#knowledge-btn-text').text('Adicionar Conhecimento');
+    $('#knowledge-submit-btn i').attr('class', 'fas fa-plus');
+    $('#knowledge-cancel-btn').hide();
+}
 
 async function loadKnowledge() {
     try {
@@ -212,9 +268,14 @@ async function loadKnowledge() {
                                 <h4 style="color: var(--legacy-navy); margin-bottom: 8px;">${item.title}</h4>
                                 <p style="color: var(--gray-600); margin: 0;">${item.content}</p>
                             </div>
-                            <button class="btn btn-danger btn-sm" onclick="deleteKnowledge(${index})">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-warning btn-sm" onclick="editKnowledge(${index})" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteKnowledge(${index})" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -257,6 +318,7 @@ async function deleteKnowledge(index) {
 $('#faq-form').on('submit', async function(e) {
     e.preventDefault();
     
+    const editIndex = $('#faq-edit-index').val();
     const data = {
         question: $('#faq-question').val(),
         answer: $('#faq-answer').val()
@@ -268,8 +330,17 @@ $('#faq-form').on('submit', async function(e) {
     }
     
     try {
-        const response = await fetch(`/admin/treinamento/api/faq/${BOT_ID}`, {
-            method: 'POST',
+        let url = `/admin/treinamento/api/faq/${BOT_ID}`;
+        let method = 'POST';
+        
+        // Se está editando
+        if (editIndex !== '') {
+            url = `/admin/treinamento/api/faq/${BOT_ID}/${editIndex}`;
+            method = 'PUT';
+        }
+        
+        const response = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
@@ -277,9 +348,13 @@ $('#faq-form').on('submit', async function(e) {
         const result = await response.json();
         
         if (result.success) {
-            alert('✅ FAQ adicionada!');
+            alert(editIndex !== '' ? '✅ FAQ atualizada!' : '✅ FAQ adicionada!');
             $('#faq-question').val('');
             $('#faq-answer').val('');
+            $('#faq-edit-index').val('');
+            $('#faq-btn-text').text('Adicionar FAQ');
+            $('#faq-submit-btn i').attr('class', 'fas fa-plus');
+            $('#faq-cancel-btn').hide();
             loadFAQs();
             updateCounts();
         } else {
@@ -287,9 +362,43 @@ $('#faq-form').on('submit', async function(e) {
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('❌ Erro ao adicionar FAQ');
+        alert('❌ Erro ao salvar FAQ');
     }
 });
+
+function editFAQ(index) {
+    fetch(`/admin/treinamento/api/faq/${BOT_ID}`)
+        .then(res => res.json())
+        .then(result => {
+            if (result.success && result.faqs[index]) {
+                const item = result.faqs[index];
+                $('#faq-question').val(item.question);
+                $('#faq-answer').val(item.answer);
+                $('#faq-edit-index').val(index);
+                $('#faq-btn-text').text('Atualizar FAQ');
+                $('#faq-submit-btn i').attr('class', 'fas fa-save');
+                $('#faq-cancel-btn').show();
+                
+                // Scroll para o formulário
+                $('html, body').animate({
+                    scrollTop: $('#faq-form').offset().top - 100
+                }, 500);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('❌ Erro ao carregar FAQ');
+        });
+}
+
+function cancelEditFAQ() {
+    $('#faq-question').val('');
+    $('#faq-answer').val('');
+    $('#faq-edit-index').val('');
+    $('#faq-btn-text').text('Adicionar FAQ');
+    $('#faq-submit-btn i').attr('class', 'fas fa-plus');
+    $('#faq-cancel-btn').hide();
+}
 
 async function loadFAQs() {
     try {
@@ -305,9 +414,14 @@ async function loadFAQs() {
                                 <h4 style="color: var(--legacy-navy); margin-bottom: 8px;">❓ ${item.question}</h4>
                                 <p style="color: var(--gray-600); margin: 0;">💬 ${item.answer}</p>
                             </div>
-                            <button class="btn btn-danger btn-sm" onclick="deleteFAQ(${index})">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-warning btn-sm" onclick="editFAQ(${index})" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteFAQ(${index})" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
