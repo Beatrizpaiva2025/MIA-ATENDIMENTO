@@ -170,19 +170,19 @@
             <div class="form-group">
                 <label><i class="bi bi-chat-dots"></i> Tone of Voice:</label>
                 <select class="form-select" name="tone" required>
-                    <option value="professional">Professional and Formal</option>
-                    <option value="friendly" selected>Friendly and Welcoming</option>
-                    <option value="casual">Casual and Relaxed</option>
-                    <option value="technical">Technical and Precise</option>
+                    <option value="professional" {% if personality.get('tone') == 'professional' %}selected{% endif %}>Professional and Formal</option>
+                    <option value="friendly" {% if personality.get('tone') == 'friendly' or not personality.get('tone') %}selected{% endif %}>Friendly and Welcoming</option>
+                    <option value="casual" {% if personality.get('tone') == 'casual' %}selected{% endif %}>Casual and Relaxed</option>
+                    <option value="technical" {% if personality.get('tone') == 'technical' %}selected{% endif %}>Technical and Precise</option>
                 </select>
             </div>
             <div class="form-group">
                 <label><i class="bi bi-bullseye"></i> AI Goals:</label>
-                <textarea class="form-control" name="goals" rows="3" required>Help clients efficiently, provide accurate information about translation services, and convert inquiries into business opportunities.</textarea>
+                <textarea class="form-control" name="goals" rows="3" required>{{ personality.get('goals', 'Help clients efficiently, provide accurate information about translation services, and convert inquiries into business opportunities.') }}</textarea>
             </div>
             <div class="form-group">
                 <label><i class="bi bi-shield-check"></i> Behavioral Restrictions:</label>
-                <textarea class="form-control" name="restrictions" rows="3" required>Never provide false information, do not make promises without confirmation, always maintain professional ethics.</textarea>
+                <textarea class="form-control" name="restrictions" rows="3" required>{{ personality.get('restrictions', 'Never provide false information, do not make promises without confirmation, always maintain professional ethics.') }}</textarea>
             </div>
             <button type="submit" class="btn btn-primary">
                 <i class="bi bi-save"></i> Save Configuration
@@ -198,7 +198,7 @@
         <p>Teach Mia about your services, prices, and processes</p>
     </div>
     <div class="card-body">
-        <form action="/admin/knowledge/add" method="POST" class="mb-4">
+        <form action="/admin/training/knowledge/add" method="POST" class="mb-4">
             <div class="form-group">
                 <label><i class="bi bi-tag"></i> Category:</label>
                 <select class="form-select" name="category" required>
@@ -264,7 +264,7 @@
         <p>Train Mia to answer common questions</p>
     </div>
     <div class="card-body">
-        <form action="/admin/faq/add" method="POST" class="mb-4">
+        <form action="/admin/training/faq/add" method="POST" class="mb-4">
             <div class="form-group">
                 <label><i class="bi bi-question"></i> Question:</label>
                 <input type="text" class="form-control" name="question" placeholder="e.g., What is the delivery time?" required>
@@ -323,7 +323,7 @@ function editKnowledge(id) {
 // Delete knowledge
 function deleteKnowledge(id) {
     if (confirm('Are you sure you want to delete this knowledge item?')) {
-        fetch(`/admin/knowledge/delete/${id}`, {
+        fetch(`/admin/training/knowledge/delete/${id}`, {
             method: 'DELETE'
         }).then(response => {
             if (response.ok) {
@@ -342,7 +342,7 @@ function editFAQ(id) {
 // Delete FAQ
 function deleteFAQ(id) {
     if (confirm('Are you sure you want to delete this FAQ?')) {
-        fetch(`/admin/faq/delete/${id}`, {
+        fetch(`/admin/training/faq/delete/${id}`, {
             method: 'DELETE'
         }).then(response => {
             if (response.ok) {
