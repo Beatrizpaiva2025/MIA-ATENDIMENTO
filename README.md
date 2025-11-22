@@ -1,78 +1,98 @@
-# 🤖 MIA ATENDIMENTO - WhatsApp AI Platform
+# MIA Bot - Sistema de Atendimento WhatsApp com IA
 
-Bot WhatsApp inteligente com IA para atendimento automatizado da Legacy Translations.
+Bot de atendimento inteligente para WhatsApp com painel administrativo completo.
 
 ## 🚀 Funcionalidades
 
-✅ **Mensagens de Texto** - Conversação natural com GPT-4  
-✅ **Imagens** - Análise de documentos com GPT-4 Vision  
-✅ **Áudios** - Transcrição de voz com Whisper  
-✅ **Painel Admin** - Dashboard completo de gestão  
-✅ **Pipeline de Vendas** - CRM e funil de conversão  
-✅ **Controle IA/Humano** - Alterne entre bot e atendimento manual  
+### Bot de Atendimento
+- ✅ Responde automaticamente com IA (GPT-4)
+- ✅ Reconhece **texto**, **imagem** (GPT-4 Vision), **áudio** (Whisper) e **PDF**
+- ✅ Transferência para atendente humano **invisível**
+- ✅ Comandos especiais: `*` (transferir), `+` (voltar IA), `##` (desligar), `++` (religar)
 
-## 📋 Pré-requisitos
+### Painel Administrativo
+- ✅ **Dashboard** com estatísticas em tempo real
+- ✅ **Treinamento da IA** (personalidade, knowledge base, FAQs)
+- ✅ **Controle do Bot** (botão liga/desliga global)
+- ✅ **Conversas** em tempo real
+- ✅ **Leads** capturados automaticamente
 
-- Python 3.11
+## 📋 Requisitos
+
+- Python 3.11+
 - MongoDB Atlas
-- Conta OpenAI com API Key
-- Conta Z-API (WhatsApp Business)
+- OpenAI API Key
+- Z-API (WhatsApp)
 
-## 🔧 Variáveis de Ambiente
+## 🔧 Instalação Local
 
-Configure no Render.com:
+```bash
+# Clonar repositório
+git clone https://github.com/Beatrizpaiva2025/MIA-ATENDIMENTO.git
+cd MIA-ATENDIMENTO
 
-```env
-# MongoDB
-MONGODB_URI=mongodb+srv://usuario:senha@cluster.mongodb.net/mia_bot
+# Instalar dependências
+pip install -r requirements.txt
 
-# OpenAI
-OPENAI_API_KEY=sk-...
+# Configurar variáveis de ambiente
+cp .env.example .env
+# Editar .env com suas credenciais
 
-# Z-API (WhatsApp)
-ZAPI_INSTANCE_ID=seu_instance_id
-ZAPI_TOKEN=seu_token
-ZAPI_CLIENT_TOKEN=seu_client_token
-ZAPI_URL=https://api.z-api.io
-
-# Controle
-IA_ENABLED=true
-MANUTENCAO=false
+# Executar
+python main.py
 ```
 
-## 🚀 Deploy no Render.com
+## 🌐 Deploy no Render.com
 
-1. **Conecte o repositório** no Render.com
-2. **Configure variáveis de ambiente** (Settings → Environment)
-3. **Deploy automático** será iniciado
-4. **Acesse o painel:** `https://seu-app.onrender.com/admin`
-
-## 📊 Rotas do Painel Admin
-
-- `/admin` - Dashboard principal
-- `/admin/pipeline` - Pipeline de vendas
-- `/admin/leads` - Gestão de leads (CRM)
-- `/admin/transfers` - Transferências para humano
-- `/admin/documents` - Documentos analisados
-- `/admin/controle` - Controle IA vs Humano
-- `/admin/config` - Configurações do sistema
-
-## 🔗 Webhooks
-
-Configure na Z-API:
-```
-https://seu-app.onrender.com/webhook/whatsapp
-```
+1. Conectar repositório GitHub
+2. Configurar variáveis de ambiente:
+   - `MONGODB_URI`
+   - `OPENAI_API_KEY`
+   - `ZAPI_INSTANCE_ID`
+   - `ZAPI_TOKEN`
+   - `PYTHON_VERSION=3.11.7`
+3. Build Command: `pip install -r requirements.txt`
+4. Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
 
 ## 🎯 Como Usar
 
-1. Cliente envia mensagem no WhatsApp
-2. Bot Mia responde automaticamente
-3. Se cliente enviar imagem, analisa com Vision
-4. Se enviar áudio, transcreve e responde
-5. Use painel admin para acompanhar tudo
+### Acessar Painel Admin
+1. Acesse: `https://seu-dominio.onrender.com/login`
+2. Login: `admin` / Senha: `admin123`
+
+### Treinar a IA
+1. Vá em **Treinamento IA**
+2. Configure personalidade, knowledge base e FAQs
+3. Salve as alterações
+
+### Controlar o Bot
+1. Vá em **Controle do Bot**
+2. Use o botão **LIGAR/DESLIGAR IA**
+3. Quando desligado, você atende manualmente (cliente não sabe)
+
+### Comandos do Cliente
+- `*` → Transferir para atendente humano
+- `+` → Voltar para IA
+- `##` → Desligar IA (individual)
+- `++` → Religar IA (individual)
+
+## 📱 Integração WhatsApp
+
+Configure o webhook no Z-API:
+```
+https://seu-dominio.onrender.com/webhook/whatsapp
+```
+
+## 🎨 Design
+
+- **Cores**: Blue Legacy (Navy + Light Blue)
+- **Fonte**: Inter, Segoe UI
+- **Framework**: FastAPI + Jinja2
 
 ## 📞 Suporte
 
-Desenvolvido para **Legacy Translations**  
-Bot: **Mia** - Assistente Virtual
+Para dúvidas ou problemas, abra uma issue no GitHub.
+
+## 📄 Licença
+
+MIT License
