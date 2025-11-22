@@ -1092,12 +1092,26 @@ async def admin_configurations(request: Request):
         "bot_active": bot.get("is_active", True) if bot else True
     }
     
+    # Obter webhooks
+    webhooks = []
+    try:
+        webhooks_cursor = db.webhooks.find().limit(5)
+        async for webhook in webhooks_cursor:
+            webhooks.append({
+                "name": webhook.get("name", "Webhook"),
+                "url": webhook.get("url", "N/A"),
+                "status": webhook.get("status", "Active")
+            })
+    except:
+        pass
+    
     return templates.TemplateResponse(
         "admin_config.html",
         {
             "request": request,
             "username": username,
-            "config": config
+            "config": config,
+            "webhooks": webhooks
         }
     )
 
