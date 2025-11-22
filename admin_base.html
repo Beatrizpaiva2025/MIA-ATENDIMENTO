@@ -1,483 +1,63 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Admin Panel - MIA Customer Service{% endblock %}</title>
-    
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Bootstrap 5.3 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #f8fafc;
-            overflow-x: hidden;
-        }
-        
-        /* ==================== SIDEBAR ==================== */
-        .sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 280px;
-            height: 100vh;
-            background: linear-gradient(180deg, #0a3d62 0%, #1e5a7d 100%);
-            padding: 0;
-            z-index: 1000;
-            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1);
-            overflow-y: auto;
-        }
-        
-        /* Logo Section */
-        .sidebar-logo {
-            padding: 30px 25px;
-            background: rgba(0, 0, 0, 0.2);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .sidebar-logo h3 {
-            color: white;
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .sidebar-logo h3 i {
-            font-size: 1.8rem;
-            color: #4fc3f7;
-        }
-        
-        .sidebar-logo p {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 0.85rem;
-            margin: 5px 0 0 0;
-            font-weight: 300;
-        }
-        
-        /* User Info */
-        .user-info {
-            padding: 20px 25px;
-            background: rgba(0, 0, 0, 0.15);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .user-info .user-avatar {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(135deg, #4fc3f7 0%, #2196f3 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.3rem;
-            color: white;
-            font-weight: 700;
-            float: left;
-            margin-right: 12px;
-        }
-        
-        .user-info .user-details {
-            overflow: hidden;
-        }
-        
-        .user-info .user-name {
-            color: white;
-            font-size: 0.95rem;
-            font-weight: 600;
-            margin: 0;
-            line-height: 1.3;
-        }
-        
-        .user-info .user-role {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 0.75rem;
-            margin: 2px 0 0 0;
-        }
-        
-        .user-info .user-role.admin {
-            color: #4fc3f7;
-            font-weight: 600;
-        }
-        
-        /* Navigation Menu */
-        .sidebar-nav {
-            padding: 20px 0;
-        }
-        
-        .nav-section-title {
-            color: rgba(255, 255, 255, 0.5);
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            padding: 15px 25px 10px 25px;
-            margin: 0;
-        }
-        
-        .nav-item {
-            list-style: none;
-        }
-        
-        .nav-link {
-            display: flex;
-            align-items: center;
-            padding: 14px 25px;
-            color: rgba(255, 255, 255, 0.85);
-            text-decoration: none;
-            transition: all 0.3s ease;
-            font-size: 0.95rem;
-            font-weight: 500;
-            border-left: 3px solid transparent;
-        }
-        
-        .nav-link i {
-            font-size: 1.3rem;
-            margin-right: 15px;
-            width: 25px;
-            text-align: center;
-        }
-        
-        .nav-link:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border-left-color: #4fc3f7;
-        }
-        
-        .nav-link.active {
-            background: rgba(79, 195, 247, 0.2);
-            color: white;
-            border-left-color: #4fc3f7;
-            font-weight: 600;
-        }
-        
-        .nav-link.active i {
-            color: #4fc3f7;
-        }
-        
-        /* Logout Button */
-        .logout-section {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            padding: 20px 25px;
-            background: rgba(0, 0, 0, 0.2);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .btn-logout {
-            width: 100%;
-            padding: 12px;
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-            color: white;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        
-        .btn-logout:hover {
-            background: #ef4444;
-            border-color: #ef4444;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-        }
-        
-        /* ==================== MAIN CONTENT ==================== */
-        .main-content {
-            margin-left: 280px;
-            padding: 0;
-            min-height: 100vh;
-            background: #f8fafc;
-        }
-        
-        /* Top Header */
-        .top-header {
-            background: white;
-            padding: 20px 40px;
-            border-bottom: 1px solid #e2e8f0;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        
-        .top-header h1 {
-            color: #1e293b;
-            font-size: 1.8rem;
-            font-weight: 700;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .top-header h1 i {
-            color: #3b82f6;
-        }
-        
-        .breadcrumb {
-            background: none;
-            padding: 8px 0 0 0;
-            margin: 0;
-            font-size: 0.85rem;
-        }
-        
-        .breadcrumb-item {
-            color: #64748b;
-        }
-        
-        .breadcrumb-item.active {
-            color: #1e293b;
-            font-weight: 600;
-        }
-        
-        .breadcrumb-item + .breadcrumb-item::before {
-            content: "›";
-            color: #94a3b8;
-        }
-        
-        /* Content Area */
-        .content-area {
-            padding: 30px 40px;
-        }
-        
-        /* Mobile Responsive */
-        @media (max-width: 992px) {
-            .sidebar {
-                transform: translateX(-280px);
-                transition: transform 0.3s;
-            }
-            
-            .sidebar.active {
-                transform: translateX(0);
-            }
-            
-            .main-content {
-                margin-left: 0;
-            }
-            
-            .mobile-toggle {
-                display: block !important;
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                width: 60px;
-                height: 60px;
-                background: #3b82f6;
-                color: white;
-                border-radius: 50%;
-                border: none;
-                font-size: 1.5rem;
-                cursor: pointer;
-                z-index: 1001;
-                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-            }
-        }
-        
-        .mobile-toggle {
-            display: none;
-        }
-        
-        /* Scrollbar styling */
-        .sidebar::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .sidebar::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.1);
-        }
-        
-        .sidebar::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 3px;
-        }
-        
-        .sidebar::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.5);
-        }
-    </style>
-    
+    <title>{% block title %}MIA - Painel Administrativo{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/legacy_theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Mobile Menu Toggle -->
-    <button class="mobile-toggle" onclick="toggleSidebar()">
-        <i class="bi bi-list"></i>
-    </button>
-    
     <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <!-- Logo -->
+    <div class="sidebar">
         <div class="sidebar-logo">
-            <h3>
-                <i class="bi bi-translate"></i>
-                Legacy Translations
-            </h3>
-            <p>Intelligent Customer Service</p>
+            <img src="/static/images/logo_legacy.jpeg" alt="Legacy Translations">
+            <h2>MIA Bot</h2>
+            <p>Painel Administrativo</p>
         </div>
         
-        <!-- User Info -->
-        <div class="user-info">
-            <div class="user-avatar">
-                {{ session.get('username', 'U')[0].upper() }}
-            </div>
-            <div class="user-details">
-                <p class="user-name">{{ session.get('username', 'User') }}</p>
-                <p class="user-role {% if session.get('user_role') == 'admin' %}admin{% endif %}">
-                    {% if session.get('user_role') == 'admin' %}
-                        <i class="bi bi-shield-check"></i> Administrator
-                    {% else %}
-                        <i class="bi bi-person"></i> User
-                    {% endif %}
-                </p>
-            </div>
-        </div>
-        
-        <!-- Navigation Menu -->
-        <nav class="sidebar-nav">
-            <p class="nav-section-title">Main Menu</p>
-            <ul style="padding: 0; margin: 0;">
-                <li class="nav-item">
-                    <a href="/admin/dashboard" class="nav-link {% if request.path == '/admin/dashboard' %}active{% endif %}">
-                        <i class="bi bi-speedometer2"></i>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/training" class="nav-link {% if request.path == '/admin/training' %}active{% endif %}">
-                        <i class="bi bi-brain"></i>
-                        <span>AI Training</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/pipeline" class="nav-link {% if request.path == '/admin/pipeline' %}active{% endif %}">
-                        <i class="bi bi-funnel"></i>
-                        <span>Sales Pipeline</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/leads" class="nav-link {% if request.path == '/admin/leads' %}active{% endif %}">
-                        <i class="bi bi-people"></i>
-                        <span>Lead Management</span>
-                    </a>
-                </li>
-            </ul>
-            
-            <p class="nav-section-title">Operations</p>
-            <ul style="padding: 0; margin: 0;">
-                <li class="nav-item">
-                    <a href="/admin/transfers" class="nav-link {% if request.path == '/admin/transfers' %}active{% endif %}">
-                        <i class="bi bi-arrow-left-right"></i>
-                        <span>Transfers</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/documents" class="nav-link {% if request.path == '/admin/documents' %}active{% endif %}">
-                        <i class="bi bi-file-earmark-text"></i>
-                        <span>Documents</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/control" class="nav-link {% if request.path == '/admin/control' %}active{% endif %}">
-                        <i class="bi bi-gear"></i>
-                        <span>AI/Human Control</span>
-                    </a>
-                </li>
-            </ul>
-            
-            <p class="nav-section-title">Settings</p>
-            <ul style="padding: 0; margin: 0;">
-                <li class="nav-item">
-                    <a href="/admin/config" class="nav-link {% if request.path == '/admin/config' %}active{% endif %}">
-                        <i class="bi bi-sliders"></i>
-                        <span>Configurations</span>
-                    </a>
-                </li>
-            </ul>
-        </nav>
-        
-        <!-- Logout Button -->
-        <div class="logout-section">
-            <a href="/logout" class="btn-logout">
-                <i class="bi bi-box-arrow-right"></i>
-                <span>Logout</span>
+        <nav>
+            <a href="/admin/dashboard" {% if request.url.path == '/admin/dashboard' %}class="active"{% endif %}>
+                <i class="fas fa-chart-line"></i>
+                Dashboard
             </a>
+            <a href="/admin/treinamento" {% if request.url.path == '/admin/treinamento' %}class="active"{% endif %}>
+                <i class="fas fa-brain"></i>
+                Treinamento IA
+            </a>
+            <a href="/admin/controle" {% if request.url.path == '/admin/controle' %}class="active"{% endif %}>
+                <i class="fas fa-toggle-on"></i>
+                Controle do Bot
+            </a>
+            <a href="/admin/conversas" {% if request.url.path == '/admin/conversas' %}class="active"{% endif %}>
+                <i class="fas fa-comments"></i>
+                Conversas
+            </a>
+            <a href="/admin/leads" {% if request.url.path == '/admin/leads' %}class="active"{% endif %}>
+                <i class="fas fa-users"></i>
+                Leads
+            </a>
+            <a href="/logout" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+                <i class="fas fa-sign-out-alt"></i>
+                Sair
+            </a>
+        </nav>
+    </div>
+
+    <!-- Conteúdo Principal -->
+    <div class="main-content">
+        <div class="content-header">
+            <h1>{% block page_title %}Painel Administrativo{% endblock %}</h1>
+            <p>{% block page_subtitle %}Gerencie seu bot de atendimento{% endblock %}</p>
         </div>
-    </aside>
-    
-    <!-- Main Content -->
-    <main class="main-content">
-        <!-- Top Header -->
-        <div class="top-header">
-            <h1>
-                {% block page_icon %}<i class="bi bi-speedometer2"></i>{% endblock %}
-                {% block page_title %}Dashboard{% endblock %}
-            </h1>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/admin/dashboard">Home</a></li>
-                    {% block breadcrumb %}
-                    <li class="breadcrumb-item active">Dashboard</li>
-                    {% endblock %}
-                </ol>
-            </nav>
+
+        <div class="container">
+            {% block content %}{% endblock %}
         </div>
-        
-        <!-- Content Area -->
-        <div class="content-area">
-            {% block content %}
-            <!-- Page content goes here -->
-            {% endblock %}
-        </div>
-    </main>
-    
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Mobile Toggle Script -->
-    <script>
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('active');
-        }
-        
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(event) {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.querySelector('.mobile-toggle');
-            
-            if (window.innerWidth <= 992 && 
-                !sidebar.contains(event.target) && 
-                !toggle.contains(event.target) &&
-                sidebar.classList.contains('active')) {
-                sidebar.classList.remove('active');
-            }
-        });
-    </script>
-    
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

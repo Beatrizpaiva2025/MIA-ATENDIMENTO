@@ -1,0 +1,225 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Controle do Bot - MIA{% endblock %}
+
+{% block page_title %}Controle do Bot{% endblock %}
+{% block page_subtitle %}Ligue ou desligue a IA para atendimento humano invisível{% endblock %}
+
+{% block content %}
+<!-- Status Principal -->
+<div class="card" style="margin-bottom: 32px;">
+    <div class="card-body" style="text-align: center; padding: 48px 24px;">
+        <div id="bot-status-indicator" style="margin-bottom: 24px;">
+            <div style="width: 120px; height: 120px; margin: 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 3rem; {% if bot_enabled %}background: linear-gradient(135deg, #28a745, #20c997);{% else %}background: linear-gradient(135deg, #dc3545, #c82333);{% endif %} box-shadow: 0 8px 24px rgba(0,0,0,0.15);">
+                <i class="fas {% if bot_enabled %}fa-robot{% else %}fa-user-tie{% endif %}" style="color: white;"></i>
+            </div>
+        </div>
+        
+        <h2 id="bot-status-text" style="color: var(--legacy-navy); font-size: 2rem; margin-bottom: 12px;">
+            {% if bot_enabled %}🤖 IA ATIVA{% else %}👤 ATENDIMENTO HUMANO{% endif %}
+        </h2>
+        
+        <p id="bot-status-description" style="color: var(--gray-500); font-size: 1.1rem; margin-bottom: 32px;">
+            {% if bot_enabled %}
+            A IA está respondendo automaticamente aos clientes
+            {% else %}
+            Você está atendendo manualmente. A IA não responderá.
+            {% endif %}
+        </p>
+        
+        <div style="display: flex; gap: 16px; justify-content: center; align-items: center;">
+            <button id="btn-desligar" class="btn btn-danger btn-lg" onclick="toggleBot(false)" {% if not bot_enabled %}style="display: none;"{% endif %}>
+                <i class="fas fa-power-off"></i> DESLIGAR IA
+            </button>
+            
+            <button id="btn-ligar" class="btn btn-success btn-lg" onclick="toggleBot(true)" {% if bot_enabled %}style="display: none;"{% endif %}>
+                <i class="fas fa-power-off"></i> LIGAR IA
+            </button>
+        </div>
+        
+        <p style="color: var(--gray-400); font-size: 0.85rem; margin-top: 24px;">
+            Última atualização: <span id="last-update">{{ last_update.strftime('%d/%m/%Y %H:%M:%S') }}</span>
+        </p>
+    </div>
+</div>
+
+<!-- Estatísticas -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>IA Ativa</h3>
+        <div class="stat-value" id="stat-ia-ativa">{{ stats.ia_ativa }}</div>
+        <i class="fas fa-robot stat-icon"></i>
+    </div>
+    
+    <div class="stat-card">
+        <h3>Atendimento Humano</h3>
+        <div class="stat-value" id="stat-humano">{{ stats.atendimento_humano }}</div>
+        <i class="fas fa-user-tie stat-icon"></i>
+    </div>
+    
+    <div class="stat-card">
+        <h3>IA Desligada</h3>
+        <div class="stat-value" id="stat-desligada">{{ stats.ia_desligada }}</div>
+        <i class="fas fa-power-off stat-icon"></i>
+    </div>
+    
+    <div class="stat-card">
+        <h3>Total de Conversas</h3>
+        <div class="stat-value" id="stat-total">{{ stats.total }}</div>
+        <i class="fas fa-comments stat-icon"></i>
+    </div>
+</div>
+
+<!-- Informações -->
+<div class="card">
+    <div class="card-header">
+        <h2>ℹ️ Como Funciona</h2>
+        <p>Entenda o sistema de handoff humano invisível</p>
+    </div>
+    <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+            <div>
+                <h3 style="color: var(--legacy-navy); margin-bottom: 12px;">
+                    <i class="fas fa-robot" style="color: var(--success);"></i> IA Ligada
+                </h3>
+                <ul style="color: var(--gray-600); line-height: 2;">
+                    <li>Bot responde automaticamente</li>
+                    <li>Cliente não sabe que é IA</li>
+                    <li>Você pode monitorar conversas</li>
+                    <li>Transferência invisível disponível</li>
+                </ul>
+            </div>
+            
+            <div>
+                <h3 style="color: var(--legacy-navy); margin-bottom: 12px;">
+                    <i class="fas fa-user-tie" style="color: var(--danger);"></i> IA Desligada
+                </h3>
+                <ul style="color: var(--gray-600); line-height: 2;">
+                    <li>Você atende manualmente</li>
+                    <li>Cliente NÃO sabe da mudança</li>
+                    <li>IA não responde nada</li>
+                    <li>Mensagens são salvas normalmente</li>
+                </ul>
+            </div>
+            
+            <div>
+                <h3 style="color: var(--legacy-navy); margin-bottom: 12px;">
+                    <i class="fas fa-exchange-alt" style="color: var(--legacy-blue);"></i> Comandos do Cliente
+                </h3>
+                <ul style="color: var(--gray-600); line-height: 2;">
+                    <li><code>*</code> → Transferir para humano</li>
+                    <li><code>+</code> → Voltar para IA</li>
+                    <li><code>##</code> → Desligar IA (individual)</li>
+                    <li><code>++</code> → Religar IA (individual)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alerta de Aviso -->
+<div class="card" style="border-left: 4px solid var(--warning); background: rgba(255, 193, 7, 0.05);">
+    <div class="card-body">
+        <h3 style="color: var(--warning); margin-bottom: 12px;">
+            <i class="fas fa-exclamation-triangle"></i> Importante
+        </h3>
+        <p style="color: var(--gray-700); margin: 0; line-height: 1.8;">
+            Quando você <strong>desliga a IA</strong>, o cliente <strong>NÃO RECEBE NENHUMA NOTIFICAÇÃO</strong>. 
+            Para ele, continua sendo a mesma conversa. Isso permite que você intervenha de forma invisível 
+            e depois volte a IA sem que o cliente perceba a diferença.
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentStatus = {{ 'true' if bot_enabled else 'false' }};
+
+// ============================================================
+// ALTERNAR STATUS DO BOT
+// ============================================================
+async function toggleBot(enable) {
+    try {
+        const response = await fetch('/admin/controle/api/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: enable })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            currentStatus = enable;
+            updateUI(enable);
+            alert(result.message);
+            loadStats();
+        } else {
+            alert('❌ Erro: ' + result.message);
+        }
+    } catch (error) {
+        console.error('Erro ao alternar bot:', error);
+        alert('❌ Erro ao alternar bot');
+    }
+}
+
+// ============================================================
+// ATUALIZAR INTERFACE
+// ============================================================
+function updateUI(enabled) {
+    // Atualizar indicador
+    const indicator = document.querySelector('#bot-status-indicator > div');
+    if (enabled) {
+        indicator.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
+        indicator.innerHTML = '<i class="fas fa-robot" style="color: white;"></i>';
+    } else {
+        indicator.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
+        indicator.innerHTML = '<i class="fas fa-user-tie" style="color: white;"></i>';
+    }
+    
+    // Atualizar texto
+    document.getElementById('bot-status-text').textContent = enabled ? '🤖 IA ATIVA' : '👤 ATENDIMENTO HUMANO';
+    
+    // Atualizar descrição
+    document.getElementById('bot-status-description').textContent = enabled 
+        ? 'A IA está respondendo automaticamente aos clientes'
+        : 'Você está atendendo manualmente. A IA não responderá.';
+    
+    // Alternar botões
+    document.getElementById('btn-desligar').style.display = enabled ? 'inline-flex' : 'none';
+    document.getElementById('btn-ligar').style.display = enabled ? 'none' : 'inline-flex';
+    
+    // Atualizar timestamp
+    document.getElementById('last-update').textContent = new Date().toLocaleString('pt-BR');
+}
+
+// ============================================================
+// CARREGAR ESTATÍSTICAS
+// ============================================================
+async function loadStats() {
+    try {
+        const response = await fetch('/admin/controle/api/status');
+        const result = await response.json();
+        
+        if (result.success) {
+            document.getElementById('stat-ia-ativa').textContent = result.stats.ia_ativa;
+            document.getElementById('stat-humano').textContent = result.stats.atendimento_humano;
+            document.getElementById('stat-desligada').textContent = result.stats.ia_desligada;
+            document.getElementById('stat-total').textContent = result.stats.total;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar estatísticas:', error);
+    }
+}
+
+// ============================================================
+// AUTO-REFRESH
+// ============================================================
+setInterval(loadStats, 10000); // Atualizar a cada 10 segundos
+
+// Carregar ao iniciar
+$(document).ready(function() {
+    loadStats();
+});
+</script>
+{% endblock %}
