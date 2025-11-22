@@ -811,6 +811,59 @@ async def stop_bot(request: Request):
 # API: TRAINING - FIX SAVE FUNCTIONALITY
 # ============================================================
 
+# ============================================================
+# ROTA: SALVAR PERSONALIDADE DA IA
+# ============================================================
+@app.post("/admin/config/personality")
+async def save_personality(
+    request: Request,
+    tone: str = Form(...),
+    goals: str = Form(...),
+    restrictions: str = Form(...)
+):
+    """Salvar configuração de personalidade da IA"""
+    username = get_current_user(request)
+    
+    try:
+        # Buscar ou criar bot
+        bot = await db.bots.find_one({"name": "Mia"})
+        
+        if not bot:
+            bot = {
+                "name": "Mia",
+                "personality": {},
+                "knowledge_base": [],
+                "faqs": [],
+                "is_active": True,
+                "created_at": datetime.now()
+            }
+            await db.bots.insert_one(bot)
+        
+        # Atualizar personalidade
+        await db.bots.update_one(
+            {"name": "Mia"},
+            {
+                "$set": {
+                    "personality": {
+                        "tone": tone,
+                        "goals": goals,
+                        "restrictions": restrictions
+                    },
+                    "updated_at": datetime.now(),
+                    "updated_by": username
+                }
+            }
+        )
+        
+        return RedirectResponse(url="/admin/training", status_code=303)
+        
+    except Exception as e:
+        print(f"❌ Erro ao salvar personalidade: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
 @app.post("/admin/training/knowledge/add")
 async def add_knowledge_item(
     request: Request,
@@ -1388,11 +1441,29 @@ async def admin_training(request: Request):
     """AI Training page"""
     username = get_current_user(request)
     
-    # Get knowledge items
-    knowledge_items = await db.knowledge.find().to_list(length=100)
+    # Buscar dados do bot Mia
+    bot = await db.bots.find_one({"name": "Mia"})
     
-    # Get FAQ items
-    faq_items = await db.faqs.find().to_list(length=100)
+    if not bot:
+        # Criar bot padrão se não existir
+        bot = {
+            "name": "Mia",
+            "personality": {
+                "tone": "friendly",
+                "goals": "Help clients efficiently, provide accurate information about translation services, and convert inquiries into business opportunities.",
+                "restrictions": "Never provide false information, do not make promises without confirmation, always maintain professional ethics."
+            },
+            "knowledge_base": [],
+            "faqs": [],
+            "is_active": True,
+            "created_at": datetime.now()
+        }
+        await db.bots.insert_one(bot)
+    
+    # Extrair dados
+    personality = bot.get("personality", {})
+    knowledge_items = bot.get("knowledge_base", [])
+    faq_items = bot.get("faqs", [])
     
     return templates.TemplateResponse(
         "admin_training.html",
@@ -1400,12 +1471,11 @@ async def admin_training(request: Request):
             "request": request,
             "session": request.session,
             "username": username,
+            "personality": personality,
             "knowledge_items": knowledge_items,
             "faq_items": faq_items
         }
     )
-
-# ============================================================
 # ROTA: CONTROL (COM CONTROLE DE ACESSO)
 # ============================================================
 @app.get("/admin/control")
