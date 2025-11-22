@@ -1,174 +1,220 @@
 """
-Rotas do Painel Admin - Controle de Atendimento IA vs Humano
+admin_controle_routes.py - Rotas para controle do bot (Liga/Desliga)
 """
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from datetime import datetime
-from typing import Optional
 import logging
-from controle_atendimento import (
-    verificar_estado_conversa,
-    forcar_estado,
-    obter_info_controle,
-    listar_atendimentos_ativos,
-    estatisticas_atendimento,
-    ESTADO_IA,
-    ESTADO_HUMANO,
-    ESTADO_DESLIGADA
-)
 
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 templates = Jinja2Templates(directory="templates")
 
-router = APIRouter(prefix="/admin/controle", tags=["Controle Atendimento"])
+router = APIRouter(prefix="/admin/controle", tags=["Admin Control"])
+
+# Importar database do admin_training_routes
+from admin_training_routes import db
 
 # ============================================================
-# PÁGINA: CONTROLE DE ATENDIMENTO
+# FUNÇÕES DE CONTROLE DO BOT
 # ============================================================
 
-@router.get("/", response_class=HTMLResponse)
-async def pagina_controle(request: Request):
-    """Página de controle de atendimento IA vs Humano"""
+async def get_bot_status():
+    """Retorna status atual do bot (ativo/inativo)"""
     try:
-        # Buscar atendimentos ativos
-        atendimentos = await listar_atendimentos_ativos()
+        config = await db.bot_config.find_one({"_id": "global_status"})
+        if config:
+            return {
+                "enabled": config.get("enabled", True),
+                "last_update": config.get("last_update", datetime.now())
+            }
+        return {"enabled": True, "last_update": datetime.now()}
+    except Exception as e:
+        logger.error(f"Erro ao buscar status do bot: {e}")
+        return {"enabled": True, "last_update": datetime.now()}
+
+async def set_bot_status(enabled: bool):
+    """Ativa ou desativa o bot globalmente"""
+    try:
+        await db.bot_config.update_one(
+            {"_id": "global_status"},
+            {
+                "$set": {
+                    "enabled": enabled,
+                    "last_update": datetime.now()
+                }
+            },
+            upsert=True
+        )
+        logger.info(f"✅ Bot {'ATIVADO' if enabled else 'DESATIVADO'}")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar status do bot: {e}")
+        return False
+
+# ============================================================
+# ROTAS DE VISUALIZAÇÃO
+# ============================================================
+
+@router.get("/", response_class=HTMLResponse, name="admin_controle")
+async def controle_page(request: Request):
+    """Página de controle do bot"""
+    try:
+        status = await get_bot_status()
         
-        # Formatar timestamps
-        for atendimento in atendimentos:
-            if atendimento.get("timestamp"):
-                atendimento["timestamp_formatted"] = atendimento["timestamp"].strftime("%d/%m/%Y %H:%M")
-            atendimento["_id"] = str(atendimento["_id"])
+        # Contar conversas por modo
+        try:
+            # Conversas em modo IA ativo
+            ia_ativa = await db.conversas.count_documents({
+                "mode": {"$in": ["ia", None]},
+                "timestamp": {"$gte": datetime.now().replace(hour=0, minute=0, second=0)}
+            })
+            
+            # Conversas em atendimento humano
+            humano = await db.conversas.count_documents({
+                "mode": "human",
+                "timestamp": {"$gte": datetime.now().replace(hour=0, minute=0, second=0)}
+            })
+            
+            # Conversas com IA desligada
+            ia_desligada = await db.conversas.count_documents({
+                "mode": "disabled",
+                "timestamp": {"$gte": datetime.now().replace(hour=0, minute=0, second=0)}
+            })
+        except:
+            ia_ativa = 0
+            humano = 0
+            ia_desligada = 0
         
-        # Estatísticas
-        stats = await estatisticas_atendimento()
-        
-        return templates.TemplateResponse("admin_controle.html", {
-            "request": request,
-            "atendimentos": atendimentos,
-            "stats": stats
+        return templates.TemplateResponse(
+            "admin_controle.html",
+            {
+                "request": request,
+                "bot_enabled": status["enabled"],
+                "last_update": status["last_update"],
+                "stats": {
+                    "ia_ativa": ia_ativa,
+                    "atendimento_humano": humano,
+                    "ia_desligada": ia_desligada,
+                    "total": ia_ativa + humano + ia_desligada
+                }
+            }
+        )
+    except Exception as e:
+        logger.error(f"❌ Erro ao carregar página de controle: {e}")
+        raise
+
+# ============================================================
+# API ENDPOINTS
+# ============================================================
+
+@router.get("/api/status")
+async def api_status():
+    """Retorna status atual do bot"""
+    status = await get_bot_status()
+    
+    # Contar conversas por modo
+    try:
+        ia_ativa = await db.conversas.count_documents({
+            "mode": {"$in": ["ia", None]},
+            "timestamp": {"$gte": datetime.now().replace(hour=0, minute=0, second=0)}
         })
         
-    except Exception as e:
-        logger.error(f"Erro na página de controle: {e}")
-        return templates.TemplateResponse("admin_controle.html", {
-            "request": request,
-            "error": str(e),
-            "atendimentos": [],
-            "stats": {}
+        humano = await db.conversas.count_documents({
+            "mode": "human",
+            "timestamp": {"$gte": datetime.now().replace(hour=0, minute=0, second=0)}
         })
-
-# ============================================================
-# API: VERIFICAR ESTADO
-# ============================================================
-
-@router.get("/api/estado/{phone}")
-async def api_verificar_estado(phone: str):
-    """Verifica estado atual de um contato"""
-    try:
-        info = await obter_info_controle(phone)
-        return JSONResponse(info)
         
+        ia_desligada = await db.conversas.count_documents({
+            "mode": "disabled",
+            "timestamp": {"$gte": datetime.now().replace(hour=0, minute=0, second=0)}
+        })
+    except:
+        ia_ativa = 0
+        humano = 0
+        ia_desligada = 0
+    
+    return {
+        "success": True,
+        "enabled": status["enabled"],
+        "last_update": status["last_update"].isoformat(),
+        "stats": {
+            "ia_ativa": ia_ativa,
+            "atendimento_humano": humano,
+            "ia_desligada": ia_desligada,
+            "total": ia_ativa + humano + ia_desligada
+        }
+    }
+
+@router.post("/api/toggle")
+async def api_toggle(request: Request):
+    """Liga ou desliga o bot globalmente"""
+    try:
+        data = await request.json()
+        enabled = data.get("enabled", True)
+        
+        success = await set_bot_status(enabled)
+        
+        if success:
+            return {
+                "success": True,
+                "enabled": enabled,
+                "message": f"Bot {'ATIVADO' if enabled else 'DESATIVADO'} com sucesso!"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Erro ao atualizar status do bot"
+            }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Erro ao alternar bot: {e}")
+        return {
+            "success": False,
+            "message": str(e)
+        }
 
-# ============================================================
-# API: ALTERNAR PARA IA
-# ============================================================
-
-@router.post("/api/ativar-ia/{phone}")
-async def api_ativar_ia(phone: str):
-    """Ativa IA para um contato"""
+@router.post("/api/transfer/{phone}")
+async def api_transfer(phone: str):
+    """Transfere uma conversa específica para atendimento humano"""
     try:
-        await forcar_estado(phone, ESTADO_IA)
+        await db.conversas.update_many(
+            {"phone": phone},
+            {"$set": {"mode": "human", "transferred_at": datetime.now()}}
+        )
         
-        return JSONResponse({
-            "status": "success",
+        return {
+            "success": True,
             "phone": phone,
-            "novo_estado": ESTADO_IA,
-            "mensagem": "IA ativada com sucesso"
-        })
-        
+            "message": f"Conversa {phone} transferida para atendimento humano"
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Erro ao transferir conversa: {e}")
+        return {
+            "success": False,
+            "message": str(e)
+        }
 
-# ============================================================
-# API: ALTERNAR PARA HUMANO
-# ============================================================
-
-@router.post("/api/ativar-humano/{phone}")
-async def api_ativar_humano(phone: str, atendente: Optional[str] = "Admin"):
-    """Ativa atendimento humano para um contato"""
+@router.post("/api/return/{phone}")
+async def api_return(phone: str):
+    """Retorna uma conversa para atendimento IA"""
     try:
-        await forcar_estado(phone, ESTADO_HUMANO, atendente)
+        await db.conversas.update_many(
+            {"phone": phone},
+            {"$set": {"mode": "ia", "returned_at": datetime.now()}}
+        )
         
-        return JSONResponse({
-            "status": "success",
+        return {
+            "success": True,
             "phone": phone,
-            "novo_estado": ESTADO_HUMANO,
-            "atendente": atendente,
-            "mensagem": "Atendimento humano ativado"
-        })
-        
+            "message": f"Conversa {phone} retornada para IA"
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================================
-# API: DESLIGAR IA
-# ============================================================
-
-@router.post("/api/desligar-ia/{phone}")
-async def api_desligar_ia(phone: str, atendente: Optional[str] = "Admin"):
-    """Desliga IA completamente para um contato"""
-    try:
-        await forcar_estado(phone, ESTADO_DESLIGADA, atendente)
-        
-        return JSONResponse({
-            "status": "success",
-            "phone": phone,
-            "novo_estado": ESTADO_DESLIGADA,
-            "atendente": atendente,
-            "mensagem": "IA desligada"
-        })
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================================
-# API: ESTATÍSTICAS
-# ============================================================
-
-@router.get("/api/stats")
-async def api_estatisticas():
-    """Retorna estatísticas de atendimento"""
-    try:
-        stats = await estatisticas_atendimento()
-        return JSONResponse(stats)
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================================
-# API: LISTAR ATIVOS
-# ============================================================
-
-@router.get("/api/ativos")
-async def api_listar_ativos():
-    """Lista todos os atendimentos não-IA ativos"""
-    try:
-        atendimentos = await listar_atendimentos_ativos()
-        
-        # Formatar para JSON
-        for atendimento in atendimentos:
-            atendimento["_id"] = str(atendimento["_id"])
-            if atendimento.get("timestamp"):
-                atendimento["timestamp"] = atendimento["timestamp"].isoformat()
-        
-        return JSONResponse({
-            "total": len(atendimentos),
-            "atendimentos": atendimentos
-        })
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Erro ao retornar conversa: {e}")
+        return {
+            "success": False,
+            "message": str(e)
+        }
