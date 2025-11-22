@@ -3,11 +3,13 @@
 # ============================================================
 # Bot WhatsApp com suporte a:
 # ✅ Mensagens de texto
-# ✅ Imagens (GPT-4 Vision)
-# ✅ Áudios (Whisper)
-# ✅ PDFs (Extração + Vision)
+# ✅ Imagens (GPT-4 Vision) - Leitura de documentos
+# ✅ Áudios (Whisper) - Transcrição de voz
+# ✅ PDFs (Extração de texto + Vision)
 # ✅ Painel Administrativo Completo
 # ✅ CONTROLE DE ACESSO (Admin vs Legacy)
+# ✅ PIPELINE E LEADS
+# ✅ COMANDOS * e + RESTRITOS AO ATENDENTE
 # ============================================================
 
 from fastapi import FastAPI, Request, HTTPException, Form
@@ -17,7 +19,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 import os
 import httpx
-from openai import OpenAI
+from openai import AsyncOpenAI
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
 import logging
@@ -29,6 +31,12 @@ import base64
 from io import BytesIO
 import PyPDF2
 
+# PDF Support imports
+from PyPDF2 import PdfReader
+from pdf2image import convert_from_bytes
+from PIL import Image
+
+# Importar rotas do admin
 from admin_routes import router as admin_router
 from admin_training_routes import router as training_router
 from admin_controle_routes import router as controle_router
@@ -40,10 +48,17 @@ app = FastAPI(title="WhatsApp AI Platform - Legacy Translations")
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", "your-secret-key-change-in-production"))
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Clientes
+openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 from admin_training_routes import get_database
 db = get_database()
+
+# ============================================================
+# CONFIGURAÇÃO: NÚMERO DO ATENDENTE
+# ============================================================
+ATENDENTE_PHONE = "18572081139"  # APENAS ESTE NÚMERO PODE USAR * E +
 
 # ============================================
 # ACCESS CONTROL
@@ -91,10 +106,9 @@ async def set_bot_status(enabled: bool):
         logger.error(f"Erro ao atualizar status: {e}")
         return False
 
-# ============================================
-# TRANSFERÊNCIA HUMANO
-# ============================================
-ATENDENTE_PHONE = "5518572081139"
+# ============================================================
+# TRANSFERÊNCIA PARA ATENDENTE HUMANO
+# ============================================================
 
 async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
     try:
@@ -115,8 +129,11 @@ async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
 {resumo}
 
 ---
-✅ Para assumir, responda ao cliente.
-🤖 Cliente digitando *+* volta para IA."""
+✅ Para assumir o atendimento, responda ao cliente diretamente.
+🔄 Para retornar à IA, digite: +
+"""
+        
+        # Enviar notificação
         await send_whatsapp_message(ATENDENTE_PHONE, mensagem_atendente)
         logger.info(f"✅ Notificação enviada: {phone}")
         return True
@@ -125,15 +142,25 @@ async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
         return False
 
 async def detectar_solicitacao_humano(message: str) -> bool:
-    palavras_chave = ["atendente", "humano", "pessoa", "falar com alguem", "operador", "atendimento humano"]
-    return any(palavra in message.lower() for palavra in palavras_chave)
+    """Detecta se cliente está pedindo atendente humano"""
+    palavras_chave = [
+        "atendente", "humano", "pessoa", "falar com alguem",
+        "falar com alguém", "operador", "atendimento humano",
+        "quero falar", "preciso falar", "transferir", "atender"
+    ]
+    
+    message_lower = message.lower()
+    return any(palavra in message_lower for palavra in palavras_chave)
 
 async def transferir_para_humano(phone: str, motivo: str):
     try:
         await db.conversas.update_many({"phone": phone}, {"$set": {"mode": "human", "transferred_at": datetime.now(), "transfer_reason": motivo}})
         await notificar_atendente(phone, motivo)
-        await send_whatsapp_message(phone, "✅ Transferido para atendente humano.\n\n💡 Digite + para voltar à IA.")
-        logger.info(f"✅ Transferido: {phone}")
+        
+        # NÃO enviar mensagem ao cliente (transferência invisível)
+        # Cliente não deve saber quando está com IA ou humano
+        
+        logger.info(f"✅ Conversa transferida para humano: {phone} (Motivo: {motivo})")
         return True
     except Exception as e:
         logger.error(f"❌ Erro ao transferir: {e}")
@@ -191,10 +218,28 @@ async def get_bot_training() -> str:
 async def send_whatsapp_message(phone: str, message: str):
     try:
         url = f"https://api.z-api.io/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text"
-        headers = {"Content-Type": "application/json", "Client-Token": ZAPI_CLIENT_TOKEN or ""}
-        payload = {"phone": phone, "message": message}
+        
+        # Headers COM Client-Token
+        headers = {
+            "Content-Type": "application/json",
+            "Client-Token": ZAPI_CLIENT_TOKEN or ""
+        }
+        
+        # Payload
+        payload = {
+            "phone": phone,
+            "message": message
+        }
+        
+        # Logs de debug
+        logger.info(f"📤 Enviando mensagem para {phone}")
+        
+        # Enviar requisição COM headers
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers, json=payload)
+            
+            logger.info(f"📊 Status Z-API: {response.status_code}")
+            
             if response.status_code == 200:
                 logger.info(f"✅ Mensagem enviada: {phone}")
                 return True
@@ -202,13 +247,14 @@ async def send_whatsapp_message(phone: str, message: str):
                 logger.error(f"❌ Erro envio: {response.status_code}")
                 return False
     except Exception as e:
-        logger.error(f"❌ Exceção: {e}")
+        logger.error(f"❌ Exceção ao enviar mensagem: {str(e)}")
         return False
 
 # ============================================
 # BAIXAR MÍDIA
 # ============================================
 async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
+    """Baixa mídia (imagem/áudio/pdf) da Z-API"""
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.get(media_url)
@@ -220,14 +266,129 @@ async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
         logger.error(f"❌ Erro download: {e}")
         return None
 
-# ============================================
-# PROCESSAR IMAGEM
-# ============================================
+# ============================================================
+# FUNÇÃO: PROCESSAR PDF COM GPT-4 VISION
+# ============================================================
+async def process_pdf_with_vision(pdf_url: str, phone: str) -> str:
+    """Process PDF documents using GPT-4 Vision"""
+    try:
+        logger.info(f"📄 Processando PDF: {pdf_url[:100]}")
+        
+        # Download the PDF
+        pdf_bytes = await download_media_from_zapi(pdf_url)
+        
+        if not pdf_bytes:
+            return "⚠️ Não consegui baixar o PDF. Pode enviar novamente?"
+        
+        # Try to extract text first
+        try:
+            pdf_reader = PdfReader(BytesIO(pdf_bytes))
+            extracted_text = ""
+            for page in pdf_reader.pages:
+                extracted_text += page.extract_text() + "\n"
+            
+            if extracted_text.strip():
+                # If text extraction successful, analyze with GPT
+                training_prompt = await get_bot_training()
+                
+                response = await openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": training_prompt},
+                        {"role": "user", "content": f"Analise este documento PDF e forneça orçamento de tradução:\n\n{extracted_text[:3000]}"}
+                    ],
+                    max_tokens=800
+                )
+                
+                analysis = response.choices[0].message.content
+                
+                # Save to database
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": "[PDF ENVIADO - Texto extraído]",
+                    "role": "user",
+                    "timestamp": datetime.now(),
+                    "type": "pdf",
+                    "canal": "WhatsApp"
+                })
+                
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": analysis,
+                    "role": "assistant",
+                    "timestamp": datetime.now(),
+                    "canal": "WhatsApp"
+                })
+                
+                logger.info(f"✅ PDF analisado (texto extraído)")
+                return analysis
+                
+        except Exception as text_error:
+            logger.warning(f"⚠️ Extração de texto falhou, usando Vision: {text_error}")
+        
+        # If text extraction fails, convert to images
+        images = convert_from_bytes(pdf_bytes, first_page=1, last_page=3)
+        
+        # Convert first page to base64 for GPT-4 Vision
+        buffered = BytesIO()
+        images[0].save(buffered, format="JPEG")
+        img_base64 = base64.b64encode(buffered.getvalue()).decode()
+        
+        # Analyze with GPT-4 Vision
+        training_prompt = await get_bot_training()
+        
+        vision_response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": training_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Analise este documento PDF e forneça orçamento de tradução:"},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}}
+                    ]
+                }
+            ],
+            max_tokens=1000
+        )
+        
+        analysis = vision_response.choices[0].message.content
+        
+        # Save to database
+        await db.conversas.insert_one({
+            "phone": phone,
+            "message": "[PDF ENVIADO - Análise visual]",
+            "role": "user",
+            "timestamp": datetime.now(),
+            "type": "pdf",
+            "canal": "WhatsApp"
+        })
+        
+        await db.conversas.insert_one({
+            "phone": phone,
+            "message": analysis,
+            "role": "assistant",
+            "timestamp": datetime.now(),
+            "canal": "WhatsApp"
+        })
+        
+        logger.info(f"✅ PDF analisado (Vision)")
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao processar PDF: {str(e)}")
+        return "⚠️ Desculpe, não consegui analisar o PDF. Pode me enviar como imagem ou me dizer quantas páginas tem?"
+
+# ============================================================
+# FUNÇÃO: PROCESSAR IMAGEM COM GPT-4 VISION
+# ============================================================
 async def process_image_with_vision(image_bytes: bytes, phone: str) -> str:
     try:
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
         training_prompt = await get_bot_training()
-        response = openai_client.chat.completions.create(
+        
+        # Chamar GPT-4 Vision
+        response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": f"{training_prompt}\n\n**ANÁLISE DE IMAGEM:**\n1. Tipo de documento\n2. Idioma\n3. Páginas\n4. Orçamento\n5. Prazo"},
@@ -243,8 +404,8 @@ async def process_image_with_vision(image_bytes: bytes, phone: str) -> str:
         await db.conversas.insert_one({"phone": phone, "message": analysis, "role": "assistant", "timestamp": datetime.now(), "canal": "WhatsApp"})
         return analysis
     except Exception as e:
-        logger.error(f"❌ Vision: {e}")
-        return "Desculpe, erro ao analisar imagem."
+        logger.error(f"❌ Erro no Vision: {str(e)}")
+        return "Desculpe, não consegui analisar a imagem. Pode me dizer quantas páginas tem o documento?"
 
 # ============================================
 # PROCESSAR ÁUDIO
@@ -253,13 +414,20 @@ async def process_audio_with_whisper(audio_bytes: bytes, phone: str) -> Optional
     try:
         temp_file = BytesIO(audio_bytes)
         temp_file.name = "audio.ogg"
-        transcription = openai_client.audio.transcriptions.create(model="whisper-1", file=temp_file, language="pt")
+        
+        # Chamar Whisper
+        transcription = await openai_client.audio.transcriptions.create(
+            model="whisper-1",
+            file=temp_file,
+            language="pt"
+        )
+        
         transcribed_text = transcription.text
         await db.conversas.insert_one({"phone": phone, "message": f"[ÁUDIO] {transcribed_text}", "role": "user", "timestamp": datetime.now(), "canal": "WhatsApp", "type": "audio"})
         logger.info(f"✅ Áudio transcrito")
         return transcribed_text
     except Exception as e:
-        logger.error(f"❌ Whisper: {e}")
+        logger.error(f"❌ Erro no Whisper: {str(e)}")
         return None
 
 # ============================================
@@ -322,15 +490,40 @@ async def process_message_with_ai(phone: str, message: str) -> str:
             return None
         system_prompt = await get_bot_training()
         context = await get_conversation_context(phone)
-        messages = [{"role": "system", "content": system_prompt}] + context + [{"role": "user", "content": message}]
-        response = openai_client.chat.completions.create(model="gpt-4o", messages=messages, max_tokens=500, temperature=0.7)
+        
+        # Montar mensagens
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ] + context + [
+            {"role": "user", "content": message}
+        ]
+        
+        # Chamar GPT-4
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            max_tokens=500,
+            temperature=0.7
+        )
+        
         reply = response.choices[0].message.content
         await db.conversas.insert_one({"phone": phone, "message": message, "role": "user", "timestamp": datetime.now(), "canal": "WhatsApp"})
         await db.conversas.insert_one({"phone": phone, "message": reply, "role": "assistant", "timestamp": datetime.now(), "canal": "WhatsApp"})
         return reply
     except Exception as e:
-        logger.error(f"❌ IA: {e}")
-        return "Desculpe, erro. Pode repetir?"
+        logger.error(f"❌ Erro ao processar com IA: {str(e)}")
+        return "Desculpe, tive um problema. Pode repetir?"
+
+# ============================================================
+# FUNÇÃO AUXILIAR: NORMALIZAR TELEFONE
+# ============================================================
+def normalize_phone(phone: str) -> str:
+    """Normaliza número de telefone para comparação"""
+    return ''.join(filter(str.isdigit, phone))
+
+# ============================================================
+# API: CONTROLE DO BOT
+# ============================================================
 
 # ============================================
 # API ROUTES
@@ -343,21 +536,69 @@ async def api_bot_status():
     return {"enabled": status["enabled"], "last_update": status["last_update"].isoformat(), "stats": {"ia_ativa": len(ia_ativa), "atendimento_humano": len(humano), "ia_desligada": 0 if status["enabled"] else len(ia_ativa), "total": len(ia_ativa) + len(humano)}}
 
 @app.post("/admin/api/bot/toggle")
-async def api_bot_toggle(enabled: bool):
-    success = await set_bot_status(enabled)
-    if success:
-        return {"success": True, "enabled": enabled, "message": f"Bot {'ATIVADO' if enabled else 'DESATIVADO'}"}
-    raise HTTPException(status_code=500, detail="Erro")
+async def api_bot_toggle(request: Request):
+    """Toggle bot status"""
+    username = check_admin_access(request)
+    
+    try:
+        data = await request.json()
+        new_status = data.get("is_active", True)
+        
+        await db.bots.update_one(
+            {"name": "Mia"},
+            {"$set": {"is_active": new_status, "updated_at": datetime.now()}},
+            upsert=True
+        )
+        
+        return {"success": True, "is_active": new_status}
+    except Exception as e:
+        logger.error(f"Error toggling bot: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================
+# NOVAS API ROUTES - DASHBOARD E CONTROLE
+# ============================================================
 
 @app.get("/admin/api/stats")
 async def get_dashboard_stats(request: Request):
     username = check_admin_access(request)
-    return {"receita_total": 150000.00, "novos_leads": 42, "taxa_conversao": 35, "atividades": [{"tipo": "NEW LEAD", "descricao": "Tech Solutions entered", "data": "11/21/2025 2:30 PM", "status": "new"}]}
+    
+    return {
+        "receita_total": 150000.00,
+        "novos_leads": 42,
+        "taxa_conversao": 35,
+        "atividades": [
+            {
+                "tipo": "NEW LEAD",
+                "descricao": "Client 'Tech Solutions' entered the funnel",
+                "data": "11/21/2025 2:30 PM",
+                "status": "new"
+            },
+            {
+                "tipo": "SALE",
+                "descricao": "Sworn Translation - $8,500",
+                "data": "11/21/2025 11:15 AM",
+                "status": "won"
+            }
+        ]
+    }
 
 @app.get("/admin/api/control-stats")
 async def get_control_stats(request: Request):
     username = get_current_user(request)
     return {"ai_active_minutes": 1250, "human_service_minutes": 180, "ai_disabled_minutes": 45, "total_minutes": 1475, "conversations": []}
+
+@app.get("/admin/api/transfers")
+async def get_transfers(request: Request):
+    """Get transfers"""
+    username = check_admin_access(request)
+    return {"success": True, "transfers": []}
+
+@app.get("/admin/api/documents")
+async def get_documents(request: Request):
+    """Get documents"""
+    username = check_admin_access(request)
+    return {"success": True, "documents": []}
 
 @app.post("/admin/bot/start")
 async def start_bot(request: Request):
@@ -371,75 +612,362 @@ async def stop_bot(request: Request):
     success = await set_bot_status(False)
     return {"success": success, "message": "Bot stopped"}
 
-@app.post("/admin/knowledge/add")
-async def add_knowledge(request: Request, category: str = Form(...), title: str = Form(...), content: str = Form(...)):
+# ============================================================
+# API: TRAINING - FIX SAVE FUNCTIONALITY
+# ============================================================
+
+@app.post("/admin/training/knowledge/add")
+async def add_knowledge_item(
+    request: Request,
+    category: str = Form(...),
+    title: str = Form(...),
+    content: str = Form(...)
+):
+    """Add new knowledge item to bot training"""
     username = get_current_user(request)
-    await db.knowledge.insert_one({"category": category, "title": title, "content": content, "created_by": username, "created_at": datetime.now()})
-    return RedirectResponse(url="/admin/training", status_code=303)
+    
+    try:
+        bot = await db.bots.find_one({"name": "Mia"})
+        
+        if not bot:
+            bot = {
+                "name": "Mia",
+                "personality": {"goals": [], "tone": "", "restrictions": []},
+                "knowledge_base": [],
+                "faqs": []
+            }
+            await db.bots.insert_one(bot)
+        
+        new_item = {
+            "category": category,
+            "title": title,
+            "content": content,
+            "created_by": username,
+            "created_at": datetime.now()
+        }
+        
+        await db.bots.update_one(
+            {"name": "Mia"},
+            {"$push": {"knowledge_base": new_item}}
+        )
+        
+        return RedirectResponse(url="/admin/training", status_code=303)
+        
+    except Exception as e:
+        logger.error(f"Error adding knowledge: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/admin/knowledge/delete/{knowledge_id}")
-async def delete_knowledge(knowledge_id: str, request: Request):
-    username = check_admin_access(request)
-    from bson import ObjectId
-    result = await db.knowledge.delete_one({"_id": ObjectId(knowledge_id)})
-    if result.deleted_count == 1:
-        return {"success": True}
-    raise HTTPException(status_code=404, detail="Not found")
-
-@app.post("/admin/faq/add")
-async def add_faq(request: Request, question: str = Form(...), answer: str = Form(...)):
+@app.post("/admin/training/faq/add")
+async def add_faq_item(
+    request: Request,
+    question: str = Form(...),
+    answer: str = Form(...)
+):
+    """Add new FAQ item to bot training"""
     username = get_current_user(request)
-    await db.faqs.insert_one({"question": question, "answer": answer, "created_by": username, "created_at": datetime.now()})
-    return RedirectResponse(url="/admin/training", status_code=303)
+    
+    try:
+        bot = await db.bots.find_one({"name": "Mia"})
+        
+        if not bot:
+            bot = {
+                "name": "Mia",
+                "personality": {"goals": [], "tone": "", "restrictions": []},
+                "knowledge_base": [],
+                "faqs": []
+            }
+            await db.bots.insert_one(bot)
+        
+        new_item = {
+            "question": question,
+            "answer": answer,
+            "created_by": username,
+            "created_at": datetime.now()
+        }
+        
+        await db.bots.update_one(
+            {"name": "Mia"},
+            {"$push": {"faqs": new_item}}
+        )
+        
+        return RedirectResponse(url="/admin/training", status_code=303)
+        
+    except Exception as e:
+        logger.error(f"Error adding FAQ: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/admin/faq/delete/{faq_id}")
-async def delete_faq(faq_id: str, request: Request):
+@app.delete("/admin/training/knowledge/delete/{index}")
+async def delete_knowledge_item(index: int, request: Request):
+    """Delete knowledge item by index"""
     username = check_admin_access(request)
-    from bson import ObjectId
-    result = await db.faqs.delete_one({"_id": ObjectId(faq_id)})
-    if result.deleted_count == 1:
-        return {"success": True}
-    raise HTTPException(status_code=404, detail="Not found")
+    
+    try:
+        bot = await db.bots.find_one({"name": "Mia"})
+        
+        if bot and "knowledge_base" in bot:
+            knowledge_base = bot["knowledge_base"]
+            
+            if 0 <= index < len(knowledge_base):
+                knowledge_base.pop(index)
+                
+                await db.bots.update_one(
+                    {"name": "Mia"},
+                    {"$set": {"knowledge_base": knowledge_base}}
+                )
+                
+                return {"success": True}
+        
+        raise HTTPException(status_code=404, detail="Item not found")
+        
+    except Exception as e:
+        logger.error(f"Error deleting knowledge: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/admin/training/faq/delete/{index}")
+async def delete_faq_item(index: int, request: Request):
+    """Delete FAQ item by index"""
+    username = check_admin_access(request)
+    
+    try:
+        bot = await db.bots.find_one({"name": "Mia"})
+        
+        if bot and "faqs" in bot:
+            faqs = bot["faqs"]
+            
+            if 0 <= index < len(faqs):
+                faqs.pop(index)
+                
+                await db.bots.update_one(
+                    {"name": "Mia"},
+                    {"$set": {"faqs": faqs}}
+                )
+                
+                return {"success": True}
+        
+        raise HTTPException(status_code=404, detail="Item not found")
+        
+    except Exception as e:
+        logger.error(f"Error deleting FAQ: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================
+# ROTA: PIPELINE (COM CONTROLE DE ACESSO)
+# ============================================================
+@app.get("/admin/pipeline")
+async def admin_pipeline(request: Request):
+    """Sales Pipeline page"""
+    username = get_current_user(request)
+    
+    return templates.TemplateResponse(
+        "admin_pipeline.html",
+        {
+            "request": request,
+            "session": request.session,
+            "username": username
+        }
+    )
+
+# ============================================================
+# ROTA: LEADS (COM CONTROLE DE ACESSO)
+# ============================================================
+@app.get("/admin/leads")
+async def admin_leads(request: Request):
+    """Leads Management page"""
+    username = get_current_user(request)
+    
+    return templates.TemplateResponse(
+        "admin_leads.html",
+        {
+            "request": request,
+            "session": request.session,
+            "username": username
+        }
+    )
+
+# ============================================================
+# ROTA: TRANSFERS (NOVA)
+# ============================================================
+@app.get("/admin/transfers")
+async def admin_transfers(request: Request):
+    """Transfers page - View conversation transfers"""
+    username = get_current_user(request)
+    
+    # Get recent transfers
+    transfers = await db.conversas.find(
+        {"mode": "human"}
+    ).sort("transferred_at", -1).limit(20).to_list(length=20)
+    
+    return templates.TemplateResponse(
+        "admin_transfers.html",
+        {
+            "request": request,
+            "session": request.session,
+            "username": username,
+            "transfers": transfers
+        }
+    )
+
+# ============================================================
+# ROTA: DOCUMENTS (NOVA)
+# ============================================================
+@app.get("/admin/documents")
+async def admin_documents(request: Request):
+    """Documents page - View uploaded documents"""
+    username = get_current_user(request)
+    
+    # Get recent documents (PDFs, images)
+    documents = await db.conversas.find(
+        {"type": {"$in": ["pdf", "image", "document"]}}
+    ).sort("timestamp", -1).limit(50).to_list(length=50)
+    
+    return templates.TemplateResponse(
+        "admin_documents.html",
+        {
+            "request": request,
+            "session": request.session,
+            "username": username,
+            "documents": documents
+        }
+    )
+
+# ============================================================
+# ROTA: CONFIGURATIONS (NOVA)
+# ============================================================
+@app.get("/admin/configurations")
+async def admin_configurations(request: Request):
+    """Configurations page"""
+    username = check_admin_access(request)
+    
+    bot = await db.bots.find_one({"name": "Mia"})
+    
+    config = {
+        "openai_status": "Connected",
+        "zapi_status": "Connected",
+        "mongodb_status": "Connected",
+        "bot_active": bot.get("is_active", True) if bot else True
+    }
+    
+    return templates.TemplateResponse(
+        "admin_config.html",
+        {
+            "request": request,
+            "username": username,
+            "config": config
+        }
+    )
+
+# ============================================================
+# WEBHOOK: WHATSAPP (Z-API) - COMANDOS RESTRITOS
+# ============================================================
 
 # ============================================
 # WEBHOOK
 # ============================================
 @app.post("/webhook/whatsapp")
 async def webhook_whatsapp(request: Request):
+    """Webhook principal para receber mensagens do WhatsApp"""
     try:
         data = await request.json()
         bot_status = await get_bot_status()
         phone = data.get("phone", "")
+        
+        # Normalizar telefones para comparação
+        phone_normalized = normalize_phone(phone)
+        atendente_normalized = normalize_phone(ATENDENTE_PHONE)
+        
+        # Verificar se é o ATENDENTE
+        is_atendente = phone_normalized == atendente_normalized
+        
+        # Verificar se conversa está em modo humano
         conversa = await db.conversas.find_one({"phone": phone}, sort=[("timestamp", -1)])
         modo_humano = conversa and conversa.get("mode") == "human"
         
-        if not bot_status["enabled"] or modo_humano:
-            await db.conversas.insert_one({"phone": phone, "message": data.get("text", {}).get("message", "[MSG]"), "timestamp": datetime.now(), "role": "user", "type": "text", "mode": "human" if modo_humano else "disabled", "canal": "WhatsApp"})
-            return {"status": "received", "processed": False}
+        # Se bot desligado OU conversa em modo humano, não processar (EXCETO ATENDENTE)
+        if not is_atendente and (not bot_status["enabled"] or modo_humano):
+            logger.info(f"⏸️ Bot {'desligado' if not bot_status['enabled'] else 'em modo humano para ' + phone}")
+            
+            # Salvar mensagem mas não responder
+            await db.conversas.insert_one({
+                "phone": phone,
+                "message": data.get("text", {}).get("message", "[MENSAGEM]"),
+                "timestamp": datetime.now(),
+                "role": "user",
+                "type": "text",
+                "mode": "human" if modo_humano else "disabled",
+                "canal": "WhatsApp"
+            })
+            
+            return {"status": "received", "processed": False, "reason": "bot_disabled_or_human_mode"}
         
+        # ============================================
+        # PROCESSAR COMANDOS ESPECIAIS (APENAS ATENDENTE)
+        # ============================================
         message_text = ""
         if "text" in data and "message" in data["text"]:
             message_text = data["text"]["message"].strip()
         
-        if message_text == "*":
-            await transferir_para_humano(phone, "Cliente digitou *")
-            return {"status": "transferred"}
-        if message_text == "+":
-            await db.conversas.update_many({"phone": phone}, {"$set": {"mode": "ia", "returned_at": datetime.now()}, "$unset": {"transfer_reason": "", "transferred_at": ""}})
-            await send_whatsapp_message(phone, "✅ Voltou para IA. Como posso ajudar?")
-            return {"status": "returned_to_ia"}
-        if message_text == "##":
-            await db.conversas.update_many({"phone": phone}, {"$set": {"mode": "disabled", "disabled_at": datetime.now()}})
-            await send_whatsapp_message(phone, "⏸️ IA desligada. Digite ++ para religar.")
-            return {"status": "ia_disabled"}
-        if message_text == "++":
-            await db.conversas.update_many({"phone": phone}, {"$set": {"mode": "ia", "enabled_at": datetime.now()}})
-            await send_whatsapp_message(phone, "✅ IA religada!")
-            return {"status": "ia_enabled"}
+        # ✅ APENAS ATENDENTE pode usar * e +
+        if is_atendente:
+            # Comando: * (Transferir para humano)
+            if message_text == "*":
+                # Atendente marcando que VAI assumir atendimento
+                logger.info(f"✅ Atendente assumiu controle")
+                return {"status": "atendente_command_received"}
+            
+            # Comando: + (Voltar para IA)
+            if message_text.startswith("+"):
+                # Extrair número do cliente (formato: "+5511999999999")
+                parts = message_text.split()
+                if len(parts) >= 2:
+                    cliente_phone = parts[1]
+                    
+                    await db.conversas.update_many(
+                        {"phone": cliente_phone},
+                        {
+                            "$set": {
+                                "mode": "ia",
+                                "returned_at": datetime.now()
+                            },
+                            "$unset": {
+                                "transfer_reason": "",
+                                "transferred_at": ""
+                            }
+                        }
+                    )
+                    
+                    # NÃO avisar cliente sobre retorno à IA (transição invisível)
+                    pass
+                    
+                    await send_whatsapp_message(
+                        ATENDENTE_PHONE,
+                        f"✅ Cliente {cliente_phone} retornou à IA."
+                    )
+                    
+                    logger.info(f"✅ Cliente {cliente_phone} voltou para IA (comando do atendente)")
+                    return {"status": "returned_to_ia"}
+                else:
+                    await send_whatsapp_message(
+                        ATENDENTE_PHONE,
+                        "⚠️ Formato incorreto. Use: + 5511999999999"
+                    )
+                    return {"status": "invalid_format"}
+
+        # ============================================
+        # CONTROLE DE ATIVAÇÃO DA IA
+        # ============================================
+        ia_enabled = os.getenv("IA_ENABLED", "true").lower() == "true"
+        em_manutencao = os.getenv("MANUTENCAO", "false").lower() == "true"
         
+        # Extrair dados básicos
         is_group = data.get("isGroup", False)
+        
+        # Ignorar mensagens de grupos
         if is_group:
-            return JSONResponse({"status": "ignored", "reason": "group"})
+            logger.info(f"🚫 Mensagem de grupo ignorada")
+            return JSONResponse({"status": "ignored", "reason": "group message"})
+        
+        # Detecção de tipo de mensagem
+        message_type = "text"
         
         message_type = "text"
         if "image" in data and data.get("image"):
@@ -454,6 +982,25 @@ async def webhook_whatsapp(request: Request):
         if not phone:
             return JSONResponse({"status": "ignored", "reason": "no phone"})
         
+        # Se em manutenção, responder e sair
+        if em_manutencao:
+            logger.info(f"🔧 Modo manutenção ativo - mensagem de {phone}")
+            if message_type == "text":
+                mensagem_manutencao = """🔧 *Sistema em Manutenção*
+
+Olá! Estamos melhorando nosso atendimento.
+Em breve voltaremos! 😊"""
+                await send_whatsapp_message(phone, mensagem_manutencao)
+            return JSONResponse({"status": "maintenance"})
+        
+        # Se IA desabilitada, apenas logar
+        if not ia_enabled:
+            logger.info(f"⏸️ IA desabilitada - mensagem de {phone} ignorada")
+            return JSONResponse({"status": "ia_disabled"})
+        
+        # ============================================
+        # PROCESSAR MENSAGEM DE TEXTO
+        # ============================================
         if message_type == "text":
             text = data.get("text", {}).get("message", "")
             if not text:
@@ -463,53 +1010,80 @@ async def webhook_whatsapp(request: Request):
                 await send_whatsapp_message(phone, reply)
             return JSONResponse({"status": "processed", "type": "text"})
         
+        # ============================================
+        # PROCESSAR IMAGEM
+        # ============================================
         elif message_type == "image":
             image_url = data.get("image", {}).get("imageUrl", "")
+            
             if not image_url:
-                return JSONResponse({"status": "ignored"})
+                return JSONResponse({"status": "ignored", "reason": "no image url"})
+            
+            logger.info(f"🖼️ Imagem de {phone}: {image_url[:50]}")
+            
             image_bytes = await download_media_from_zapi(image_url)
             if not image_bytes:
-                await send_whatsapp_message(phone, "Erro ao baixar imagem. Tente novamente.")
-                return JSONResponse({"status": "error"})
+                await send_whatsapp_message(phone, "Desculpe, não consegui baixar a imagem. Pode tentar enviar novamente?")
+                return JSONResponse({"status": "error", "reason": "download failed"})
+            
             analysis = await process_image_with_vision(image_bytes, phone)
             await send_whatsapp_message(phone, analysis)
             return JSONResponse({"status": "processed", "type": "image"})
         
+        # ============================================
+        # PROCESSAR ÁUDIO
+        # ============================================
         elif message_type == "audio":
             audio_url = data.get("audio", {}).get("audioUrl", "")
             if not audio_url:
-                return JSONResponse({"status": "ignored"})
+                return JSONResponse({"status": "ignored", "reason": "no audio url"})
+            
+            logger.info(f"🎤 Áudio de {phone}: {audio_url[:50]}")
+            
             audio_bytes = await download_media_from_zapi(audio_url)
             if not audio_bytes:
-                await send_whatsapp_message(phone, "Erro ao baixar áudio.")
-                return JSONResponse({"status": "error"})
+                await send_whatsapp_message(phone, "Desculpe, não consegui baixar o áudio. Pode tentar enviar novamente?")
+                return JSONResponse({"status": "error", "reason": "download failed"})
+            
             transcription = await process_audio_with_whisper(audio_bytes, phone)
             if not transcription:
-                await send_whatsapp_message(phone, "Não entendi o áudio.")
-                return JSONResponse({"status": "error"})
+                await send_whatsapp_message(phone, "Desculpe, não consegui entender o áudio. Pode escrever ou enviar novamente?")
+                return JSONResponse({"status": "error", "reason": "transcription failed"})
+            
+            logger.info(f"📝 Transcrição: {transcription}")
+            
             reply = await process_message_with_ai(phone, transcription)
+            
             if reply:
                 await send_whatsapp_message(phone, reply)
             return JSONResponse({"status": "processed", "type": "audio"})
         
+        # ============================================
+        # PROCESSAR DOCUMENTO (PDF)
+        # ============================================
         elif message_type == "document":
-            document_url = data.get("document", {}).get("documentUrl", "")
-            mime_type = data.get("document", {}).get("mimeType", "")
-            filename = data.get("document", {}).get("fileName", "")
-            if not document_url:
-                return JSONResponse({"status": "ignored"})
-            if "pdf" not in mime_type.lower() and not filename.lower().endswith('.pdf'):
-                await send_whatsapp_message(phone, "Só aceito PDF. Envie em PDF ou fotos.")
-                return JSONResponse({"status": "ignored"})
-            pdf_bytes = await download_media_from_zapi(document_url)
-            if not pdf_bytes:
-                await send_whatsapp_message(phone, "Erro ao baixar PDF.")
-                return JSONResponse({"status": "error"})
-            analysis = await process_pdf_with_vision(pdf_bytes, phone)
-            await send_whatsapp_message(phone, analysis)
-            return JSONResponse({"status": "processed", "type": "pdf"})
+            document_data = data.get("document", {})
+            pdf_url = document_data.get("url") or document_data.get("link") or document_data.get("documentUrl")
+            mime_type = document_data.get("mimeType", "")
+            file_name = document_data.get("fileName", "")
+            
+            logger.info(f"📎 Documento recebido: {file_name} ({mime_type})")
+            
+            if "pdf" in mime_type.lower() or file_name.lower().endswith(".pdf"):
+                if not pdf_url:
+                    await send_whatsapp_message(phone, "⚠️ Não consegui acessar o PDF. Pode enviar novamente?")
+                    return JSONResponse({"status": "error", "reason": "no pdf url"})
+                
+                analysis = await process_pdf_with_vision(pdf_url, phone)
+                await send_whatsapp_message(phone, analysis)
+                
+                return JSONResponse({"status": "processed", "type": "pdf"})
+            else:
+                await send_whatsapp_message(phone, "⚠️ Por favor, envie apenas arquivos PDF, imagens ou áudios.")
+                return JSONResponse({"status": "unsupported_document"})
         
-        return JSONResponse({"status": "ignored"})
+        return JSONResponse({"status": "unknown_type"})
+        
     except Exception as e:
         logger.error(f"❌ Webhook: {e}")
         return JSONResponse({"status": "error"}, status_code=500)
@@ -518,9 +1092,21 @@ async def webhook_whatsapp(request: Request):
 # ROTAS
 # ============================================
 @app.get("/", response_class=HTMLResponse)
+async def show_root(request: Request):
+    """Redirect root to login"""
+    return RedirectResponse(url="/login")
+
+# ============================================================
+# ROTA: LOGIN PAGE (GET)
+# ============================================================
+@app.get("/login", response_class=HTMLResponse)
 async def show_login_page(request: Request):
+    """Show login page"""
     return templates.TemplateResponse("login.html", {"request": request})
 
+# ============================================================
+# ROTA: PROCESSAMENTO DO LOGIN (POST)
+# ============================================================
 @app.post("/login")
 async def handle_login(request: Request, username: str = Form(...), password: str = Form(...)):
     valid_credentials = {"admin": "admin123", "legacy": "legacy2025"}
@@ -537,9 +1123,24 @@ async def logout(request: Request):
 
 @app.get("/admin/dashboard")
 async def admin_dashboard(request: Request):
+    """Admin Dashboard - Shows different content based on user role"""
     username = get_current_user(request)
-    knowledge_count = await db.knowledge.count_documents({})
-    return templates.TemplateResponse("admin_dashboard.html", {"request": request, "session": request.session, "username": username, "knowledge_count": knowledge_count})
+    user_role = request.session.get('user_role', 'legacy')
+    
+    # Get knowledge count
+    bot = await db.bots.find_one({"name": "Mia"})
+    knowledge_count = len(bot.get("knowledge_base", [])) if bot else 0
+    
+    return templates.TemplateResponse(
+        "admin_dashboard.html",
+        {
+            "request": request,
+            "session": request.session,
+            "username": username,
+            "user_role": user_role,
+            "knowledge_count": knowledge_count
+        }
+    )
 
 @app.get("/admin/training")
 async def admin_training(request: Request):

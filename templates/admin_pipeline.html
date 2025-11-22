@@ -1,174 +1,540 @@
-{% block extra_css %}
-<style>
-    /* Fix stats grid */
-    .stats-grid {
-        display: grid !important;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
-        gap: 20px !important;
-        margin-bottom: 30px !important;
-        width: 100% !important;
-    }
-    
-    .stat-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        padding: 25px !important;
-        border-radius: 12px !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important;
-        position: relative !important;
-        overflow: hidden !important;
-        min-height: 140px !important;
-    }
-    
-    .stat-card h3 {
-        color: white !important;
-        font-size: 0.95rem !important;
-        margin-bottom: 10px !important;
-        opacity: 0.9 !important;
-    }
-    
-    .stat-value {
-        font-size: 2.5rem !important;
-        font-weight: bold !important;
-        color: white !important;
-        margin: 10px 0 !important;
-    }
-    
-    .stat-icon {
-        position: absolute !important;
-        right: 20px !important;
-        bottom: 20px !important;
-        font-size: 3rem !important;
-        opacity: 0.2 !important;
-    }
-    
-    /* Kanban Board */
-    .kanban-board {
-        display: flex !important;
-        gap: 20px !important;
-        overflow-x: auto !important;
-        padding: 20px 10px !important;
-        min-height: 500px !important;
-        background-color: #f8f9fa !important;
-        border-radius: 12px !important;
-    }
-    
-    .kanban-column {
-        flex: 0 0 320px !important;
-        background-color: white !important;
-        border-radius: 12px !important;
-        padding: 20px !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-        min-width: 320px !important;
-    }
-    
-    .kanban-column-header {
-        padding-bottom: 15px !important;
-        margin-bottom: 20px !important;
-        border-bottom: 3px solid #3b82f6 !important;
-    }
-    
-    .kanban-column-header h3 {
-        font-size: 1.1rem !important;
-        font-weight: 600 !important;
-        color: #1e3a8a !important;
-        margin-bottom: 5px !important;
-    }
-    
-    .etapa-total {
-        font-size: 0.85rem !important;
-        color: #6b7280 !important;
-        font-weight: 500 !important;
-    }
-    
-    .kanban-cards {
-        min-height: 300px !important;
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 15px !important;
-    }
-    
-    .kanban-card {
-        background: #ffffff !important;
-        border-radius: 10px !important;
-        padding: 18px !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important;
-        border-left: 5px solid #3b82f6 !important;
-        cursor: grab !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    .kanban-card:active {
-        cursor: grabbing !important;
-    }
-    
-    .kanban-card:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-        transform: translateY(-3px) !important;
-    }
-    
-    .kanban-card h4 {
-        font-size: 1rem !important;
-        font-weight: 600 !important;
-        color: #1f2937 !important;
-        margin-bottom: 10px !important;
-    }
-    
-    .card-valor {
-        font-size: 1.3rem !important;
-        font-weight: 700 !important;
-        color: #10b981 !important;
-        margin: 8px 0 !important;
-    }
-    
-    .card-info {
-        font-size: 0.85rem !important;
-        color: #6b7280 !important;
-        margin-top: 8px !important;
-    }
-    
-    /* Card improvements */
-    .card {
-        border: none !important;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08) !important;
-        border-radius: 12px !important;
-        margin-bottom: 25px !important;
-    }
-    
-    .card-header {
-        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%) !important;
-        color: white !important;
-        padding: 20px !important;
-        border-radius: 12px 12px 0 0 !important;
-        border: none !important;
-    }
-    
-    .card-header h2 {
-        color: white !important;
-        margin: 0 0 5px 0 !important;
-        font-size: 1.4rem !important;
-    }
-    
-    .card-header p {
-        color: rgba(255,255,255,0.9) !important;
-        margin: 0 !important;
-        font-size: 0.9rem !important;
-    }
-    
-    .card-body {
-        padding: 25px !important;
-    }
-    
-    /* Responsive */
-    @media (max-width: 768px) {
-        .stats-grid {
-            grid-template-columns: 1fr !important;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Pipeline - MIA Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        
-        .kanban-column {
-            flex: 0 0 280px !important;
-            min-width: 280px !important;
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
         }
-    }
-</style>
-{% endblock %}
+
+        .sidebar {
+            width: 260px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 30px;
+            text-align: center;
+            padding: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .menu-section {
+            margin-bottom: 25px;
+        }
+
+        .menu-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            padding-left: 10px;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            color: #555;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-bottom: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .menu-item:hover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .menu-item.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .menu-item i {
+            margin-right: 10px;
+            font-size: 18px;
+        }
+
+        .logout-btn {
+            margin-top: auto;
+            padding: 12px 15px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: #ff5252;
+            transform: translateY(-2px);
+        }
+
+        .main-content {
+            margin-left: 260px;
+            flex: 1;
+            padding: 30px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            color: #777;
+            font-size: 14px;
+        }
+
+        .pipeline-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .pipeline-stage {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .stage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .stage-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .stage-count {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .deal-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .deal-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+        }
+
+        .deal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .deal-name {
+            font-weight: 600;
+            color: #333;
+            font-size: 15px;
+        }
+
+        .deal-value {
+            color: #27ae60;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .deal-info {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .deal-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .action-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .action-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.4);
+        }
+
+        .action-btn.delete {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+        }
+
+        .charts-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .add-deal-btn {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .add-deal-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(46, 204, 113, 0.4);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 80px;
+            }
+
+            .main-content {
+                margin-left: 80px;
+            }
+
+            .menu-item span {
+                display: none;
+            }
+
+            .logo {
+                font-size: 18px;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div class="logo">🤖 MIA Admin</div>
+
+        <div class="menu-section">
+            <div class="menu-title">MAIN MENU</div>
+            <a href="/admin/dashboard" class="menu-item">
+                <i class="fas fa-home"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="/admin/training" class="menu-item">
+                <i class="fas fa-brain"></i>
+                <span>AI Training</span>
+            </a>
+            <a href="/admin/pipeline" class="menu-item active">
+                <i class="fas fa-chart-line"></i>
+                <span>Sales Pipeline</span>
+            </a>
+            <a href="/admin/leads" class="menu-item">
+                <i class="fas fa-users"></i>
+                <span>Lead Management</span>
+            </a>
+        </div>
+
+        <div class="menu-section">
+            <div class="menu-title">OPERATIONS</div>
+            <a href="/admin/transfers" class="menu-item">
+                <i class="fas fa-exchange-alt"></i>
+                <span>Transfers</span>
+            </a>
+            <a href="/admin/documents" class="menu-item">
+                <i class="fas fa-file-alt"></i>
+                <span>Documents</span>
+            </a>
+            <a href="/admin/control" class="menu-item">
+                <i class="fas fa-toggle-on"></i>
+                <span>AI/Human Control</span>
+            </a>
+        </div>
+
+        <div class="menu-section">
+            <div class="menu-title">SETTINGS</div>
+            <a href="/admin/configurations" class="menu-item">
+                <i class="fas fa-cog"></i>
+                <span>Configurations</span>
+            </a>
+        </div>
+
+        <button class="logout-btn" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+        <div class="header">
+            <h1>📊 Sales Pipeline</h1>
+            <p>Manage and track all your sales opportunities</p>
+        </div>
+
+        <button class="add-deal-btn" onclick="addDeal()">
+            <i class="fas fa-plus"></i> Add New Deal
+        </button>
+
+        <!-- CHARTS SECTION -->
+        <div class="charts-section">
+            <div class="chart-card">
+                <div class="chart-title">💰 Revenue by Stage</div>
+                <canvas id="revenueChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">📈 Conversion Funnel</div>
+                <canvas id="conversionChart"></canvas>
+            </div>
+        </div>
+
+        <!-- PIPELINE STAGES -->
+        <div class="pipeline-container" id="pipelineContainer">
+            <!-- Dynamic content loaded via JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        // Sample data (will be replaced by MongoDB data)
+        let pipelineData = {
+            "Prospecting": [
+                {id: 1, name: "ABC Corp", contact: "John Smith", phone: "11999999991", value: 5000, notes: "Initial contact made"}
+            ],
+            "Qualification": [
+                {id: 2, name: "XYZ Ltd", contact: "Mary Johnson", phone: "11999999992", value: 12000, notes: "Budget confirmed"}
+            ],
+            "Proposal": [
+                {id: 3, name: "Tech Solutions", contact: "Robert Brown", phone: "11999999993", value: 25000, notes: "Proposal sent"}
+            ],
+            "Negotiation": [
+                {id: 4, name: "Global Inc", contact: "Sarah Davis", phone: "11999999994", value: 50000, notes: "Negotiating terms"}
+            ],
+            "Closed Won": [
+                {id: 5, name: "Mega Corp", contact: "Michael Wilson", phone: "11999999995", value: 75000, notes: "Deal closed successfully"}
+            ]
+        };
+
+        // Load pipeline
+        function loadPipeline() {
+            const container = document.getElementById('pipelineContainer');
+            container.innerHTML = '';
+
+            Object.keys(pipelineData).forEach(stage => {
+                const deals = pipelineData[stage];
+                const stageDiv = document.createElement('div');
+                stageDiv.className = 'pipeline-stage';
+                
+                let dealsHTML = deals.map(deal => `
+                    <div class="deal-card">
+                        <div class="deal-header">
+                            <div class="deal-name">${deal.name}</div>
+                            <div class="deal-value">R$ ${deal.value.toLocaleString()}</div>
+                        </div>
+                        <div class="deal-info">👤 ${deal.contact}</div>
+                        <div class="deal-info">📱 ${deal.phone}</div>
+                        <div class="deal-info">📝 ${deal.notes}</div>
+                        <div class="deal-actions">
+                            <button class="action-btn" onclick="editDeal(${deal.id})">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="action-btn delete" onclick="deleteDeal(${deal.id})">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+
+                stageDiv.innerHTML = `
+                    <div class="stage-header">
+                        <div class="stage-title">${stage}</div>
+                        <div class="stage-count">${deals.length}</div>
+                    </div>
+                    ${dealsHTML}
+                `;
+                
+                container.appendChild(stageDiv);
+            });
+
+            updateCharts();
+        }
+
+        // Update charts
+        function updateCharts() {
+            // Revenue by Stage Chart
+            const stages = Object.keys(pipelineData);
+            const revenues = stages.map(stage => 
+                pipelineData[stage].reduce((sum, deal) => sum + deal.value, 0)
+            );
+
+            new Chart(document.getElementById('revenueChart'), {
+                type: 'bar',
+                data: {
+                    labels: stages,
+                    datasets: [{
+                        label: 'Revenue (R$)',
+                        data: revenues,
+                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return 'R$ ' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Conversion Funnel Chart
+            const counts = stages.map(stage => pipelineData[stage].length);
+
+            new Chart(document.getElementById('conversionChart'), {
+                type: 'line',
+                data: {
+                    labels: stages,
+                    datasets: [{
+                        label: 'Number of Deals',
+                        data: counts,
+                        fill: true,
+                        backgroundColor: 'rgba(118, 75, 162, 0.2)',
+                        borderColor: 'rgba(118, 75, 162, 1)',
+                        borderWidth: 3,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // CRUD Functions
+        function addDeal() {
+            alert('Add Deal feature - Will be connected to MongoDB');
+            // In production: open modal or redirect to form
+        }
+
+        function editDeal(id) {
+            alert(`Edit deal ${id} - Will be connected to MongoDB`);
+            // In production: open modal with deal data
+        }
+
+        function deleteDeal(id) {
+            if (confirm('Delete this deal?')) {
+                alert(`Deleting deal ${id} - Will be connected to MongoDB`);
+                // In production: API call to delete
+            }
+        }
+
+        function logout() {
+            window.location.href = '/logout';
+        }
+
+        // Initialize
+        loadPipeline();
+    </script>
+</body>
+</html>

@@ -1,193 +1,429 @@
 {% extends "admin_base.html" %}
 
-{% block title %}Dashboard - Painel Administrativo{% endblock %}
-
-{% block page_title %}Dashboard{% endblock %}
-{% block page_subtitle %}Visão geral e indicadores de performance do sistema.{% endblock %}
+{% block title %}Dashboard{% endblock %}
 
 {% block content %}
-
-<!-- 1. Cards de Métricas Principais (KPIs) -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <h3><i class="fas fa-dollar-sign"></i> Receita Total</h3>
-        <div class="stat-value" id="kpi-receita-total">R$ 0,00</div>
-        <div class="stat-icon"><i class="fas fa-wallet"></i></div>
-    </div>
-    <div class="stat-card">
-        <h3><i class="fas fa-users"></i> Novos Leads</h3>
-        <div class="stat-value" id="kpi-novos-leads">0</div>
-        <div class="stat-icon"><i class="fas fa-user-plus"></i></div>
-    </div>
-    <div class="stat-card">
-        <h3><i class="fas fa-chart-line"></i> Taxa de Conversão</h3>
-        <div class="stat-value" id="kpi-taxa-conversao">0%</div>
-        <div class="stat-icon"><i class="fas fa-percentage"></i></div>
-    </div>
-    <div class="stat-card">
-        <h3><i class="fas fa-brain"></i> Conhecimentos na IA</h3>
-        <div class="stat-value" id="kpi-conhecimentos">{{ knowledge_count }}</div>
-        <div class="stat-icon"><i class="fas fa-book"></i></div>
-    </div>
-</div>
-
-<!-- 2. Gráficos Principais -->
-<div class="row">
-    <div class="col-lg-7">
-        <div class="card">
-            <div class="card-header">
-                <h2>Relatório de Vendas Mensal</h2>
-                <p>Evolução da receita nos últimos meses.</p>
-            </div>
-            <div class="card-body">
-                <div class="chart-container" style="height: 300px;">
-                    <canvas id="salesChart"></canvas>
+<div class="container-fluid">
+    <h2 class="mb-4"><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    
+    <!-- KPI CARDS -->
+    <div class="row mb-4">
+        <!-- Total Revenue -->
+        <div class="col-md-3">
+            <div class="card stats-card bg-gradient-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-white-50 mb-1">Total Revenue</p>
+                            <h3 class="text-white mb-0" id="receita-total">$0.00</h3>
+                        </div>
+                        <div class="stats-icon">
+                            <i class="bi bi-currency-dollar"></i>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-    <div class="col-lg-5">
-        <div class="card">
-            <div class="card-header">
-                <h2>Divisão de Receita</h2>
-                <p>Receita por categoria de serviço.</p>
-            </div>
-            <div class="card-body">
-                <div class="chart-container" style="height: 300px;">
-                    <canvas id="revenueBreakdownChart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 3. Tabela de Atividades Recentes (Exemplo) -->
-<div class="card mt-4">
-    <div class="card-header">
-        <h2>Atividades Recentes</h2>
-        <p>Últimas ações e eventos no sistema.</p>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Tipo</th>
-                        <th>Descrição</th>
-                        <th>Data</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody id="recentActivitiesBody">
-                    <!-- Linhas serão preenchidas via JS -->
-                    <tr><td colspan="4" class="text-center p-4">Carregando atividades...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-{% endblock %}
-
-{% block extra_js %}
-<!-- Chart.js já está no seu admin_base.html, então podemos usá-lo aqui -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Cores do tema para os gráficos
-    const legacyColors = {
-        navy: '#1e3a5f',
-        blue: '#3b7bbf',
-        lightBlue: '#5eb3e4',
-        skyBlue: '#a8d8f0',
-        success: '#28a745',
-    };
-
-    // --- Gráfico de Linhas: Relatório de Vendas ---
-    const salesCtx = document.getElementById('salesChart').getContext('2d');
-    new Chart(salesCtx, {
-        type: 'line',
-        data: {
-            labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'], // Exemplo de dados
-            datasets: [{
-                label: 'Receita',
-                data: [12000, 19000, 15000, 22000, 18000, 25000], // Exemplo de dados
-                backgroundColor: 'rgba(59, 123, 191, 0.1)',
-                borderColor: legacyColors.blue,
-                tension: 0.4,
-                fill: true,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true } }
-        }
-    });
-
-    // --- Gráfico de Doughnut: Divisão de Receita ---
-    const revenueCtx = document.getElementById('revenueBreakdownChart').getContext('2d');
-    new Chart(revenueCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Tradução Juramentada', 'Tradução Simples', 'Revisão', 'Outros'], // Exemplo
-            datasets: [{
-                label: 'Receita por Serviço',
-                data: [15000, 8000, 5000, 2000], // Exemplo
-                backgroundColor: [
-                    legacyColors.navy,
-                    legacyColors.blue,
-                    legacyColors.lightBlue,
-                    legacyColors.skyBlue
-                ],
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-        }
-    });
-
-    // --- Função para carregar dados do dashboard (KPIs, Tabela) ---
-    async function loadDashboardData() {
-        // Aqui você faria uma chamada à sua API para buscar os dados reais
-        // Ex: const response = await fetch('/admin/api/dashboard');
-        // const data = await response.json();
         
-        // Simulando dados recebidos:
-        const data = {
-            receita_total: 45760.50,
-            novos_leads: 125,
-            taxa_conversao: 15.3,
-            atividades: [
-                { tipo: 'NOVO LEAD', descricao: 'Cliente "Global Corp" entrou no funil.', data: '2025-11-21 10:30', status: 'contato_inicial' },
-                { tipo: 'VENDA', descricao: 'Oportunidade "Tech Solutions" ganha.', data: '2025-11-21 09:45', status: 'ganho' },
-                { tipo: 'TREINAMENTO', descricao: 'Novo conhecimento sobre "Preços" adicionado à IA.', data: '2025-11-20 18:00', status: 'concluido' }
-            ]
-        };
+        <!-- New Leads -->
+        <div class="col-md-3">
+            <div class="card stats-card bg-gradient-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-white-50 mb-1">New Leads</p>
+                            <h3 class="text-white mb-0" id="novos-leads">0</h3>
+                        </div>
+                        <div class="stats-icon">
+                            <i class="bi bi-person-plus"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Conversion Rate -->
+        <div class="col-md-3">
+            <div class="card stats-card bg-gradient-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-white-50 mb-1">Conversion Rate</p>
+                            <h3 class="text-white mb-0"><span id="taxa-conversao">0</span>%</h3>
+                        </div>
+                        <div class="stats-icon">
+                            <i class="bi bi-graph-up-arrow"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Total Conversations -->
+        <div class="col-md-3">
+            <div class="card stats-card bg-gradient-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-white-50 mb-1">Total Conversations</p>
+                            <h3 class="text-white mb-0" id="total-conversas">0</h3>
+                        </div>
+                        <div class="stats-icon">
+                            <i class="bi bi-chat-dots"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CHARTS ROW -->
+    <div class="row mb-4">
+        <!-- Conversations Chart -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Conversations Overview</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="conversationsChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Leads Source Chart -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Leads by Source</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="leadsChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- RECENT ACTIVITIES -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-activity"></i> Recent Activities</h5>
+                    <button class="btn btn-sm btn-primary" onclick="loadActivities()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="activities-table">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th width="100">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activities-list">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        <i class="bi bi-inbox"></i> No activities yet
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-        // Preencher KPIs
-        document.getElementById('kpi-receita-total').textContent = `R$ ${data.receita_total.toLocaleString('pt-BR')}`;
-        document.getElementById('kpi-novos-leads').textContent = data.novos_leads;
-        document.getElementById('kpi-taxa-conversao').textContent = `${data.taxa_conversao}%`;
+<!-- EDIT ACTIVITY MODAL -->
+<div class="modal fade" id="editActivityModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Activity</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editActivityForm">
+                    <input type="hidden" id="edit-activity-id">
+                    <div class="mb-3">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" id="edit-activity-type">
+                            <option value="MESSAGE">Message</option>
+                            <option value="LEAD">New Lead</option>
+                            <option value="SALE">Sale</option>
+                            <option value="TRAINING">Training Update</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" id="edit-activity-description" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveActivity()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-        // Preencher tabela de atividades
-        const activitiesBody = document.getElementById('recentActivitiesBody');
-        if (data.atividades && data.atividades.length > 0) {
-            activitiesBody.innerHTML = data.atividades.map(act => `
-                <tr>
-                    <td><span class="badge badge-primary">${act.tipo}</span></td>
-                    <td>${act.descricao}</td>
-                    <td>${act.data}</td>
-                    <td><span class="badge badge-success">${act.status}</span></td>
-                </tr>
-            `).join('');
-        } else {
-            activitiesBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">Nenhuma atividade recente.</td></tr>';
+<style>
+    .stats-card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: transform 0.3s;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }
+    
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .bg-gradient-success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+    
+    .bg-gradient-warning {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+    
+    .bg-gradient-info {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+    
+    .stats-icon {
+        font-size: 2.5rem;
+        opacity: 0.3;
+    }
+    
+    .card {
+        border-radius: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .card-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px 15px 0 0 !important;
+        padding: 15px 20px;
+    }
+    
+    .badge {
+        padding: 5px 10px;
+        border-radius: 20px;
+    }
+    
+    .action-btn {
+        padding: 5px 10px;
+        margin: 0 2px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .action-btn:hover {
+        transform: scale(1.1);
+    }
+    
+    .edit-btn {
+        background: #3498db;
+        color: white;
+    }
+    
+    .delete-btn {
+        background: #e74c3c;
+        color: white;
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let conversationsChart, leadsChart;
+    
+    // Load dashboard data
+    async function loadDashboard() {
+        try {
+            const response = await fetch('/admin/api/stats');
+            const data = await response.json();
+            
+            // Update KPIs
+            document.getElementById('receita-total').textContent = '$' + data.receita_total.toFixed(2);
+            document.getElementById('novos-leads').textContent = data.novos_leads;
+            document.getElementById('taxa-conversao').textContent = data.taxa_conversao;
+            document.getElementById('total-conversas').textContent = data.total_conversas || 0;
+            
+            // Update activities table
+            updateActivitiesTable(data.atividades || []);
+            
+            // Update charts
+            updateCharts(data);
+        } catch (error) {
+            console.error('Error loading dashboard:', error);
         }
     }
-
-    loadDashboardData();
-});
+    
+    // Update activities table with edit/delete buttons
+    function updateActivitiesTable(activities) {
+        const tbody = document.getElementById('activities-list');
+        
+        if (activities.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted"><i class="bi bi-inbox"></i> No activities yet</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = activities.map((activity, index) => `
+            <tr>
+                <td><span class="badge bg-primary">${activity.tipo}</span></td>
+                <td>${activity.descricao}</td>
+                <td>${activity.data}</td>
+                <td><span class="badge bg-${getStatusColor(activity.status)}">${activity.status}</span></td>
+                <td>
+                    <button class="action-btn edit-btn" onclick="editActivity(${index}, '${activity.tipo}', '${activity.descricao}')" title="Edit">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="action-btn delete-btn" onclick="deleteActivity(${index})" title="Delete">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    // Edit activity
+    function editActivity(index, type, description) {
+        document.getElementById('edit-activity-id').value = index;
+        document.getElementById('edit-activity-type').value = type;
+        document.getElementById('edit-activity-description').value = description;
+        
+        const modal = new bootstrap.Modal(document.getElementById('editActivityModal'));
+        modal.show();
+    }
+    
+    // Save activity
+    async function saveActivity() {
+        const id = document.getElementById('edit-activity-id').value;
+        const type = document.getElementById('edit-activity-type').value;
+        const description = document.getElementById('edit-activity-description').value;
+        
+        try {
+            const response = await fetch(`/admin/api/activity/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tipo: type, descricao: description })
+            });
+            
+            if (response.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('editActivityModal')).hide();
+                loadDashboard();
+                alert('Activity updated successfully!');
+            }
+        } catch (error) {
+            console.error('Error saving activity:', error);
+            alert('Error updating activity');
+        }
+    }
+    
+    // Delete activity
+    async function deleteActivity(index) {
+        if (!confirm('Are you sure you want to delete this activity?')) return;
+        
+        try {
+            const response = await fetch(`/admin/api/activity/${index}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                loadDashboard();
+                alert('Activity deleted successfully!');
+            }
+        } catch (error) {
+            console.error('Error deleting activity:', error);
+            alert('Error deleting activity');
+        }
+    }
+    
+    // Get status color
+    function getStatusColor(status) {
+        const colors = {
+            'new': 'info',
+            'won': 'success',
+            'ia': 'primary',
+            'human': 'warning',
+            'completed': 'success'
+        };
+        return colors[status] || 'secondary';
+    }
+    
+    // Update charts
+    function updateCharts(data) {
+        // Conversations Chart
+        const ctxConv = document.getElementById('conversationsChart').getContext('2d');
+        if (conversationsChart) conversationsChart.destroy();
+        
+        conversationsChart = new Chart(ctxConv, {
+            type: 'line',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Conversations',
+                    data: [12, 19, 15, 25, 22, 30, 28],
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true } }
+            }
+        });
+        
+        // Leads Chart
+        const ctxLeads = document.getElementById('leadsChart').getContext('2d');
+        if (leadsChart) leadsChart.destroy();
+        
+        leadsChart = new Chart(ctxLeads, {
+            type: 'doughnut',
+            data: {
+                labels: ['WhatsApp', 'Website', 'Direct', 'Referral'],
+                datasets: [{
+                    data: [45, 25, 20, 10],
+                    backgroundColor: ['#667eea', '#11998e', '#f093fb', '#4facfe']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
+    
+    // Load activities
+    function loadActivities() {
+        loadDashboard();
+    }
+    
+    // Load on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        loadDashboard();
+        setInterval(loadDashboard, 30000); // Refresh every 30 seconds
+    });
 </script>
 {% endblock %}
