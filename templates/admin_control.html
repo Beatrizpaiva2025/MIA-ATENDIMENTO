@@ -11,6 +11,45 @@
 
 {% block content %}
 <style>
+    /* Compact layout */
+    .container-fluid {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
+    
+    .card {
+        margin-bottom: 20px;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .card-header {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        color: white;
+        padding: 18px 24px;
+        border-radius: 12px 12px 0 0 !important;
+        border: none;
+    }
+    
+    .card-header h2 {
+        color: white;
+        margin: 0 0 5px 0;
+        font-size: 1.3rem;
+        font-weight: 700;
+    }
+    
+    .card-header p {
+        color: rgba(255,255,255,0.9);
+        margin: 0;
+        font-size: 0.85rem;
+    }
+    
+    .card-body {
+        padding: 25px;
+    }
+    
+    /* Bot status */
     .bot-status {
         text-align: center;
         padding: 40px 20px;
@@ -52,6 +91,12 @@
         color: #ef4444;
     }
     
+    .status-subtext {
+        color: #64748b;
+        font-size: 1rem;
+    }
+    
+    /* Control buttons */
     .control-buttons {
         display: flex;
         gap: 15px;
@@ -95,6 +140,113 @@
     .btn-control:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+        transform: none !important;
+    }
+    
+    /* Statistics grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-top: 30px;
+    }
+    
+    .stat-card {
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        border-left: 4px solid;
+        text-align: center;
+        transition: all 0.3s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+    
+    .stat-card.green {
+        border-left-color: #10b981;
+    }
+    
+    .stat-card.blue {
+        border-left-color: #3b82f6;
+    }
+    
+    .stat-card.red {
+        border-left-color: #ef4444;
+    }
+    
+    .stat-card.purple {
+        border-left-color: #8b5cf6;
+    }
+    
+    .stat-card h4 {
+        color: #64748b;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stat-card .value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 5px;
+    }
+    
+    .stat-card .unit {
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+    
+    /* Conversations table */
+    .table {
+        margin: 0;
+    }
+    
+    .table thead th {
+        background-color: #f8fafc;
+        color: #1e3a8a;
+        font-weight: 600;
+        border: none;
+        padding: 15px;
+    }
+    
+    .table tbody td {
+        padding: 15px;
+        vertical-align: middle;
+    }
+    
+    .badge {
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 0.85rem;
+    }
+    
+    .badge-warning {
+        background: #f59e0b;
+        color: white;
+    }
+    
+    .badge-danger {
+        background: #ef4444;
+        color: white;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #94a3b8;
+    }
+    
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 15px;
+        display: block;
     }
 </style>
 
@@ -115,14 +267,71 @@
             </div>
             
             <div class="control-buttons">
-                <button class="btn-control btn-turn-on" id="btnTurnOn" onclick="toggleBot(true)" style="display: none;">
+                <!-- GREEN BUTTON - Turn ON (visible when bot is OFF) -->
+                <button class="btn-control btn-turn-on" id="btnTurnOn" onclick="startBot()" style="display: none;">
                     <i class="bi bi-play-circle-fill"></i> Turn ON Bot
                 </button>
                 
-                <button class="btn-control btn-turn-off" id="btnTurnOff" onclick="toggleBot(false)">
+                <!-- RED BUTTON - Turn OFF (visible when bot is ON) -->
+                <button class="btn-control btn-turn-off" id="btnTurnOff" onclick="stopBot()">
                     <i class="bi bi-stop-circle-fill"></i> Turn OFF Bot
                 </button>
             </div>
+        </div>
+        
+        <!-- Statistics by Time (Minutes) -->
+        <div class="stats-grid">
+            <div class="stat-card green">
+                <h4><i class="bi bi-robot"></i> AI Active</h4>
+                <div class="value" id="stat-ai-active">1,250</div>
+                <div class="unit">minutes</div>
+            </div>
+            <div class="stat-card blue">
+                <h4><i class="bi bi-person"></i> Human Service</h4>
+                <div class="value" id="stat-human">180</div>
+                <div class="unit">minutes</div>
+            </div>
+            <div class="stat-card red">
+                <h4><i class="bi bi-pause-circle"></i> AI Disabled</h4>
+                <div class="value" id="stat-disabled">45</div>
+                <div class="unit">minutes</div>
+            </div>
+            <div class="stat-card purple">
+                <h4><i class="bi bi-clock"></i> Total Time</h4>
+                <div class="value" id="stat-total">1,475</div>
+                <div class="unit">minutes</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Conversations in Human or Disabled Mode -->
+<div class="card">
+    <div class="card-header">
+        <h2><i class="bi bi-chat-dots"></i> Conversations in Human or Disabled Mode</h2>
+        <p>List of conversations requiring manual attention</p>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Contact</th>
+                        <th>Phone</th>
+                        <th>Status</th>
+                        <th>Last Message</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="conversationsTable">
+                    <tr>
+                        <td colspan="5" class="empty-state">
+                            <i class="bi bi-check-circle"></i>
+                            <p>No conversations in human or disabled mode</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -131,79 +340,77 @@
 
 {% block extra_js %}
 <script>
-let currentBotStatus = true;
+let botActive = true;
 
-// Toggle bot (unified function)
-async function toggleBot(turnOn) {
-    try {
-        const btnOn = document.getElementById('btnTurnOn');
-        const btnOff = document.getElementById('btnTurnOff');
-        
-        // Disable buttons during request
-        btnOn.disabled = true;
-        btnOff.disabled = true;
-        
-        const response = await fetch('/admin/api/bot/toggle', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                is_active: turnOn
-            })
+// Start bot (GREEN BUTTON)
+function startBot() {
+    fetch('/admin/bot/start', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                botActive = true;
+                updateUI();
+                loadStats();
+                showNotification('Bot activated successfully!', 'success');
+            }
+        })
+        .catch(error => {
+            console.error('Error starting bot:', error);
+            showNotification('Error starting bot', 'error');
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            currentBotStatus = data.is_active;
-            updateUI(data.is_active);
-            showNotification(
-                turnOn ? 'Bot activated successfully!' : 'Bot deactivated successfully!',
-                turnOn ? 'success' : 'warning'
-            );
-        } else {
-            showNotification('Error updating bot status', 'error');
-        }
-        
-        // Re-enable buttons
-        btnOn.disabled = false;
-        btnOff.disabled = false;
-        
-    } catch (error) {
-        console.error('Error toggling bot:', error);
-        showNotification('Error connecting to server', 'error');
-        document.getElementById('btnTurnOn').disabled = false;
-        document.getElementById('btnTurnOff').disabled = false;
+}
+
+// Stop bot (RED BUTTON)
+function stopBot() {
+    if (confirm('Are you sure you want to turn off the AI assistant? Conversations will require manual attention.')) {
+        fetch('/admin/bot/stop', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    botActive = false;
+                    updateUI();
+                    loadStats();
+                    showNotification('Bot deactivated successfully!', 'warning');
+                }
+            })
+            .catch(error => {
+                console.error('Error stopping bot:', error);
+                showNotification('Error stopping bot', 'error');
+            });
     }
 }
 
-// Update interface
-function updateUI(isActive) {
+// Update interface with color changes
+function updateUI() {
     const icon = document.getElementById('statusIcon');
     const text = document.getElementById('statusText');
     const subtext = document.getElementById('statusSubtext');
     const btnTurnOn = document.getElementById('btnTurnOn');
     const btnTurnOff = document.getElementById('btnTurnOff');
     
-    if (isActive) {
-        // BOT IS ON - GREEN
+    if (botActive) {
+        // BOT IS ON - Show GREEN status and RED button to turn OFF
         icon.className = 'status-icon active';
         icon.innerHTML = '<i class="bi bi-robot"></i>';
         text.className = 'status-text active';
         text.textContent = 'AI ACTIVE';
+        text.style.color = '#10b981'; // GREEN
         subtext.textContent = 'The assistant is responding to customer messages';
         
+        // Show only RED button (Turn OFF)
         btnTurnOn.style.display = 'none';
         btnTurnOff.style.display = 'inline-flex';
+        
     } else {
-        // BOT IS OFF - RED
+        // BOT IS OFF - Show RED status and GREEN button to turn ON
         icon.className = 'status-icon inactive';
         icon.innerHTML = '<i class="bi bi-pause-circle"></i>';
         text.className = 'status-text inactive';
         text.textContent = 'AI DISABLED';
+        text.style.color = '#ef4444'; // RED
         subtext.textContent = 'The assistant is not responding - manual service required';
         
+        // Show only GREEN button (Turn ON)
         btnTurnOn.style.display = 'inline-flex';
         btnTurnOff.style.display = 'none';
     }
@@ -240,40 +447,86 @@ function showNotification(message, type) {
     }, 3000);
 }
 
-// Load current bot status
-async function loadBotStatus() {
-    try {
-        const response = await fetch('/admin/api/bot/status');
-        const data = await response.json();
-        
-        if (data.success) {
-            currentBotStatus = data.is_active;
-            updateUI(data.is_active);
-        }
-    } catch (error) {
-        console.error('Error loading bot status:', error);
-    }
+// Load statistics
+function loadStats() {
+    fetch('/admin/api/control-stats')
+        .then(response => response.json())
+        .then(data => {
+            // Update statistics
+            document.getElementById('stat-ai-active').textContent = data.ai_active_minutes || 0;
+            document.getElementById('stat-human').textContent = data.human_service_minutes || 0;
+            document.getElementById('stat-disabled').textContent = data.ai_disabled_minutes || 0;
+            document.getElementById('stat-total').textContent = data.total_minutes || 0;
+            
+            // Update conversations table
+            const tbody = document.getElementById('conversationsTable');
+            if (data.conversations && data.conversations.length > 0) {
+                tbody.innerHTML = data.conversations.map(c => `
+                    <tr>
+                        <td><strong>${c.contact}</strong></td>
+                        <td>${c.phone}</td>
+                        <td><span class="badge badge-${c.status === 'human' ? 'warning' : 'danger'}">${c.status}</span></td>
+                        <td>${c.last_message}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="viewConversation('${c.id}')">
+                                <i class="bi bi-eye"></i> View
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="empty-state">
+                            <i class="bi bi-check-circle"></i>
+                            <p>No conversations in human or disabled mode</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading statistics:', error);
+        });
+}
+
+// View conversation
+function viewConversation(id) {
+    window.location.href = `/admin/conversations/${id}`;
 }
 
 // Add animation styles
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideIn {
-        from { transform: translateX(400px); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
     }
+    
     @keyframes slideOut {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(400px); opacity: 0; }
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(400px);
+            opacity: 0;
+        }
     }
 `;
 document.head.appendChild(style);
 
-// Load status on page load
+// Initial load
 document.addEventListener('DOMContentLoaded', function() {
-    loadBotStatus();
-    // Auto-refresh every 10 seconds
-    setInterval(loadBotStatus, 10000);
+    loadStats();
+    // Auto-update every 30 seconds
+    setInterval(loadStats, 30000);
 });
 </script>
 {% endblock %}
