@@ -4,188 +4,45 @@
 
 {% block content %}
 <style>
-    /* Compact layout */
-    .container-fluid {
-        padding: 0 !important;
-        max-width: 100% !important;
-    }
-    
-    .card {
-        margin-bottom: 20px;
-        border: none;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    
-    .card-header {
-        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-        color: white;
-        padding: 18px 24px;
-        border-radius: 12px 12px 0 0 !important;
-        border: none;
-    }
-    
-    .card-header h2 {
-        color: white;
-        margin: 0 0 5px 0;
-        font-size: 1.3rem;
-        font-weight: 700;
-    }
-    
-    .card-header p {
-        color: rgba(255,255,255,0.9);
-        margin: 0;
-        font-size: 0.85rem;
-    }
-    
-    .card-body {
-        padding: 20px;
-    }
-    
-    /* Form groups */
-    .form-group {
-        margin-bottom: 20px;
-    }
-    
-    .form-group label {
-        font-weight: 600;
-        color: #1e3a8a;
-        margin-bottom: 8px;
-        display: block;
-    }
-    
-    .form-control, .form-select {
-        border: 2px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 10px 15px;
-        font-size: 0.95rem;
-        transition: all 0.3s;
-    }
-    
-    .form-control:focus, .form-select:focus {
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        outline: none;
-    }
-    
-    /* Buttons */
-    .btn-primary {
-        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-        border: none;
-        padding: 10px 24px;
-        font-weight: 600;
-        border-radius: 8px;
-        transition: all 0.3s;
-    }
-    
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
-    }
-    
-    .btn-warning {
-        background: #f59e0b;
-        border: none;
-        color: white;
-        padding: 8px 16px;
-        font-weight: 500;
-        border-radius: 6px;
-        transition: all 0.3s;
-    }
-    
-    .btn-warning:hover {
-        background: #d97706;
-        transform: translateY(-2px);
-    }
-    
-    .btn-danger {
-        background: #ef4444;
-        border: none;
-        padding: 8px 16px;
-        font-weight: 500;
-        border-radius: 6px;
-        transition: all 0.3s;
-    }
-    
-    .btn-danger:hover {
-        background: #dc2626;
-        transform: translateY(-2px);
-    }
-    
-    /* Knowledge items */
-    .knowledge-item, .faq-item {
-        background: #f8fafc;
-        padding: 18px;
-        border-radius: 10px;
-        margin-bottom: 15px;
-        border-left: 4px solid #3b82f6;
-        transition: all 0.3s;
-    }
-    
-    .knowledge-item:hover, .faq-item:hover {
-        background: #f1f5f9;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-    
-    .knowledge-item h5, .faq-item h5 {
-        color: #1e3a8a;
-        font-size: 1.05rem;
-        font-weight: 700;
-        margin-bottom: 10px;
-    }
-    
-    .knowledge-item p, .faq-item p {
-        color: #475569;
-        margin: 0;
-        line-height: 1.6;
-    }
-    
-    .knowledge-actions, .faq-actions {
-        margin-top: 12px;
-        display: flex;
-        gap: 8px;
-    }
-    
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        color: #94a3b8;
-    }
-    
-    .empty-state i {
-        font-size: 4rem;
-        margin-bottom: 15px;
-        display: block;
-    }
+    .card { margin-bottom: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .card-header { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 18px 24px; }
+    .card-header h2 { color: white; margin: 0; font-size: 1.3rem; font-weight: 700; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { font-weight: 600; color: #1e3a8a; margin-bottom: 8px; display: block; }
+    .form-control, .form-select { border: 2px solid #e2e8f0; border-radius: 8px; padding: 10px 15px; width: 100%; }
+    .form-control:focus { border-color: #3b82f6; outline: none; }
+    .btn-primary { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); border: none; padding: 10px 24px; font-weight: 600; border-radius: 8px; color: white; cursor: pointer; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3); }
+    .btn-warning { background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+    .btn-danger { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+    .knowledge-item, .faq-item { background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
 </style>
 
-<!-- AI Personality Configuration -->
+<!-- Personality Configuration -->
 <div class="card">
     <div class="card-header">
-        <h2><i class="bi bi-robot"></i> AI Personality</h2>
-        <p>Configure Mia's communication style and behavior</p>
+        <h2><i class="bi bi-person-gear"></i> AI Personality</h2>
     </div>
     <div class="card-body">
-        <form action="/admin/config/personality" method="POST">
+        <form id="personalityForm">
             <div class="form-group">
-                <label><i class="bi bi-chat-dots"></i> Tone of Voice:</label>
-                <select class="form-select" name="tone" required>
-                    <option value="professional">Professional and Formal</option>
-                    <option value="friendly" selected>Friendly and Welcoming</option>
-                    <option value="casual">Casual and Relaxed</option>
-                    <option value="technical">Technical and Precise</option>
+                <label>Tone</label>
+                <select class="form-select" id="tone" name="tone">
+                    <option value="professional">Professional</option>
+                    <option value="friendly">Friendly</option>
+                    <option value="formal">Formal</option>
                 </select>
             </div>
             <div class="form-group">
-                <label><i class="bi bi-bullseye"></i> AI Goals:</label>
-                <textarea class="form-control" name="goals" rows="3" required>Help clients efficiently, provide accurate information about translation services, and convert inquiries into business opportunities.</textarea>
+                <label>Main Goals</label>
+                <textarea class="form-control" id="goals" name="goals" rows="3" placeholder="What are the assistant's main objectives?"></textarea>
             </div>
             <div class="form-group">
-                <label><i class="bi bi-shield-check"></i> Behavioral Restrictions:</label>
-                <textarea class="form-control" name="restrictions" rows="3" required>Never provide false information, do not make promises without confirmation, always maintain professional ethics.</textarea>
+                <label>Restrictions</label>
+                <textarea class="form-control" id="restrictions" name="restrictions" rows="3" placeholder="What the assistant should NOT do?"></textarea>
             </div>
-            <button type="submit" class="btn btn-primary">
-                <i class="bi bi-save"></i> Save Configuration
+            <button type="submit" class="btn-primary">
+                <i class="bi bi-save"></i> Save Personality
             </button>
         </form>
     </div>
@@ -195,118 +52,51 @@
 <div class="card">
     <div class="card-header">
         <h2><i class="bi bi-book"></i> Knowledge Base</h2>
-        <p>Teach Mia about your services, prices, and processes</p>
     </div>
     <div class="card-body">
-        <form action="/admin/knowledge/add" method="POST" class="mb-4">
+        <form id="knowledgeForm">
             <div class="form-group">
-                <label><i class="bi bi-tag"></i> Category:</label>
-                <select class="form-select" name="category" required>
-                    <option value="services">Services</option>
-                    <option value="prices">Prices</option>
-                    <option value="policies">Policies</option>
-                    <option value="process">Process</option>
-                    <option value="company">Company Information</option>
-                </select>
+                <label>Category</label>
+                <input type="text" class="form-control" id="kb_category" name="category" placeholder="E.g.: Translation Services">
             </div>
             <div class="form-group">
-                <label><i class="bi bi-card-text"></i> Title:</label>
-                <input type="text" class="form-control" name="title" placeholder="e.g., Sworn Translation Prices" required>
+                <label>Title</label>
+                <input type="text" class="form-control" id="kb_title" name="title" placeholder="E.g.: What is sworn translation?">
             </div>
             <div class="form-group">
-                <label><i class="bi bi-text-paragraph"></i> Content:</label>
-                <textarea class="form-control" name="content" rows="4" placeholder="Detailed information that Mia should know..." required></textarea>
+                <label>Content</label>
+                <textarea class="form-control" id="kb_content" name="content" rows="4" placeholder="Detailed information..."></textarea>
             </div>
-            <button type="submit" class="btn btn-primary">
-                <i class="bi bi-plus-circle"></i> Add Knowledge
+            <button type="submit" class="btn-primary">
+                <i class="bi bi-plus-circle"></i> Add to Knowledge Base
             </button>
         </form>
         
-        <hr class="my-4">
-        
-        <h4 class="mb-3" style="color: #1e3a8a; font-weight: 700;">
-            <i class="bi bi-list-ul"></i> Registered Knowledge Items
-        </h4>
-        
-        <div id="knowledge-list">
-            {% if knowledge_items %}
-                {% for item in knowledge_items %}
-                <div class="knowledge-item">
-                    <h5>
-                        <span class="badge bg-primary">{{ item.category }}</span>
-                        {{ item.title }}
-                    </h5>
-                    <p>{{ item.content }}</p>
-                    <div class="knowledge-actions">
-                        <button class="btn btn-sm btn-warning" onclick="editKnowledge('{{ item.id }}')">
-                            <i class="bi bi-pencil"></i> Edit
-                        </button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteKnowledge('{{ item.id }}')">
-                            <i class="bi bi-trash"></i> Delete
-                        </button>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state">
-                    <i class="bi bi-inbox"></i>
-                    <p>No knowledge items yet. Add your first item above!</p>
-                </div>
-            {% endif %}
-        </div>
+        <div id="knowledgeList" style="margin-top: 20px;"></div>
     </div>
 </div>
 
-<!-- FAQs -->
+<!-- FAQ -->
 <div class="card">
     <div class="card-header">
-        <h2><i class="bi bi-question-circle"></i> Frequently Asked Questions (FAQ)</h2>
-        <p>Train Mia to answer common questions</p>
+        <h2><i class="bi bi-question-circle"></i> Frequently Asked Questions</h2>
     </div>
     <div class="card-body">
-        <form action="/admin/faq/add" method="POST" class="mb-4">
+        <form id="faqForm">
             <div class="form-group">
-                <label><i class="bi bi-question"></i> Question:</label>
-                <input type="text" class="form-control" name="question" placeholder="e.g., What is the delivery time?" required>
+                <label>Question</label>
+                <input type="text" class="form-control" id="faq_question" name="question" placeholder="E.g.: What are your business hours?">
             </div>
             <div class="form-group">
-                <label><i class="bi bi-chat-left-text"></i> Answer:</label>
-                <textarea class="form-control" name="answer" rows="3" placeholder="The answer Mia should provide..." required></textarea>
+                <label>Answer</label>
+                <textarea class="form-control" id="faq_answer" name="answer" rows="3" placeholder="Detailed answer..."></textarea>
             </div>
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" class="btn-primary">
                 <i class="bi bi-plus-circle"></i> Add FAQ
             </button>
         </form>
         
-        <hr class="my-4">
-        
-        <h4 class="mb-3" style="color: #1e3a8a; font-weight: 700;">
-            <i class="bi bi-list-check"></i> Registered FAQs
-        </h4>
-        
-        <div id="faq-list">
-            {% if faq_items %}
-                {% for faq in faq_items %}
-                <div class="faq-item">
-                    <h5><i class="bi bi-question-diamond"></i> {{ faq.question }}</h5>
-                    <p><strong>Answer:</strong> {{ faq.answer }}</p>
-                    <div class="faq-actions">
-                        <button class="btn btn-sm btn-warning" onclick="editFAQ('{{ faq.id }}')">
-                            <i class="bi bi-pencil"></i> Edit
-                        </button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteFAQ('{{ faq.id }}')">
-                            <i class="bi bi-trash"></i> Delete
-                        </button>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state">
-                    <i class="bi bi-inbox"></i>
-                    <p>No FAQs yet. Add your first FAQ above!</p>
-                </div>
-            {% endif %}
-        </div>
+        <div id="faqList" style="margin-top: 20px;"></div>
     </div>
 </div>
 
@@ -314,42 +104,148 @@
 
 {% block extra_js %}
 <script>
-// Edit knowledge
-function editKnowledge(id) {
-    // Implement edit modal or redirect to edit page
-    alert('Edit knowledge ID: ' + id);
-}
-
-// Delete knowledge
-function deleteKnowledge(id) {
-    if (confirm('Are you sure you want to delete this knowledge item?')) {
-        fetch(`/admin/knowledge/delete/${id}`, {
-            method: 'DELETE'
-        }).then(response => {
-            if (response.ok) {
-                location.reload();
-            }
+// Save Personality
+document.getElementById('personalityForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const tone = document.getElementById('tone').value;
+    const goals = document.getElementById('goals').value;
+    const restrictions = document.getElementById('restrictions').value;
+    
+    const personality = {
+        tone: tone,
+        goals: goals,
+        restrictions: restrictions
+    };
+    
+    try {
+        const response = await fetch('/admin/config/personality', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personality: JSON.stringify(personality) })
         });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Personality saved successfully!', 'success');
+        } else {
+            showNotification('Error saving personality', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error connecting to server', 'error');
     }
-}
+});
 
-// Edit FAQ
-function editFAQ(id) {
-    // Implement edit modal or redirect to edit page
-    alert('Edit FAQ ID: ' + id);
-}
-
-// Delete FAQ
-function deleteFAQ(id) {
-    if (confirm('Are you sure you want to delete this FAQ?')) {
-        fetch(`/admin/faq/delete/${id}`, {
-            method: 'DELETE'
-        }).then(response => {
-            if (response.ok) {
-                location.reload();
-            }
+// Add Knowledge
+document.getElementById('knowledgeForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const category = document.getElementById('kb_category').value;
+    const title = document.getElementById('kb_title').value;
+    const content = document.getElementById('kb_content').value;
+    
+    if (!category || !title || !content) {
+        showNotification('Fill in all fields', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/admin/knowledge/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category, title, content })
         });
+        
+        if (response.ok) {
+            showNotification('Knowledge added successfully!', 'success');
+            document.getElementById('knowledgeForm').reset();
+            loadKnowledge();
+        } else {
+            showNotification('Error adding knowledge', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error connecting to server', 'error');
     }
+});
+
+// Add FAQ
+document.getElementById('faqForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const question = document.getElementById('faq_question').value;
+    const answer = document.getElementById('faq_answer').value;
+    
+    if (!question || !answer) {
+        showNotification('Fill in all fields', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/admin/faq/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question, answer })
+        });
+        
+        if (response.ok) {
+            showNotification('FAQ added successfully!', 'success');
+            document.getElementById('faqForm').reset();
+            loadFAQs();
+        } else {
+            showNotification('Error adding FAQ', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error connecting to server', 'error');
+    }
+});
+
+// Load Knowledge
+async function loadKnowledge() {
+    // Placeholder for loading knowledge items
+    document.getElementById('knowledgeList').innerHTML = '<p style="color: #64748b; font-style: italic;">Knowledge items will be displayed here</p>';
 }
+
+// Load FAQs
+async function loadFAQs() {
+    // Placeholder for loading FAQ items
+    document.getElementById('faqList').innerHTML = '<p style="color: #64748b; font-style: italic;">FAQ items will be displayed here</p>';
+}
+
+// Show notification
+function showNotification(message, type) {
+    const colors = {
+        success: '#10b981',
+        warning: '#f59e0b',
+        error: '#ef4444'
+    };
+    
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${colors[type]};
+        color: white;
+        padding: 15px 25px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 9999;
+        font-weight: 600;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => notification.remove(), 3000);
+}
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadKnowledge();
+    loadFAQs();
+});
 </script>
 {% endblock %}
