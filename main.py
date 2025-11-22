@@ -497,7 +497,7 @@ async def process_message_with_ai(phone: str, message: str) -> str:
     try:
 
         # Detectar se cliente quer falar com humano
-        if await detectar_solicitacao_humano(user_message):
+        if await detectar_solicitacao_humano(message):
             await transferir_para_humano(phone, "Cliente solicitou atendente")
             return None
         
