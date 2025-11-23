@@ -1,78 +1,87 @@
 {% extends "admin_base.html" %}
 
-{% block title %}Atendimento Humano - MIA Bot{% endblock %}
+{% block title %}Atendimento Humano - MIA Admin{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <h2 class="mb-4">👤 Atendimento Humano</h2>
-    
-    <!-- Alerta de conversas aguardando -->
-    {% if total > 0 %}
-    <div class="alert alert-warning">
-        <strong>🔔 {{ total }} conversa(s) aguardando atendimento!</strong>
-    </div>
-    {% endif %}
-
-    <!-- Card de estatísticas -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card" style="background: linear-gradient(135deg, #ff9800 0%, #ffb74d 100%); color: white;">
-                <div class="card-body text-center">
-                    <h3>{{ total }}</h3>
-                    <p class="mb-0">Conversas Aguardando Atendimento</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Lista de conversas -->
-    <div class="card">
-        <div class="card-header" style="background-color: #1e3a5f; color: white;">
-            <h5 class="mb-0">📋 Conversas em Atendimento Humano</h5>
-        </div>
-        <div class="card-body">
-            {% if conversas %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead style="background-color: #f8f9fa;">
-                            <tr>
-                                <th>📱 Telefone</th>
-                                <th>💬 Última Mensagem</th>
-                                <th>📅 Transferido em</th>
-                                <th>⚠️ Motivo</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for conv in conversas %}
-                            <tr style="background-color: #fff3cd;">
-                                <td><strong>{{ conv._id }}</strong></td>
-                                <td>{{ conv.last_message[:60] }}...</td>
-                                <td>{{ conv.transferred_at.strftime('%d/%m/%Y %H:%M') if conv.transferred_at else '-' }}</td>
-                                <td><span class="badge" style="background-color: #ff9800;">{{ conv.transfer_reason }}</span></td>
-                                <td>
-                                    <a href="/admin/atendimento/{{ conv._id }}" class="btn btn-sm" style="background-color: #1e3a5f; color: white;">
-                                        💬 Atender
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <div class="text-center py-5">
-                    <p class="text-muted">✅ Nenhuma conversa aguardando atendimento no momento.</p>
-                </div>
-            {% endif %}
-        </div>
-    </div>
+<div class="page-header">
+    <h1>👤 Atendimento Humano</h1>
+    <p>Gerencie conversas que precisam de atendimento manual</p>
 </div>
 
+<div style="background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); color: white; padding: 25px; border-radius: 12px; margin-bottom: 30px; text-align: center;">
+    <h2 style="font-size: 3em; margin: 0;">{{ conversas|length }}</h2>
+    <p style="font-size: 1.2em; margin: 10px 0 0 0;">Conversas Aguardando Atendimento</p>
+</div>
+
+<div style="background: #f8f9fa; padding: 20px; border-radius: 10px;">
+    <h3 style="color: #1e3a5f; margin-bottom: 20px;">📋 Conversas em Atendimento Humano</h3>
+    
+    {% if conversas %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #1e3a5f; color: white;">
+                    <th style="padding: 15px; text-align: left; border-radius: 8px 0 0 0;">Telefone</th>
+                    <th style="padding: 15px; text-align: left;">Última Mensagem</th>
+                    <th style="padding: 15px; text-align: left;">Transferido em</th>
+                    <th style="padding: 15px; text-align: center; border-radius: 0 8px 0 0;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for conversa in conversas %}
+                <tr style="border-bottom: 1px solid #ddd; background: {% if loop.index % 2 == 0 %}#fff{% else %}#f8f9fa{% endif %};">
+                    <td style="padding: 15px; font-weight: bold; color: #1e3a5f;">{{ conversa._id }}</td>
+                    <td style="padding: 15px; color: #666;">{{ conversa.last_message[:50] }}...</td>
+                    <td style="padding: 15px; color: #666;">
+                        {% if conversa.transferred_at %}
+                            {{ conversa.transferred_at.strftime('%d/%m %H:%M') }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px; text-align: center;">
+                        <a href="/admin/atendimento/{{ conversa._id }}" 
+                           style="background: #5dade2; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; margin-right: 8px; display: inline-block;">
+                            💬 Atender
+                        </a>
+                        <button onclick="devolverParaIA('{{ conversa._id }}')"
+                                style="background: #ff9800; color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;">
+                            🤖 Devolver para IA
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div style="text-align: center; padding: 40px; color: #666;">
+            <div style="font-size: 4em; margin-bottom: 20px;">✅</div>
+            <p style="font-size: 1.2em;">Nenhuma conversa aguardando atendimento no momento.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
 <script>
-// Atualizar página a cada 10 segundos
-setInterval(function() {
-    location.reload();
-}, 10000);
+    async function devolverParaIA(phone) {
+        if (!confirm(`Devolver conversa de ${phone} para IA?`)) return;
+        
+        try {
+            const response = await fetch(`/admin/reset-mode/${phone}`);
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                alert('✅ Conversa devolvida para IA!');
+                location.reload();
+            } else {
+                alert('❌ Erro: ' + data.message);
+            }
+        } catch (error) {
+            alert('❌ Erro ao devolver: ' + error);
+        }
+    }
+
+    // Auto-refresh a cada 10 segundos
+    setTimeout(() => location.reload(), 10000);
 </script>
 {% endblock %}
