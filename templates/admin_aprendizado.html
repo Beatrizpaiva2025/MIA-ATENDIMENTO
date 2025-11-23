@@ -1,0 +1,120 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Aprendizado Híbrido - MIA Bot{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">🧠 Aprendizado Híbrido</h2>
+    <p class="text-muted">A IA sugere novos conhecimentos baseados em conversas. Aprove ou rejeite as sugestões.</p>
+
+    <!-- Sugestões Pendentes -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-white">
+            <h5 class="mb-0">⏳ Sugestões Pendentes ({{ pending_count }})</h5>
+        </div>
+        <div class="card-body">
+            {% if pending %}
+                {% for suggestion in pending %}
+                <div class="card mb-3 border-warning">
+                    <div class="card-body">
+                        <h6 class="card-title"><strong>{{ suggestion.title }}</strong></h6>
+                        <p class="card-text">{{ suggestion.content }}</p>
+                        
+                        <div class="alert alert-light">
+                            <small>
+                                <strong>📱 Pergunta do cliente:</strong> {{ suggestion.user_question }}<br>
+                                <strong>🤖 Resposta da IA:</strong> {{ suggestion.bot_response[:200] }}...
+                            </small>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <form method="POST" action="/admin/aprendizado/approve/{{ suggestion._id }}" style="display:inline;">
+                                <button type="submit" class="btn btn-success btn-sm">
+                                    ✅ Aprovar e Adicionar
+                                </button>
+                            </form>
+                            
+                            <form method="POST" action="/admin/aprendizado/reject/{{ suggestion._id }}" style="display:inline;">
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    ❌ Rejeitar
+                                </button>
+                            </form>
+                        </div>
+                        
+                        <small class="text-muted">Sugerido em: {{ suggestion.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">Nenhuma sugestão pendente no momento.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Sugestões Aprovadas -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">✅ Sugestões Aprovadas (últimas 20)</h5>
+        </div>
+        <div class="card-body">
+            {% if approved %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Título</th>
+                                <th>Conteúdo</th>
+                                <th>Aprovado em</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for suggestion in approved %}
+                            <tr>
+                                <td><strong>{{ suggestion.title }}</strong></td>
+                                <td>{{ suggestion.content[:100] }}...</td>
+                                <td>{{ suggestion.approved_at.strftime('%d/%m/%Y %H:%M') if suggestion.approved_at else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted">Nenhuma sugestão aprovada ainda.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Sugestões Rejeitadas -->
+    <div class="card mb-4">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">❌ Sugestões Rejeitadas (últimas 20)</h5>
+        </div>
+        <div class="card-body">
+            {% if rejected %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Título</th>
+                                <th>Conteúdo</th>
+                                <th>Rejeitado em</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for suggestion in rejected %}
+                            <tr>
+                                <td><strong>{{ suggestion.title }}</strong></td>
+                                <td>{{ suggestion.content[:100] }}...</td>
+                                <td>{{ suggestion.approved_at.strftime('%d/%m/%Y %H:%M') if suggestion.approved_at else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted">Nenhuma sugestão rejeitada ainda.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
