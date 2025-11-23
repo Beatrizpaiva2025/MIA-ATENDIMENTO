@@ -3,61 +3,196 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}MIA - Painel Administrativo{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/legacy_theme.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    {% block extra_css %}{% endblock %}
+    <title>{% block title %}Painel Admin - MIA{% endblock %}</title>
+    <link rel="stylesheet" href="/css/legacy_theme.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 260px;
+            background: #1e3a5f;
+            color: white;
+            padding: 20px 0;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+
+        .logo-container {
+            text-align: center;
+            padding: 0 20px 30px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .logo-container img {
+            width: 120px;
+            height: 120px;
+            border-radius: 20px;
+            object-fit: cover;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .logo-container h2 {
+            margin-top: 15px;
+            font-size: 1.5em;
+            color: #5dade2;
+        }
+
+        .menu {
+            padding: 20px 0;
+        }
+
+        .menu-item {
+            padding: 15px 25px;
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+
+        .menu-item:hover {
+            background: rgba(93, 173, 226, 0.1);
+            border-left-color: #5dade2;
+        }
+
+        .menu-item.active {
+            background: rgba(93, 173, 226, 0.2);
+            border-left-color: #ff9800;
+        }
+
+        .menu-item-icon {
+            font-size: 1.3em;
+            margin-right: 12px;
+            width: 25px;
+            text-align: center;
+        }
+
+        /* MAIN CONTENT */
+        .main-content {
+            margin-left: 260px;
+            flex: 1;
+            padding: 30px;
+        }
+
+        .content-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .page-header {
+            margin-bottom: 30px;
+        }
+
+        .page-header h1 {
+            color: #1e3a5f;
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .page-header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 70px;
+            }
+
+            .logo-container img {
+                width: 50px;
+                height: 50px;
+                border-radius: 10px;
+            }
+
+            .logo-container h2,
+            .menu-item-text {
+                display: none;
+            }
+
+            .menu-item {
+                justify-content: center;
+                padding: 15px;
+            }
+
+            .menu-item-icon {
+                margin-right: 0;
+            }
+
+            .main-content {
+                margin-left: 70px;
+            }
+        }
+
+        {% block extra_style %}{% endblock %}
+    </style>
 </head>
 <body>
-    <!-- Sidebar -->
+    <!-- SIDEBAR -->
     <div class="sidebar">
-        <div class="sidebar-logo">
-            <img src="/static/images/logo_legacy.jpeg" alt="Legacy Translations">
-            <h2>MIA Bot</h2>
-            <p>Painel Administrativo</p>
+        <div class="logo-container">
+            <img src="/images/logo_legacy.jpeg" alt="MIA Logo">
+            <h2>MIA Admin</h2>
         </div>
-        
-        <nav>
-            <a href="/admin/dashboard" {% if request.url.path == '/admin/dashboard' %}class="active"{% endif %}>
-                <i class="fas fa-chart-line"></i>
-                Dashboard
+
+        <nav class="menu">
+            <a href="/admin/controle" class="menu-item {% if request.url.path == '/admin/controle' or request.url.path == '/admin/controle/' %}active{% endif %}">
+                <span class="menu-item-icon">🎛️</span>
+                <span class="menu-item-text">Controle</span>
             </a>
-            <a href="/admin/treinamento" {% if request.url.path == '/admin/treinamento' %}class="active"{% endif %}>
-                <i class="fas fa-brain"></i>
-                Treinamento IA
+
+            <a href="/admin/treinamento" class="menu-item {% if request.url.path == '/admin/treinamento' %}active{% endif %}">
+                <span class="menu-item-icon">🎓</span>
+                <span class="menu-item-text">Treinamento</span>
             </a>
-            <a href="/admin/controle" {% if request.url.path == '/admin/controle' %}class="active"{% endif %}>
-                <i class="fas fa-toggle-on"></i>
-                Controle do Bot
+
+            <a href="/admin/atendimento" class="menu-item {% if request.url.path == '/admin/atendimento' %}active{% endif %}">
+                <span class="menu-item-icon">👤</span>
+                <span class="menu-item-text">Atendimento</span>
             </a>
-            <a href="/admin/conversas" {% if request.url.path == '/admin/conversas' %}class="active"{% endif %}>
-                <i class="fas fa-comments"></i>
-                Conversas
+
+            <a href="/admin/aprendizado" class="menu-item {% if request.url.path == '/admin/aprendizado' %}active{% endif %}">
+                <span class="menu-item-icon">🧠</span>
+                <span class="menu-item-text">Aprendizado</span>
             </a>
-            <a href="/admin/leads" {% if request.url.path == '/admin/leads' %}class="active"{% endif %}>
-                <i class="fas fa-users"></i>
-                Leads
+
+            <a href="/admin/conversas" class="menu-item {% if '/admin/conversas' in request.url.path %}active{% endif %}">
+                <span class="menu-item-icon">💬</span>
+                <span class="menu-item-text">Conversas</span>
             </a>
-            <a href="/logout" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-                <i class="fas fa-sign-out-alt"></i>
-                Sair
+
+            <a href="/admin/leads" class="menu-item {% if request.url.path == '/admin/leads' %}active{% endif %}">
+                <span class="menu-item-icon">📊</span>
+                <span class="menu-item-text">Leads</span>
             </a>
         </nav>
     </div>
 
-    <!-- Conteúdo Principal -->
+    <!-- MAIN CONTENT -->
     <div class="main-content">
-        <div class="content-header">
-            <h1>{% block page_title %}Painel Administrativo{% endblock %}</h1>
-            <p>{% block page_subtitle %}Gerencie seu bot de atendimento{% endblock %}</p>
-        </div>
-
-        <div class="container">
+        <div class="content-card">
             {% block content %}{% endblock %}
         </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    {% block extra_js %}{% endblock %}
+    {% block extra_scripts %}{% endblock %}
 </body>
 </html>
