@@ -1,0 +1,78 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Atendimento Humano - MIA Bot{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">👤 Atendimento Humano</h2>
+    
+    <!-- Alerta de conversas aguardando -->
+    {% if total > 0 %}
+    <div class="alert alert-warning">
+        <strong>🔔 {{ total }} conversa(s) aguardando atendimento!</strong>
+    </div>
+    {% endif %}
+
+    <!-- Card de estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card" style="background: linear-gradient(135deg, #ff9800 0%, #ffb74d 100%); color: white;">
+                <div class="card-body text-center">
+                    <h3>{{ total }}</h3>
+                    <p class="mb-0">Conversas Aguardando Atendimento</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de conversas -->
+    <div class="card">
+        <div class="card-header" style="background-color: #1e3a5f; color: white;">
+            <h5 class="mb-0">📋 Conversas em Atendimento Humano</h5>
+        </div>
+        <div class="card-body">
+            {% if conversas %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead style="background-color: #f8f9fa;">
+                            <tr>
+                                <th>📱 Telefone</th>
+                                <th>💬 Última Mensagem</th>
+                                <th>📅 Transferido em</th>
+                                <th>⚠️ Motivo</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for conv in conversas %}
+                            <tr style="background-color: #fff3cd;">
+                                <td><strong>{{ conv._id }}</strong></td>
+                                <td>{{ conv.last_message[:60] }}...</td>
+                                <td>{{ conv.transferred_at.strftime('%d/%m/%Y %H:%M') if conv.transferred_at else '-' }}</td>
+                                <td><span class="badge" style="background-color: #ff9800;">{{ conv.transfer_reason }}</span></td>
+                                <td>
+                                    <a href="/admin/atendimento/{{ conv._id }}" class="btn btn-sm" style="background-color: #1e3a5f; color: white;">
+                                        💬 Atender
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <p class="text-muted">✅ Nenhuma conversa aguardando atendimento no momento.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Atualizar página a cada 10 segundos
+setInterval(function() {
+    location.reload();
+}, 10000);
+</script>
+{% endblock %}

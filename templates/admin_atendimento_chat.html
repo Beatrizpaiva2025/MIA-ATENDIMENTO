@@ -1,0 +1,167 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Chat - {{ phone }} - MIA Bot{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>💬 Atendimento: {{ phone }}</h2>
+        <div>
+            <button onclick="returnToIA()" class="btn btn-success me-2">
+                🤖 Devolver para IA
+            </button>
+            <a href="/admin/atendimento" class="btn btn-secondary">← Voltar</a>
+        </div>
+    </div>
+
+    <!-- Chat Container -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header" style="background-color: #1e3a5f; color: white;">
+                    <h5 class="mb-0">Histórico da Conversa</h5>
+                </div>
+                <div class="card-body" style="height: 500px; overflow-y: auto;" id="chatContainer">
+                    {% if messages %}
+                        {% for msg in messages %}
+                            {% if msg.role == 'user' %}
+                            <div class="mb-3 d-flex justify-content-start">
+                                <div class="card bg-light" style="max-width: 70%;">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge" style="background-color: #5dade2; margin-right: 8px;">👤 Cliente</span>
+                                            <small class="text-muted">{{ msg.timestamp.strftime('%d/%m/%Y %H:%M:%S') if msg.timestamp else '-' }}</small>
+                                        </div>
+                                        <p class="mb-0">{{ msg.message }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="mb-3 d-flex justify-content-end">
+                                <div class="card" style="background-color: #1e3a5f; color: white; max-width: 70%;">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge bg-light text-dark me-2">
+                                                {% if msg.get('sent_by') == 'admin_panel' %}👤 Você{% else %}🤖 IA{% endif %}
+                                            </span>
+                                            <small style="color: rgba(255,255,255,0.7);">{{ msg.timestamp.strftime('%d/%m/%Y %H:%M:%S') if msg.timestamp else '-' }}</small>
+                                        </div>
+                                        <p class="mb-0">{{ msg.message }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">Nenhuma mensagem encontrada.</p>
+                    {% endif %}
+                </div>
+                
+                <!-- Campo de Resposta -->
+                <div class="card-footer">
+                    <form id="sendMessageForm" onsubmit="sendMessage(event)">
+                        <div class="input-group">
+                            <textarea 
+                                id="messageInput" 
+                                class="form-control" 
+                                placeholder="Digite sua mensagem..." 
+                                rows="2"
+                                required
+                            ></textarea>
+                            <button type="submit" class="btn" style="background-color: #5dade2; color: white;">
+                                📤 Enviar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const phone = '{{ phone }}';
+
+// Scroll para última mensagem
+function scrollToBottom() {
+    const container = document.getElementById('chatContainer');
+    container.scrollTop = container.scrollHeight;
+}
+scrollToBottom();
+
+// Enviar mensagem
+async function sendMessage(event) {
+    event.preventDefault();
+    
+    const messageInput = document.getElementById('messageInput');
+    const message = messageInput.value.trim();
+    
+    if (!message) return;
+    
+    try {
+        const formData = new FormData();
+        formData.append('phone', phone);
+        formData.append('message', message);
+        
+        const response = await fetch('/admin/atendimento/send', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            messageInput.value = '';
+            // Recarregar página para mostrar nova mensagem
+            location.reload();
+        } else {
+            alert('Erro ao enviar mensagem: ' + result.message);
+        }
+    } catch (error) {
+        alert('Erro ao enviar mensagem: ' + error);
+    }
+}
+
+// Devolver para IA
+async function returnToIA() {
+    if (!confirm('Tem certeza que deseja devolver esta conversa para IA?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/admin/atendimento/return-to-ia/${phone}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            alert('Conversa devolvida para IA com sucesso!');
+            window.location.href = '/admin/atendimento';
+        } else {
+            alert('Erro: ' + result.message);
+        }
+    } catch (error) {
+        alert('Erro: ' + error);
+    }
+}
+
+// Atualizar mensagens a cada 5 segundos
+setInterval(async function() {
+    try {
+        const response = await fetch(`/admin/atendimento/messages/${phone}`);
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            // Verificar se há novas mensagens
+            const currentCount = document.querySelectorAll('.card.bg-light, .card[style*="background-color: #1e3a5f"]').length;
+            if (result.messages.length > currentCount) {
+                location.reload();
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao atualizar mensagens:', error);
+    }
+}, 5000);
+</script>
+{% endblock %}
