@@ -34,6 +34,7 @@ from admin_routes import router as admin_router
 from admin_training_routes import router as training_router
 from admin_controle_routes import router as controle_router
 from admin_learning_routes import router as learning_router
+from admin_atendimento_routes import router as atendimento_router
 
 # ============================================================
 # CONFIGURAÇÃO DE LOGGING
@@ -112,7 +113,9 @@ async def set_bot_status(enabled: bool):
 # ============================================================
 
 # Número do atendente para notificações
-ATENDENTE_PHONE = "5518572081139"  # Formato internacional
+# Números do sistema
+ATENDENTE_PHONE = "5518573167770"  # Número oficial de atendimento (responde clientes)
+NOTIFICACAO_PHONE = "5518572081139"  # Número pessoal (recebe notificações)
 
 async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
     """Envia notificação para atendente com resumo da conversa"""
@@ -148,8 +151,8 @@ async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
 🤖 Cliente digitando *+* volta para IA automaticamente.
 """
         
-        # Enviar notificação
-        await send_whatsapp_message(ATENDENTE_PHONE, mensagem_atendente)
+        # Enviar notificação para número pessoal
+        await send_whatsapp_message(NOTIFICACAO_PHONE, mensagem_atendente)
         logger.info(f"✅ Notificação enviada para atendente: {phone}")
         
         return True
@@ -366,6 +369,7 @@ app.include_router(admin_router)
 app.include_router(training_router)
 app.include_router(controle_router)
 app.include_router(learning_router)
+app.include_router(atendimento_router)
 
 # ============================================================
 # CONFIGURAÇÕES Z-API
@@ -918,27 +922,22 @@ async def webhook_whatsapp(request: Request):
             await transferir_para_humano(phone, "Cliente digitou *")
             return {"status": "transferred_to_human"}
         
-        # Comando: + (Voltar para IA)
+        # Comando: + (Voltar para IA) - APENAS ATENDENTE
         if message_text == "+":
-            await db.conversas.update_many(
-                {"phone": phone},
-                {
-                    "$set": {
-                        "mode": "ia",
-                        "returned_at": datetime.now()
-                    },
-                    "$unset": {
-                        "transfer_reason": "",
-                        "transferred_at": ""
-                    }
-                }
-            )
-            await send_whatsapp_message(
-                phone,
-                "✅ Você voltou para o atendimento automático com IA. Como posso ajudar?"
-            )
-            logger.info(f"✅ Cliente voltou para IA: {phone}")
-            return {"status": "returned_to_ia"}
+            # Verificar se é o atendente
+            if phone == ATENDENTE_PHONE:
+                # Atendente pode devolver qualquer conversa para IA
+                # Mas precisa especificar o número: "+ 5516893094980"
+                await send_whatsapp_message(
+                    phone,
+                    "✅ Para devolver um cliente para IA, envie: + seguido do número do cliente\nExemplo: + 5516893094980"
+                )
+                return {"status": "command_help"}
+            else:
+                # Cliente comum não pode usar este comando
+                # Ignorar silenciosamente (não responder nada)
+                logger.info(f"⚠️ Cliente {phone} tentou usar comando + (negado)")
+                return {"status": "ignored"}
         
         # Comando: ## (Desligar IA para este usuário)
         if message_text == "##":
