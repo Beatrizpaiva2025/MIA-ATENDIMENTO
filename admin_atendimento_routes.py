@@ -27,7 +27,12 @@ async def admin_atendimento_page(request: Request):
         # Buscar conversas em modo human
         pipeline = [
             {
-                "$match": {"mode": "human"}
+                "$match": {
+                    "$or": [
+                        {"mode": "human"},
+                        {"transferred_at": {"$exists": True}}
+                    ]
+                }
             },
             {
                 "$sort": {"timestamp": -1}
