@@ -34,6 +34,7 @@ from admin_routes import router as admin_router
 from admin_training_routes import router as training_router
 from admin_controle_routes import router as controle_router
 from admin_learning_routes import router as learning_router
+from admin_conversas_leads_routes import router as conversas_leads_router
 
 # ============================================================
 # CONFIGURAÇÃO DE LOGGING
@@ -263,6 +264,9 @@ async def detectar_conversao(phone: str, message: str) -> bool:
         
         return False
         
+    except Exception as e:
+        logger.error(f"❌ Erro ao detectar conversão: {str(e)}")
+        return False
 
 # ============================================================
 # FUNÇÃO: HYBRID LEARNING - SUGERIR CONHECIMENTO
@@ -363,6 +367,7 @@ app.include_router(admin_router)
 app.include_router(training_router)
 app.include_router(controle_router)
 app.include_router(learning_router)
+app.include_router(conversas_leads_router)
 
 # ============================================================
 # CONFIGURAÇÕES Z-API
@@ -764,7 +769,8 @@ async def process_message_with_ai(phone: str, message: str) -> str:
         if await detectar_solicitacao_humano(message):
             await transferir_para_humano(phone, "Cliente solicitou atendente")
             # Retornar mensagem normal (invisível - cliente não sabe que foi transferido)
-            return "Entendo. Vou verificar isso para você. Um momento, por favor."
+            # Mensagem natural sem mencionar "humano" ou "robô"
+            return "Perfeito! Vou transferir você agora para um de nossos especialistas que poderá te ajudar melhor com isso. Um momento, por favor."
         
         # Buscar treinamento dinâmico do MongoDB
         system_prompt = await get_bot_training()
