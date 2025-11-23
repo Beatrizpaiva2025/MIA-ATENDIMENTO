@@ -1232,4 +1232,28 @@ async def health_check():
 # ============================================================
 @app.get("/admin/reset-mode/{phone}")
 async def reset_mode(phone: str):
-    """Reset modo de conversa para IA (desbloquea
+    """Reset modo de conversa para IA (desbloquear)"""
+    try:
+        result = await db.conversas.update_many(
+            {"phone": phone},
+            {
+                "$set": {"mode": "ia"},
+                "$unset": {"transferred_at": "", "transfer_reason": ""}
+            }
+        )
+        return {
+            "status": "success",
+            "phone": phone,
+            "updated": result.modified_count,
+            "message": f"Número {phone} desbloqueado! Bot vai responder agora."
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ============================================================
+# INICIAR SERVIDOR
+# ============================================================
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
