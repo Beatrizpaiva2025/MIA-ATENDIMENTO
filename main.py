@@ -1228,9 +1228,8 @@ async def health_check():
     }
 
 # ============================================================
-# INICIAR SERVIDOR
+# ENDPOINT DE RESET (TEMPORÁRIO)
 # ============================================================
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", 10000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+@app.get("/admin/reset-mode/{phone}")
+async def reset_mode(phone: str):
+    """Reset modo de conversa para IA (desbloquea
