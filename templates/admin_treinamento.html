@@ -1,487 +1,345 @@
 {% extends "admin_base.html" %}
 
-{% block title %}Treinamento da IA - MIA Bot{% endblock %}
+{% block title %}Treinamento - MIA Admin{% endblock %}
 
-{% block page_title %}Treinamento da IA{% endblock %}
-{% block page_subtitle %}Configure a personalidade, conhecimento e FAQs da MIA{% endblock %}
+{% block extra_style %}
+<style>
+    .section-card {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 25px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border-left: 4px solid #ff9800;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .section-icon {
+        font-size: 2em;
+        margin-right: 15px;
+    }
+
+    .section-title {
+        font-size: 1.5em;
+        color: #1e3a5f;
+        margin: 0;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #1e3a5f;
+        margin-bottom: 8px;
+        font-size: 1.05em;
+    }
+
+    .form-input, .form-textarea, .form-select {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 1em;
+        transition: all 0.3s;
+        font-family: inherit;
+    }
+
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+        outline: none;
+        border-color: #5dade2;
+        box-shadow: 0 0 0 3px rgba(93, 173, 226, 0.1);
+    }
+
+    .form-textarea {
+        min-height: 120px;
+        resize: vertical;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+        color: white;
+        padding: 12px 30px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1.1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(255, 152, 0, 0.4);
+    }
+
+    .btn-secondary {
+        background: #5dade2;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.95em;
+        cursor: pointer;
+        margin-right: 10px;
+        transition: all 0.3s;
+    }
+
+    .btn-secondary:hover {
+        background: #4a9dd1;
+    }
+
+    .knowledge-item, .faq-item {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border-left: 3px solid #5dade2;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .item-content {
+        flex: 1;
+    }
+
+    .item-title {
+        font-weight: 600;
+        color: #1e3a5f;
+        margin-bottom: 5px;
+    }
+
+    .item-text {
+        color: #666;
+        font-size: 0.95em;
+    }
+
+    .item-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .btn-edit, .btn-delete {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.9em;
+        transition: all 0.2s;
+    }
+
+    .btn-edit {
+        background: #5dade2;
+        color: white;
+    }
+
+    .btn-edit:hover {
+        background: #4a9dd1;
+    }
+
+    .btn-delete {
+        background: #e74c3c;
+        color: white;
+    }
+
+    .btn-delete:hover {
+        background: #c0392b;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+
+    .stat-card {
+        background: linear-gradient(135deg, #5dade2 0%, #4a9dd1 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+    }
+
+    .stat-number {
+        font-size: 2.5em;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+
+    .stat-label {
+        font-size: 0.95em;
+        opacity: 0.9;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
+<div class="page-header">
+    <h1>🎓 Treinamento da IA</h1>
+    <p>Configure o conhecimento e personalidade da MIA</p>
+</div>
+
+<!-- STATS -->
 <div class="stats-grid">
     <div class="stat-card">
-        <h3>Base de Conhecimento</h3>
-        <div class="stat-value" id="knowledge-count">{{ knowledge_count }}</div>
-        <i class="fas fa-book stat-icon"></i>
+        <div class="stat-number">{{ conhecimentos|length }}</div>
+        <div class="stat-label">Base de Conhecimento</div>
     </div>
-    <div class="stat-card">
-        <h3>FAQs Cadastradas</h3>
-        <div class="stat-value" id="faq-count">{{ faq_count }}</div>
-        <i class="fas fa-question-circle stat-icon"></i>
+    <div class="stat-card" style="background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);">
+        <div class="stat-number">{{ faqs|length }}</div>
+        <div class="stat-label">FAQs Cadastradas</div>
     </div>
 </div>
 
-<!-- Seção de Personalidade -->
-<div class="card">
-    <div class="card-header">
-        <h2>🎭 Personalidade da IA</h2>
-        <p>Defina como a MIA deve se comportar nas conversas</p>
+<!-- PERSONALIDADE -->
+<div class="section-card">
+    <div class="section-header">
+        <span class="section-icon">🤖</span>
+        <h2 class="section-title">Personalidade da IA</h2>
     </div>
-    <div class="card-body">
-        <form id="personality-form">
-            <div class="form-group">
-                <label for="tone">Tom de Voz</label>
-                <select id="tone" name="tone" class="form-control">
-                    <option value="friendly" {% if personality.get('tone') == 'friendly' %}selected{% endif %}>Amigável e Casual</option>
-                    <option value="professional" {% if personality.get('tone') == 'professional' %}selected{% endif %}>Profissional e Formal</option>
-                    <option value="enthusiastic" {% if personality.get('tone') == 'enthusiastic' %}selected{% endif %}>Entusiasta e Energético</option>
-                    <option value="empathetic" {% if personality.get('tone') == 'empathetic' %}selected{% endif %}>Empático e Acolhedor</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="goals">Objetivos da IA</label>
-                <textarea id="goals" name="goals" class="form-control" rows="4" placeholder="Ex: Qualificar leads de tradução, agendar reuniões, fornecer informações sobre serviços...">{{ personality.get('goals', '') if personality.get('goals') is string else '\n'.join(personality.get('goals', [])) }}</textarea>
-                <p class="form-hint">Um objetivo por linha</p>
-            </div>
-
-            <div class="form-group">
-                <label for="restrictions">Restrições</label>
-                <textarea id="restrictions" name="restrictions" class="form-control" rows="4" placeholder="Ex: Não fornecer orçamentos sem análise, sempre transferir casos complexos para humano...">{{ personality.get('restrictions', '') if personality.get('restrictions') is string else '\n'.join(personality.get('restrictions', [])) }}</textarea>
-                <p class="form-hint">Uma restrição por linha</p>
-            </div>
-
-            <button type="submit" class="btn btn-primary">
-                <i class="fas fa-save"></i> Salvar Personalidade
-            </button>
-        </form>
-    </div>
-</div>
-
-<!-- Seção de Base de Conhecimento -->
-<div class="card">
-    <div class="card-header">
-        <h2>📚 Base de Conhecimento</h2>
-        <p>Adicione informações que a IA deve saber</p>
-    </div>
-    <div class="card-body">
-        <form id="knowledge-form">
-            <input type="hidden" id="knowledge-edit-index" value="">
-            <div class="form-group">
-                <label for="knowledge-title">Título</label>
-                <input type="text" id="knowledge-title" name="title" class="form-control" placeholder="Ex: Serviços de Tradução Juramentada">
-            </div>
-
-            <div class="form-group">
-                <label for="knowledge-content">Conteúdo</label>
-                <textarea id="knowledge-content" name="content" class="form-control" rows="6" placeholder="Descreva as informações que a IA deve saber sobre este tópico..."></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-secondary" id="knowledge-submit-btn">
-                <i class="fas fa-plus"></i> <span id="knowledge-btn-text">Adicionar Conhecimento</span>
-            </button>
-            <button type="button" class="btn btn-outline-secondary" id="knowledge-cancel-btn" style="display: none;" onclick="cancelEditKnowledge()">
-                <i class="fas fa-times"></i> Cancelar
-            </button>
-        </form>
-
-        <div id="knowledge-list" style="margin-top: 32px;">
-            <h3 style="color: var(--legacy-navy); margin-bottom: 16px;">Conhecimentos Cadastrados</h3>
-            <div id="knowledge-items"></div>
+    
+    <form method="POST" action="/admin/treinamento/personalidade">
+        <div class="form-group">
+            <label class="form-label">Tom de Voz</label>
+            <select name="tom_voz" class="form-select">
+                <option value="amigavel" {% if personalidade.tom_voz == 'amigavel' %}selected{% endif %}>Amigável e Casual</option>
+                <option value="profissional" {% if personalidade.tom_voz == 'profissional' %}selected{% endif %}>Profissional</option>
+                <option value="formal" {% if personalidade.tom_voz == 'formal' %}selected{% endif %}>Formal</option>
+            </select>
         </div>
-    </div>
+
+        <div class="form-group">
+            <label class="form-label">Descrição da Empresa</label>
+            <textarea name="descricao" class="form-textarea" placeholder="Ex: Você é o assistente oficial da empresa Legacy Translations, especializada em..."required>{{ personalidade.descricao or '' }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Objetivos da IA</label>
+            <textarea name="objetivos" class="form-textarea" placeholder="Siga as instruções abaixo para responder a clientes de forma educada..." required>{{ personalidade.objetivos or '' }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Restrições</label>
+            <textarea name="restricoes" class="form-textarea" placeholder="Uma restrição por linha">{{ personalidade.restricoes or '' }}</textarea>
+        </div>
+
+        <button type="submit" class="btn-primary">💾 Salvar Personalidade</button>
+    </form>
 </div>
 
-<!-- Seção de FAQs -->
-<div class="card">
-    <div class="card-header">
-        <h2>❓ Perguntas Frequentes (FAQs)</h2>
-        <p>Cadastre perguntas e respostas comuns</p>
+<!-- BASE DE CONHECIMENTO -->
+<div class="section-card">
+    <div class="section-header">
+        <span class="section-icon">📚</span>
+        <h2 class="section-title">Base de Conhecimento</h2>
     </div>
-    <div class="card-body">
-        <form id="faq-form">
-            <input type="hidden" id="faq-edit-index" value="">
-            <div class="form-group">
-                <label for="faq-question">Pergunta</label>
-                <input type="text" id="faq-question" name="question" class="form-control" placeholder="Ex: Quanto tempo leva uma tradução?">
-            </div>
 
-            <div class="form-group">
-                <label for="faq-answer">Resposta</label>
-                <textarea id="faq-answer" name="answer" class="form-control" rows="4" placeholder="Resposta que a IA deve dar..."></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-secondary" id="faq-submit-btn">
-                <i class="fas fa-plus"></i> <span id="faq-btn-text">Adicionar FAQ</span>
-            </button>
-            <button type="button" class="btn btn-outline-secondary" id="faq-cancel-btn" style="display: none;" onclick="cancelEditFAQ()">
-                <i class="fas fa-times"></i> Cancelar
-            </button>
-        </form>
-
-        <div id="faq-list" style="margin-top: 32px;">
-            <h3 style="color: var(--legacy-navy); margin-bottom: 16px;">FAQs Cadastradas</h3>
-            <div id="faq-items"></div>
+    <form method="POST" action="/admin/treinamento/conhecimento" style="margin-bottom: 25px;">
+        <div class="form-group">
+            <label class="form-label">Título</label>
+            <input type="text" name="titulo" class="form-input" placeholder="Ex: Serviços de Tradução Jurídica" required>
         </div>
+
+        <div class="form-group">
+            <label class="form-label">Conteúdo</label>
+            <textarea name="conteudo" class="form-textarea" placeholder="Descreva as informações que a IA deve saber sobre este tópico..." required></textarea>
+        </div>
+
+        <button type="submit" class="btn-primary">➕ Adicionar Conhecimento</button>
+    </form>
+
+    {% if conhecimentos %}
+        {% for item in conhecimentos %}
+        <div class="knowledge-item">
+            <div class="item-content">
+                <div class="item-title">{{ item.titulo }}</div>
+                <div class="item-text">{{ item.conteudo[:100] }}...</div>
+            </div>
+            <div class="item-actions">
+                <button class="btn-edit" onclick="editarConhecimento('{{ item._id }}')">✏️ Editar</button>
+                <button class="btn-delete" onclick="deletarConhecimento('{{ item._id }}')">🗑️ Deletar</button>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="text-align: center; color: #999; padding: 30px;">Nenhum conhecimento cadastrado ainda.</p>
+    {% endif %}
+</div>
+
+<!-- FAQs -->
+<div class="section-card">
+    <div class="section-header">
+        <span class="section-icon">❓</span>
+        <h2 class="section-title">FAQs Cadastradas</h2>
     </div>
+
+    <form method="POST" action="/admin/treinamento/faq" style="margin-bottom: 25px;">
+        <div class="form-group">
+            <label class="form-label">Pergunta</label>
+            <input type="text" name="pergunta" class="form-input" placeholder="Ex: Quanto custa uma tradução juramentada?" required>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Resposta</label>
+            <textarea name="resposta" class="form-textarea" placeholder="Digite a resposta completa..." required></textarea>
+        </div>
+
+        <button type="submit" class="btn-primary">➕ Adicionar FAQ</button>
+    </form>
+
+    {% if faqs %}
+        {% for faq in faqs %}
+        <div class="faq-item">
+            <div class="item-content">
+                <div class="item-title">{{ faq.pergunta }}</div>
+                <div class="item-text">{{ faq.resposta[:100] }}...</div>
+            </div>
+            <div class="item-actions">
+                <button class="btn-edit" onclick="editarFAQ('{{ faq._id }}')">✏️ Editar</button>
+                <button class="btn-delete" onclick="deletarFAQ('{{ faq._id }}')">🗑️ Deletar</button>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="text-align: center; color: #999; padding: 30px;">Nenhuma FAQ cadastrada ainda.</p>
+    {% endif %}
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block extra_scripts %}
 <script>
-const BOT_ID = "{{ bot_id }}";
-
-// ============================================================
-// PERSONALIDADE
-// ============================================================
-$('#personality-form').on('submit', async function(e) {
-    e.preventDefault();
-    
-    const goals = $('#goals').val().split('\n').filter(g => g.trim());
-    const restrictions = $('#restrictions').val().split('\n').filter(r => r.trim());
-    
-    const data = {
-        personality: {
-            tone: $('#tone').val(),
-            goals: goals,
-            restrictions: restrictions
-        }
-    };
-    
-    try {
-        const response = await fetch(`/admin/treinamento/api/personality/${BOT_ID}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert('✅ Personalidade salva com sucesso!');
-        } else {
-            alert('❌ Erro ao salvar: ' + result.message);
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('❌ Erro ao salvar personalidade');
+    function editarConhecimento(id) {
+        alert('Edição em desenvolvimento. ID: ' + id);
     }
-});
 
-// ============================================================
-// BASE DE CONHECIMENTO
-// ============================================================
-$('#knowledge-form').on('submit', async function(e) {
-    e.preventDefault();
-    
-    const editIndex = $('#knowledge-edit-index').val();
-    const data = {
-        title: $('#knowledge-title').val(),
-        content: $('#knowledge-content').val()
-    };
-    
-    if (!data.title || !data.content) {
-        alert('⚠️ Preencha todos os campos');
-        return;
-    }
-    
-    try {
-        let url = `/admin/treinamento/api/knowledge/${BOT_ID}`;
-        let method = 'POST';
-        
-        // Se está editando
-        if (editIndex !== '') {
-            url = `/admin/treinamento/api/knowledge/${BOT_ID}/${editIndex}`;
-            method = 'PUT';
+    function deletarConhecimento(id) {
+        if (confirm('Deletar este conhecimento?')) {
+            fetch('/admin/treinamento/conhecimento/' + id, { method: 'DELETE' })
+                .then(() => location.reload());
         }
-        
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert(editIndex !== '' ? '✅ Conhecimento atualizado!' : '✅ Conhecimento adicionado!');
-            $('#knowledge-title').val('');
-            $('#knowledge-content').val('');
-            $('#knowledge-edit-index').val('');
-            $('#knowledge-btn-text').text('Adicionar Conhecimento');
-            $('#knowledge-submit-btn i').attr('class', 'fas fa-plus');
-            $('#knowledge-cancel-btn').hide();
-            loadKnowledge();
-            updateCounts();
-        } else {
-            alert('❌ Erro: ' + result.message);
+    }
+
+    function editarFAQ(id) {
+        alert('Edição em desenvolvimento. ID: ' + id);
+    }
+
+    function deletarFAQ(id) {
+        if (confirm('Deletar esta FAQ?')) {
+            fetch('/admin/treinamento/faq/' + id, { method: 'DELETE' })
+                .then(() => location.reload());
         }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('❌ Erro ao salvar conhecimento');
     }
-});
-
-function editKnowledge(index) {
-    fetch(`/admin/treinamento/api/knowledge/${BOT_ID}`)
-        .then(res => res.json())
-        .then(result => {
-            if (result.success && result.knowledge[index]) {
-                const item = result.knowledge[index];
-                $('#knowledge-title').val(item.title);
-                $('#knowledge-content').val(item.content);
-                $('#knowledge-edit-index').val(index);
-                $('#knowledge-btn-text').text('Atualizar Conhecimento');
-                $('#knowledge-submit-btn i').attr('class', 'fas fa-save');
-                $('#knowledge-cancel-btn').show();
-                
-                // Scroll para o formulário
-                $('html, body').animate({
-                    scrollTop: $('#knowledge-form').offset().top - 100
-                }, 500);
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('❌ Erro ao carregar conhecimento');
-        });
-}
-
-function cancelEditKnowledge() {
-    $('#knowledge-title').val('');
-    $('#knowledge-content').val('');
-    $('#knowledge-edit-index').val('');
-    $('#knowledge-btn-text').text('Adicionar Conhecimento');
-    $('#knowledge-submit-btn i').attr('class', 'fas fa-plus');
-    $('#knowledge-cancel-btn').hide();
-}
-
-async function loadKnowledge() {
-    try {
-        const response = await fetch(`/admin/treinamento/api/knowledge/${BOT_ID}`);
-        const result = await response.json();
-        
-        if (result.success && result.knowledge.length > 0) {
-            const html = result.knowledge.map((item, index) => `
-                <div class="card" style="margin-bottom: 16px;">
-                    <div class="card-body">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div style="flex: 1;">
-                                <h4 style="color: var(--legacy-navy); margin-bottom: 8px;">${item.title}</h4>
-                                <p style="color: var(--gray-600); margin: 0;">${item.content}</p>
-                            </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button class="btn btn-warning btn-sm" onclick="editKnowledge(${index})" title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-danger btn-sm" onclick="deleteKnowledge(${index})" title="Excluir">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-            $('#knowledge-items').html(html);
-        } else {
-            $('#knowledge-items').html('<p style="color: var(--gray-500);">Nenhum conhecimento cadastrado ainda.</p>');
-        }
-    } catch (error) {
-        console.error('Erro ao carregar conhecimento:', error);
-    }
-}
-
-async function deleteKnowledge(index) {
-    if (!confirm('Tem certeza que deseja excluir este conhecimento?')) return;
-    
-    try {
-        const response = await fetch(`/admin/treinamento/api/knowledge/${BOT_ID}/${index}`, {
-            method: 'DELETE'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert('✅ Conhecimento excluído!');
-            loadKnowledge();
-            updateCounts();
-        } else {
-            alert('❌ Erro ao excluir');
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('❌ Erro ao excluir conhecimento');
-    }
-}
-
-// ============================================================
-// FAQs
-// ============================================================
-$('#faq-form').on('submit', async function(e) {
-    e.preventDefault();
-    
-    const editIndex = $('#faq-edit-index').val();
-    const data = {
-        question: $('#faq-question').val(),
-        answer: $('#faq-answer').val()
-    };
-    
-    if (!data.question || !data.answer) {
-        alert('⚠️ Preencha todos os campos');
-        return;
-    }
-    
-    try {
-        let url = `/admin/treinamento/api/faq/${BOT_ID}`;
-        let method = 'POST';
-        
-        // Se está editando
-        if (editIndex !== '') {
-            url = `/admin/treinamento/api/faq/${BOT_ID}/${editIndex}`;
-            method = 'PUT';
-        }
-        
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert(editIndex !== '' ? '✅ FAQ atualizada!' : '✅ FAQ adicionada!');
-            $('#faq-question').val('');
-            $('#faq-answer').val('');
-            $('#faq-edit-index').val('');
-            $('#faq-btn-text').text('Adicionar FAQ');
-            $('#faq-submit-btn i').attr('class', 'fas fa-plus');
-            $('#faq-cancel-btn').hide();
-            loadFAQs();
-            updateCounts();
-        } else {
-            alert('❌ Erro: ' + result.message);
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('❌ Erro ao salvar FAQ');
-    }
-});
-
-function editFAQ(index) {
-    fetch(`/admin/treinamento/api/faq/${BOT_ID}`)
-        .then(res => res.json())
-        .then(result => {
-            if (result.success && result.faqs[index]) {
-                const item = result.faqs[index];
-                $('#faq-question').val(item.question);
-                $('#faq-answer').val(item.answer);
-                $('#faq-edit-index').val(index);
-                $('#faq-btn-text').text('Atualizar FAQ');
-                $('#faq-submit-btn i').attr('class', 'fas fa-save');
-                $('#faq-cancel-btn').show();
-                
-                // Scroll para o formulário
-                $('html, body').animate({
-                    scrollTop: $('#faq-form').offset().top - 100
-                }, 500);
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('❌ Erro ao carregar FAQ');
-        });
-}
-
-function cancelEditFAQ() {
-    $('#faq-question').val('');
-    $('#faq-answer').val('');
-    $('#faq-edit-index').val('');
-    $('#faq-btn-text').text('Adicionar FAQ');
-    $('#faq-submit-btn i').attr('class', 'fas fa-plus');
-    $('#faq-cancel-btn').hide();
-}
-
-async function loadFAQs() {
-    try {
-        const response = await fetch(`/admin/treinamento/api/faq/${BOT_ID}`);
-        const result = await response.json();
-        
-        if (result.success && result.faqs.length > 0) {
-            const html = result.faqs.map((item, index) => `
-                <div class="card" style="margin-bottom: 16px;">
-                    <div class="card-body">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div style="flex: 1;">
-                                <h4 style="color: var(--legacy-navy); margin-bottom: 8px;">❓ ${item.question}</h4>
-                                <p style="color: var(--gray-600); margin: 0;">💬 ${item.answer}</p>
-                            </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button class="btn btn-warning btn-sm" onclick="editFAQ(${index})" title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-danger btn-sm" onclick="deleteFAQ(${index})" title="Excluir">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-            $('#faq-items').html(html);
-        } else {
-            $('#faq-items').html('<p style="color: var(--gray-500);">Nenhuma FAQ cadastrada ainda.</p>');
-        }
-    } catch (error) {
-        console.error('Erro ao carregar FAQs:', error);
-    }
-}
-
-async function deleteFAQ(index) {
-    if (!confirm('Tem certeza que deseja excluir esta FAQ?')) return;
-    
-    try {
-        const response = await fetch(`/admin/treinamento/api/faq/${BOT_ID}/${index}`, {
-            method: 'DELETE'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert('✅ FAQ excluída!');
-            loadFAQs();
-            updateCounts();
-        } else {
-            alert('❌ Erro ao excluir');
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('❌ Erro ao excluir FAQ');
-    }
-}
-
-// ============================================================
-// ATUALIZAR CONTADORES
-// ============================================================
-async function updateCounts() {
-    try {
-        const [knowledgeRes, faqRes] = await Promise.all([
-            fetch(`/admin/treinamento/api/knowledge/${BOT_ID}`),
-            fetch(`/admin/treinamento/api/faq/${BOT_ID}`)
-        ]);
-        
-        const knowledge = await knowledgeRes.json();
-        const faqs = await faqRes.json();
-        
-        $('#knowledge-count').text(knowledge.knowledge?.length || 0);
-        $('#faq-count').text(faqs.faqs?.length || 0);
-    } catch (error) {
-        console.error('Erro ao atualizar contadores:', error);
-    }
-}
-
-// Carregar dados ao iniciar
-$(document).ready(function() {
-    loadKnowledge();
-    loadFAQs();
-});
 </script>
 {% endblock %}
