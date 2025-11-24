@@ -209,38 +209,28 @@
         <span class="section-icon">🤖</span>
         <h2 class="section-title">AI Personality</h2>
     </div>
-    
     <form method="POST" action="/admin/treinamento/personalidade">
         <div class="form-group">
             <label class="form-label">Tone of Voice</label>
-            <select name="tom_voz" class="form-select">
-                <option value="amigavel" {% if personalidade.tom_voz == 'amigavel' %}selected{% endif %}>Friendly and Casual</option>
-                <option value="profissional" {% if personalidade.tom_voz == 'profissional' %}selected{% endif %}>Professional</option>
-                <option value="formal" {% if personalidade.tom_voz == 'formal' %}selected{% endif %}>Formal</option>
+            <select name="tone" class="form-select">
+                <option value="amigavel" {% if personalidade.tone == 'amigavel' %}selected{% endif %}>Friendly and Casual</option>
+                <option value="profissional" {% if personalidade.tone == 'profissional' %}selected{% endif %}>Professional</option>
+                <option value="formal" {% if personalidade.tone == 'formal' %}selected{% endif %}>Formal</option>
             </select>
         </div>
-
         <div class="form-group">
-            <label class="form-label">Company Description</label>
-            <textarea name="descricao" class="form-textarea" placeholder="Ex: You are the official assistant of Legacy Translations, specialized in..."required>{{ personalidade.descricao or '' }}</textarea>
+            <label class="form-label">AI Goals & Instructions</label>
+            <textarea name="goals" class="form-textarea" placeholder="Ex: You are the official assistant of Legacy Translations, specialized in..." required>{{ personalidade.goals or '' }}</textarea>
         </div>
-
-        <div class="form-group">
-            <label class="form-label">AI Objectives</label>
-            <textarea name="objetivos" class="form-textarea" placeholder="Follow the instructions below to respond to customers politely..." required>{{ personalidade.objetivos or '' }}</textarea>
-        </div>
-
         <div class="form-group">
             <label class="form-label">Restrictions</label>
-            <textarea name="restricoes" class="form-textarea" placeholder="One restriction per line">{{ personalidade.restricoes or '' }}</textarea>
+            <textarea name="restrictions" class="form-textarea" placeholder="One restriction per line">{{ personalidade.restrictions or '' }}</textarea>
         </div>
-
         <div class="form-group">
             <label class="form-label">⏱️ Response Delay (seconds)</label>
             <input type="number" name="response_delay" class="form-input" min="0" max="30" step="1" value="{{ personalidade.response_delay or 3 }}" placeholder="3">
             <small style="color: #666; font-size: 0.9em; display: block; margin-top: 5px;">Time to wait before sending response (0-30 seconds). Recommended: 3-5 seconds.</small>
         </div>
-
         <button type="submit" class="btn-primary">💾 Save Personality</button>
     </form>
 </div>
@@ -251,21 +241,17 @@
         <span class="section-icon">📚</span>
         <h2 class="section-title">Knowledge Base</h2>
     </div>
-
     <form method="POST" action="/admin/treinamento/conhecimento" style="margin-bottom: 25px;">
         <div class="form-group">
             <label class="form-label">Title</label>
             <input type="text" name="title" class="form-input" placeholder="Ex: Legal Translation Services" required>
         </div>
-
         <div class="form-group">
             <label class="form-label">Content</label>
             <textarea name="content" class="form-textarea" placeholder="Describe the information the AI should know about this topic..." required></textarea>
         </div>
-
         <button type="submit" class="btn-primary">➕ Add Knowledge</button>
     </form>
-
     {% if conhecimentos %}
         {% for item in conhecimentos %}
         <div class="knowledge-item">
@@ -290,27 +276,23 @@
         <span class="section-icon">❓</span>
         <h2 class="section-title">Registered FAQs</h2>
     </div>
-
     <form method="POST" action="/admin/treinamento/faq" style="margin-bottom: 25px;">
         <div class="form-group">
             <label class="form-label">Question</label>
             <input type="text" name="question" class="form-input" placeholder="Ex: How much does a sworn translation cost?" required>
         </div>
-
         <div class="form-group">
             <label class="form-label">Answer</label>
             <textarea name="answer" class="form-textarea" placeholder="Enter the complete answer..." required></textarea>
         </div>
-
         <button type="submit" class="btn-primary">➕ Add FAQ</button>
     </form>
-
     {% if faqs %}
         {% for faq in faqs %}
         <div class="faq-item">
             <div class="item-content">
-                <div class="item-title">{{ faq.pergunta }}</div>
-                <div class="item-text">{{ faq.resposta[:100] }}...</div>
+                <div class="item-title">{{ faq.question or faq.pergunta }}</div>
+                <div class="item-text">{{ (faq.answer or faq.resposta)[:100] }}...</div>
             </div>
             <div class="item-actions">
                 <button class="btn-edit" onclick="editarFAQ('{{ faq._id }}')">✏️ Edit</button>
@@ -329,21 +311,18 @@
     function editarConhecimento(id) {
         alert('Editing in development. ID: ' + id);
     }
-
     function deletarConhecimento(id) {
         if (confirm('Delete este conhecimento?')) {
-            fetch('/admin/treinamento/conhecimento/' + id, { method: 'DELETE' })
+            fetch('/admin/treinamento/conhecimento/deletar/' + id, { method: 'POST' })
                 .then(() => location.reload());
         }
     }
-
     function editarFAQ(id) {
         alert('Editing in development. ID: ' + id);
     }
-
     function deletarFAQ(id) {
         if (confirm('Delete esta FAQ?')) {
-            fetch('/admin/treinamento/faq/' + id, { method: 'DELETE' })
+            fetch('/admin/treinamento/faq/deletar/' + id, { method: 'POST' })
                 .then(() => location.reload());
         }
     }
