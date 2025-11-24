@@ -255,12 +255,12 @@
     <form method="POST" action="/admin/treinamento/conhecimento" style="margin-bottom: 25px;">
         <div class="form-group">
             <label class="form-label">Title</label>
-            <input type="text" name="titulo" class="form-input" placeholder="Ex: Legal Translation Services" required>
+            <input type="text" name="title" class="form-input" placeholder="Ex: Legal Translation Services" required>
         </div>
 
         <div class="form-group">
             <label class="form-label">Content</label>
-            <textarea name="conteudo" class="form-textarea" placeholder="Describe the information the AI should know about this topic..." required></textarea>
+            <textarea name="content" class="form-textarea" placeholder="Describe the information the AI should know about this topic..." required></textarea>
         </div>
 
         <button type="submit" class="btn-primary">➕ Add Knowledge</button>
@@ -270,8 +270,8 @@
         {% for item in conhecimentos %}
         <div class="knowledge-item">
             <div class="item-content">
-                <div class="item-title">{{ item.titulo }}</div>
-                <div class="item-text">{{ item.conteudo[:100] }}...</div>
+                <div class="item-title">{{ item.title or item.titulo }}</div>
+                <div class="item-text">{{ (item.content or item.conteudo)[:100] }}...</div>
             </div>
             <div class="item-actions">
                 <button class="btn-edit" onclick="editarConhecimento('{{ item._id }}')">✏️ Edit</button>
@@ -294,12 +294,12 @@
     <form method="POST" action="/admin/treinamento/faq" style="margin-bottom: 25px;">
         <div class="form-group">
             <label class="form-label">Question</label>
-            <input type="text" name="pergunta" class="form-input" placeholder="Ex: How much does a sworn translation cost?" required>
+            <input type="text" name="question" class="form-input" placeholder="Ex: How much does a sworn translation cost?" required>
         </div>
 
         <div class="form-group">
             <label class="form-label">Answer</label>
-            <textarea name="resposta" class="form-textarea" placeholder="Enter the complete answer..." required></textarea>
+            <textarea name="answer" class="form-textarea" placeholder="Enter the complete answer..." required></textarea>
         </div>
 
         <button type="submit" class="btn-primary">➕ Add FAQ</button>
