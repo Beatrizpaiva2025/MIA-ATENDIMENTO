@@ -31,7 +31,7 @@ async def get_bot_status():
             # Criar configuração padrão se não existir
             config = {
                 "_id": "global_status",
-                "ia_ativa": True,
+                "enabled": True,
                 "modo_manutencao": False,
                 "updated_at": datetime.now()
             }
@@ -39,14 +39,14 @@ async def get_bot_status():
         return config
     except Exception as e:
         logger.error(f"Erro ao buscar status do bot: {e}")
-        return {"ia_ativa": True, "modo_manutencao": False}
+        return {"enabled": True, "modo_manutencao": False}
 
 async def set_bot_status(ia_ativa: bool = None, modo_manutencao: bool = None):
     """Atualiza status do bot"""
     try:
         update_data = {"updated_at": datetime.now()}
         if ia_ativa is not None:
-            update_data["ia_ativa"] = ia_ativa
+            update_data["enabled"] = ia_ativa
         if modo_manutencao is not None:
             update_data["modo_manutencao"] = modo_manutencao
         
@@ -86,7 +86,7 @@ async def api_get_status():
     try:
         config = await get_bot_status()
         return {
-            "ia_ativa": config.get("ia_ativa", True),
+            "ia_ativa": config.get("enabled", True),
             "modo_manutencao": config.get("modo_manutencao", False)
         }
     except Exception as e:
