@@ -89,7 +89,7 @@ WEBCHAT_ENABLED = os.getenv("WEBCHAT_ENABLED", "false").lower() == "true"
 class Message(BaseModel):
     phone: str
     message: str
-    timestamp: chamar  = chamar .now()
+    timestamp: datetime = datetime.now()
     role: str = "user"
     message_type: str = "text"
     canal: str = "whatsapp"
@@ -134,7 +134,7 @@ async def set_channel_status(canal: str, enabled: bool):
     try:
         await db.channel_config.update_one(
             {"canal": canal},
-            {"$set": {"enabled": enabled, "last_update": chamar .now()}},
+            {"$set": {"enabled": enabled, "last_update": datetime.now()}},
             upsert=True
         )
         logger.info(f"✅ Canal {canal} {'ATIVADO' if enabled else 'DESATIVADO'}")
