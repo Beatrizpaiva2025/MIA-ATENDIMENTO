@@ -1,87 +1,402 @@
 {% extends "admin_base.html" %}
 
-{% block title %}Atendimento Humano - MIA Admin{% endblock %}
+{% block title %}Chat - {{ phone }} - MIA Admin{% endblock %}
+
+{% block extra_style %}
+<style>
+    .chat-container {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0;
+        height: calc(100vh - 200px);
+        max-height: 700px;
+    }
+
+    .chat-header {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px 12px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .chat-info h2 {
+        margin: 0 0 5px 0;
+        font-size: 1.5em;
+    }
+
+    .chat-info p {
+        margin: 0;
+        opacity: 0.9;
+        font-size: 0.95em;
+    }
+
+    .chat-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn-chat-action {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .btn-devolver {
+        background: #ff9800;
+        color: white;
+    }
+
+    .btn-devolver:hover {
+        background: #e68900;
+    }
+
+    .chat-messages {
+        background: #f0f2f5;
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .message {
+        max-width: 70%;
+        padding: 12px 16px;
+        border-radius: 12px;
+        word-wrap: break-word;
+        animation: fadeIn 0.3s;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message-user {
+        align-self: flex-end;
+        background: #dcf8c6;
+        border-radius: 12px 12px 0 12px;
+    }
+
+    .message-bot {
+        align-self: flex-start;
+        background: white;
+        border-radius: 12px 12px 12px 0;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .message-assistant {
+        align-self: flex-start;
+        background: #e3f2fd;
+        border-radius: 12px 12px 12px 0;
+        border-left: 3px solid #2196f3;
+    }
+
+    .message-content {
+        margin: 0 0 5px 0;
+        line-height: 1.5;
+    }
+
+    .message-time {
+        font-size: 0.75em;
+        color: #666;
+        text-align: right;
+    }
+
+    .message-role {
+        font-size: 0.8em;
+        font-weight: 600;
+        color: #1e3a5f;
+        margin-bottom: 5px;
+    }
+
+    .chat-input-container {
+        background: white;
+        padding: 20px;
+        border-radius: 0 0 12px 12px;
+        border-top: 2px solid #e0e0e0;
+    }
+
+    .chat-input-wrapper {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+    }
+
+    .chat-input {
+        flex: 1;
+        padding: 12px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 24px;
+        font-size: 1em;
+        font-family: inherit;
+        resize: none;
+        max-height: 120px;
+        transition: all 0.3s;
+    }
+
+    .chat-input:focus {
+        outline: none;
+        border-color: #5dade2;
+        box-shadow: 0 0 0 3px rgba(93, 173, 226, 0.1);
+    }
+
+    .btn-send {
+        background: linear-gradient(135deg, #5dade2 0%, #4a9dd1 100%);
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 24px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        white-space: nowrap;
+    }
+
+    .btn-send:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(93, 173, 226, 0.4);
+    }
+
+    .btn-send:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .typing-indicator {
+        align-self: flex-start;
+        background: white;
+        padding: 12px 16px;
+        border-radius: 12px;
+        display: none;
+    }
+
+    .typing-indicator.active {
+        display: block;
+    }
+
+    .typing-dots {
+        display: flex;
+        gap: 4px;
+    }
+
+    .typing-dots span {
+        width: 8px;
+        height: 8px;
+        background: #999;
+        border-radius: 50%;
+        animation: typing 1.4s infinite;
+    }
+
+    .typing-dots span:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .typing-dots span:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+
+    @keyframes typing {
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-10px); }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1>👤 Atendimento Humano</h1>
-    <p>Gerencie conversas que precisam de atendimento manual</p>
-</div>
-
-<div style="background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); color: white; padding: 25px; border-radius: 12px; margin-bottom: 30px; text-align: center;">
-    <h2 style="font-size: 3em; margin: 0;">{{ conversas|length }}</h2>
-    <p style="font-size: 1.2em; margin: 10px 0 0 0;">Conversas Aguardando Atendimento</p>
-</div>
-
-<div style="background: #f8f9fa; padding: 20px; border-radius: 10px;">
-    <h3 style="color: #1e3a5f; margin-bottom: 20px;">📋 Conversas em Atendimento Humano</h3>
-    
-    {% if conversas %}
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="background: #1e3a5f; color: white;">
-                    <th style="padding: 15px; text-align: left; border-radius: 8px 0 0 0;">Telefone</th>
-                    <th style="padding: 15px; text-align: left;">Última Mensagem</th>
-                    <th style="padding: 15px; text-align: left;">Transferido em</th>
-                    <th style="padding: 15px; text-align: center; border-radius: 0 8px 0 0;">Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for conversa in conversas %}
-                <tr style="border-bottom: 1px solid #ddd; background: {% if loop.index % 2 == 0 %}#fff{% else %}#f8f9fa{% endif %};">
-                    <td style="padding: 15px; font-weight: bold; color: #1e3a5f;">{{ conversa._id }}</td>
-                    <td style="padding: 15px; color: #666;">{{ conversa.last_message[:50] }}...</td>
-                    <td style="padding: 15px; color: #666;">
-                        {% if conversa.transferred_at %}
-                            {{ conversa.transferred_at.strftime('%d/%m %H:%M') }}
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td style="padding: 15px; text-align: center;">
-                        <a href="/admin/atendimento/{{ conversa._id }}" 
-                           style="background: #5dade2; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; margin-right: 8px; display: inline-block;">
-                            💬 Atender
-                        </a>
-                        <button onclick="devolverParaIA('{{ conversa._id }}')"
-                                style="background: #ff9800; color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;">
-                            🤖 Devolver para IA
-                        </button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <div style="text-align: center; padding: 40px; color: #666;">
-            <div style="font-size: 4em; margin-bottom: 20px;">✅</div>
-            <p style="font-size: 1.2em;">Nenhuma conversa aguardando atendimento no momento.</p>
+<div class="chat-container">
+    <div class="chat-header">
+        <div class="chat-info">
+            <h2>💬 Chat with {{ phone }}</h2>
+            <p>{{ mensagens|length }} messages in history</p>
         </div>
-    {% endif %}
+        <div class="chat-actions">
+            <button class="btn-chat-action btn-devolver" onclick="devolverParaIA()">
+                🤖 Return to AI
+            </button>
+        </div>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+        {% for msg in mensagens %}
+        <div class="message message-{{ msg.role }}">
+            <div class="message-role">
+                {% if msg.role == 'user' %}
+                    👤 Customer
+                {% elif msg.role == 'assistant' %}
+                    🤖 MIA
+                {% else %}
+                    👨‍💼 Agent
+                {% endif %}
+            </div>
+            <div class="message-content">{{ msg.message }}</div>
+            <div class="message-time">
+                {{ msg.timestamp.strftime('%H:%M') if msg.timestamp else '' }}
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="typing-indicator" id="typing-indicator">
+            <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-input-container">
+        <div class="chat-input-wrapper">
+            <textarea 
+                id="message-input" 
+                class="chat-input" 
+                placeholder="Type your message..."
+                rows="1"
+                onkeydown="handleKeyPress(event)"></textarea>
+            <button class="btn-send" onclick="enviarMensagem()">
+                📤 Send
+            </button>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-    async function devolverParaIA(phone) {
-        if (!confirm(`Devolver conversa de ${phone} para IA?`)) return;
+    const phone = "{{ phone }}";
+    let enviando = false;
+
+    // Auto-scroll para última mensagem
+    window.onload = function() {
+        scrollToBottom();
+        document.getElementById('message-input').focus();
+        
+        // Auto-refresh a cada 3 segundos
+        setInterval(carregarNovasMessages, 3000);
+    };
+
+    function scrollToBottom() {
+        const container = document.getElementById('chat-messages');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function handleKeyPress(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            enviarMensagem();
+        }
+    }
+
+    async function enviarMensagem() {
+        if (enviando) return;
+        
+        const input = document.getElementById('message-input');
+        const mensagem = input.value.trim();
+        
+        if (!mensagem) return;
+        
+        enviando = true;
+        const btnSend = document.querySelector('.btn-send');
+        btnSend.disabled = true;
+        btnSend.textContent = '⏳ Sending...';
+        
+        try {
+            const response = await fetch(`/admin/atendimento/${phone}/enviar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mensagem })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                input.value = '';
+                input.style.height = 'auto';
+                await carregarNovasMessages();
+            } else {
+                alert('❌ Error sending: ' + data.message);
+            }
+        } catch (error) {
+            alert('❌ Error sending mensagem: ' + error);
+        } finally {
+            enviando = false;
+            btnSend.disabled = false;
+            btnSend.textContent = '📤 Send';
+            input.focus();
+        }
+    }
+
+    async function carregarNovasMessages() {
+        try {
+            const response = await fetch(`/admin/atendimento/${phone}/mensagens`);
+            const data = await response.json();
+            
+            if (data.mensagens) {
+                atualizarChat(data.mensagens);
+            }
+        } catch (error) {
+            console.error('Error loading mensagens:', error);
+        }
+    }
+
+    function atualizarChat(mensagens) {
+        const container = document.getElementById('chat-messages');
+        const scrollAtBottom = container.scrollHeight - container.scrollTop === container.clientHeight;
+        
+        // Reconstruir mensagens (simplificado - em produção usar diff)
+        const mensagensHTML = mensagens.map(msg => {
+            const roleClass = msg.role === 'user' ? 'message-user' : 
+                            msg.role === 'assistant' ? 'message-bot' : 'message-assistant';
+            const roleLabel = msg.role === 'user' ? '👤 Customer' :
+                            msg.role === 'assistant' ? '🤖 MIA' : '👨‍💼 Agent';
+            
+            return `
+                <div class="message ${roleClass}">
+                    <div class="message-role">${roleLabel}</div>
+                    <div class="message-content">${msg.message}</div>
+                    <div class="message-time">${msg.timestamp || ''}</div>
+                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = mensagensHTML + container.querySelector('.typing-indicator').outerHTML;
+        
+        if (scrollAtBottom) {
+            scrollToBottom();
+        }
+    }
+
+    async function devolverParaIA() {
+        if (!confirm(`Return conversation from ${phone} to AI?`)) return;
         
         try {
             const response = await fetch(`/admin/reset-mode/${phone}`);
             const data = await response.json();
             
             if (data.status === 'success') {
-                alert('✅ Conversa devolvida para IA!');
-                location.reload();
+                alert('✅ Conversation returned to AI!');
+                window.location.href = '/admin/atendimento';
             } else {
                 alert('❌ Erro: ' + data.message);
             }
         } catch (error) {
-            alert('❌ Erro ao devolver: ' + error);
+            alert('❌ Error returning: ' + error);
         }
     }
 
-    // Auto-refresh a cada 10 segundos
-    setTimeout(() => location.reload(), 10000);
+    // Auto-resize textarea
+    document.getElementById('message-input').addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
 </script>
 {% endblock %}

@@ -1,6 +1,6 @@
 {% extends "admin_base.html" %}
 
-{% block title %}Controle - MIA Admin{% endblock %}
+{% block title %}Control - MIA Admin{% endblock %}
 
 {% block extra_style %}
 <style>
@@ -169,8 +169,8 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>🎛️ Controle do Bot</h1>
-    <p>Gerencie o status e configurações da MIA</p>
+    <h1>🎛️ Control do Bot</h1>
+    <p>Manage MIA's status and settings</p>
 </div>
 
 <div class="control-grid">
@@ -179,13 +179,13 @@
         <div class="control-header">
             <span class="control-icon">🤖</span>
             <div>
-                <div class="control-title">Status do Bot</div>
+                <div class="control-title">Bot Status</div>
                 <span class="status-badge status-online" id="status-badge">● Online</span>
             </div>
         </div>
 
         <div class="toggle-container">
-            <span class="toggle-label">IA Ativa</span>
+            <span class="toggle-label">AI Active</span>
             <label class="toggle-switch">
                 <input type="checkbox" id="toggle-ia" checked onchange="toggleIA()">
                 <span class="slider"></span>
@@ -193,7 +193,7 @@
         </div>
 
         <div class="toggle-container">
-            <span class="toggle-label">Modo Manutenção</span>
+            <span class="toggle-label">Maintenance Mode</span>
             <label class="toggle-switch">
                 <input type="checkbox" id="toggle-manutencao" onchange="toggleManutencao()">
                 <span class="slider"></span>
@@ -201,8 +201,8 @@
         </div>
 
         <p class="info-text">
-            <strong>IA Ativa:</strong> Bot responde automaticamente<br>
-            <strong>Manutenção:</strong> Bot envia mensagem de manutenção
+            <strong>AI Active:</strong> Bot responds automatically<br>
+            <strong>Manutenção:</strong> Bot sends maintenance message
         </p>
     </div>
 
@@ -210,33 +210,33 @@
     <div class="control-card">
         <div class="control-header">
             <span class="control-icon">📊</span>
-            <div class="control-title">Estatísticas Hoje</div>
+            <div class="control-title">Today's Statistics</div>
         </div>
 
         <div class="stats-row">
             <div class="stat-box">
                 <div class="stat-value" id="stat-mensagens">0</div>
-                <div class="stat-label">Mensagens</div>
+                <div class="stat-label">Messages</div>
             </div>
             <div class="stat-box" style="background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);">
                 <div class="stat-value" id="stat-conversas">0</div>
-                <div class="stat-label">Conversas</div>
+                <div class="stat-label">Conversations</div>
             </div>
         </div>
 
-        <button class="btn-action" onclick="atualizarStats()">🔄 Atualizar</button>
+        <button class="btn-action" onclick="atualizarStats()">🔄 Update</button>
     </div>
 
     <!-- AÇÕES RÁPIDAS -->
     <div class="control-card">
         <div class="control-header">
             <span class="control-icon">⚡</span>
-            <div class="control-title">Ações Rápidas</div>
+            <div class="control-title">Actions Rápidas</div>
         </div>
 
-        <button class="btn-action" onclick="limparCache()">🗑️ Limpar Cache</button>
-        <button class="btn-action" onclick="reiniciarBot()" style="background: linear-gradient(135deg, #5dade2 0%, #4a9dd1 100%);">🔄 Reiniciar Bot</button>
-        <button class="btn-action" onclick="exportarDados()" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);">💾 Exportar Dados</button>
+        <button class="btn-action" onclick="limparCache()">🗑️ Clear Cache</button>
+        <button class="btn-action" onclick="reiniciarBot()" style="background: linear-gradient(135deg, #5dade2 0%, #4a9dd1 100%);">🔄 Restart Bot</button>
+        <button class="btn-action" onclick="exportarDados()" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);">💾 Export Data</button>
     </div>
 </div>
 
@@ -244,14 +244,14 @@
 <div class="control-card" style="margin-top: 25px;">
     <div class="control-header">
         <span class="control-icon">📝</span>
-        <div class="control-title">Logs Recentes</div>
+        <div class="control-title">Recent Logs</div>
     </div>
 
     <div id="logs-container" style="background: #f8f9fa; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 0.9em; max-height: 300px; overflow-y: auto;">
-        <div style="color: #666;">Carregando logs...</div>
+        <div style="color: #666;">Loading logs...</div>
     </div>
 
-    <button class="btn-action" onclick="carregarLogs()">🔄 Atualizar Logs</button>
+    <button class="btn-action" onclick="carregarLogs()">🔄 Update Logs</button>
 </div>
 {% endblock %}
 
@@ -284,7 +284,7 @@
                 badge.textContent = '● Offline';
             }
         } catch (error) {
-            console.error('Erro ao carregar status:', error);
+            console.error('Error loading status:', error);
         }
     }
 
@@ -323,7 +323,7 @@
             document.getElementById('stat-mensagens').textContent = data.mensagens || 0;
             document.getElementById('stat-conversas').textContent = data.conversas || 0;
         } catch (error) {
-            console.error('Erro ao carregar stats:', error);
+            console.error('Error loading stats:', error);
         }
     }
 
@@ -342,28 +342,28 @@
                     `<div style="margin-bottom: 5px; color: #333;">${log}</div>`
                 ).join('');
             } else {
-                container.innerHTML = '<div style="color: #999;">Nenhum log disponível</div>';
+                container.innerHTML = '<div style="color: #999;">No logs available</div>';
             }
         } catch (error) {
             document.getElementById('logs-container').innerHTML = 
-                '<div style="color: #e74c3c;">Erro ao carregar logs</div>';
+                '<div style="color: #e74c3c;">Error loading logs</div>';
         }
     }
 
     function limparCache() {
-        if (confirm('Limpar cache do bot?')) {
-            alert('🗑️ Cache limpo com sucesso!');
+        if (confirm('Clear bot cache?')) {
+            alert('🗑️ Cache cleared successfully!');
         }
     }
 
     function reiniciarBot() {
-        if (confirm('Reiniciar o bot? Pode levar alguns segundos.')) {
-            alert('🔄 Bot reiniciando...');
+        if (confirm('Restart bot? It may take a few seconds.')) {
+            alert('🔄 Bot restarting...');
         }
     }
 
     function exportarDados() {
-        alert('💾 Exportação em desenvolvimento');
+        alert('💾 Export in development');
     }
 </script>
 {% endblock %}

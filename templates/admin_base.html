@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Painel Admin - MIA{% endblock %}</title>
+    <title>{% block title %}Admin Panel - MIA{% endblock %}</title>
     <link rel="stylesheet" href="/css/legacy_theme.css">
     <style>
         * {
@@ -156,27 +156,27 @@
         <nav class="menu">
             <a href="/admin/controle" class="menu-item {% if request.url.path == '/admin/controle' or request.url.path == '/admin/controle/' %}active{% endif %}">
                 <span class="menu-item-icon">🎛️</span>
-                <span class="menu-item-text">Controle</span>
+                <span class="menu-item-text">Control</span>
             </a>
 
             <a href="/admin/treinamento" class="menu-item {% if request.url.path == '/admin/treinamento' %}active{% endif %}">
                 <span class="menu-item-icon">🎓</span>
-                <span class="menu-item-text">Treinamento</span>
+                <span class="menu-item-text">Training</span>
             </a>
 
             <a href="/admin/atendimento" class="menu-item {% if request.url.path == '/admin/atendimento' %}active{% endif %}">
                 <span class="menu-item-icon">👤</span>
-                <span class="menu-item-text">Atendimento</span>
+                <span class="menu-item-text">Support</span>
             </a>
 
             <a href="/admin/aprendizado" class="menu-item {% if request.url.path == '/admin/aprendizado' %}active{% endif %}">
                 <span class="menu-item-icon">🧠</span>
-                <span class="menu-item-text">Aprendizado</span>
+                <span class="menu-item-text">Learning</span>
             </a>
 
             <a href="/admin/conversas" class="menu-item {% if '/admin/conversas' in request.url.path %}active{% endif %}">
                 <span class="menu-item-icon">💬</span>
-                <span class="menu-item-text">Conversas</span>
+                <span class="menu-item-text">Conversations</span>
             </a>
 
             <a href="/admin/leads" class="menu-item {% if request.url.path == '/admin/leads' %}active{% endif %}">

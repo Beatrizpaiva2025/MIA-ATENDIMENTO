@@ -1,6 +1,6 @@
 {% extends "admin_base.html" %}
 
-{% block title %}Treinamento - MIA Admin{% endblock %}
+{% block title %}Training - MIA Admin{% endblock %}
 
 {% block extra_style %}
 <style>
@@ -187,19 +187,19 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>🎓 Treinamento da IA</h1>
-    <p>Configure o conhecimento e personalidade da MIA</p>
+    <h1>🎓 Training da IA</h1>
+    <p>Configure MIA's knowledge and personality</p>
 </div>
 
 <!-- STATS -->
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-number">{{ conhecimentos|length }}</div>
-        <div class="stat-label">Base de Conhecimento</div>
+        <div class="stat-label">Knowledge Base</div>
     </div>
     <div class="stat-card" style="background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);">
         <div class="stat-number">{{ faqs|length }}</div>
-        <div class="stat-label">FAQs Cadastradas</div>
+        <div class="stat-label">Registered FAQs</div>
     </div>
 </div>
 
@@ -207,35 +207,41 @@
 <div class="section-card">
     <div class="section-header">
         <span class="section-icon">🤖</span>
-        <h2 class="section-title">Personalidade da IA</h2>
+        <h2 class="section-title">AI Personality</h2>
     </div>
     
     <form method="POST" action="/admin/treinamento/personalidade">
         <div class="form-group">
-            <label class="form-label">Tom de Voz</label>
+            <label class="form-label">Tone of Voice</label>
             <select name="tom_voz" class="form-select">
-                <option value="amigavel" {% if personalidade.tom_voz == 'amigavel' %}selected{% endif %}>Amigável e Casual</option>
-                <option value="profissional" {% if personalidade.tom_voz == 'profissional' %}selected{% endif %}>Profissional</option>
+                <option value="amigavel" {% if personalidade.tom_voz == 'amigavel' %}selected{% endif %}>Friendly and Casual</option>
+                <option value="profissional" {% if personalidade.tom_voz == 'profissional' %}selected{% endif %}>Professional</option>
                 <option value="formal" {% if personalidade.tom_voz == 'formal' %}selected{% endif %}>Formal</option>
             </select>
         </div>
 
         <div class="form-group">
-            <label class="form-label">Descrição da Empresa</label>
-            <textarea name="descricao" class="form-textarea" placeholder="Ex: Você é o assistente oficial da empresa Legacy Translations, especializada em..."required>{{ personalidade.descricao or '' }}</textarea>
+            <label class="form-label">Company Description</label>
+            <textarea name="descricao" class="form-textarea" placeholder="Ex: You are the official assistant of Legacy Translations, specialized in..."required>{{ personalidade.descricao or '' }}</textarea>
         </div>
 
         <div class="form-group">
-            <label class="form-label">Objetivos da IA</label>
-            <textarea name="objetivos" class="form-textarea" placeholder="Siga as instruções abaixo para responder a clientes de forma educada..." required>{{ personalidade.objetivos or '' }}</textarea>
+            <label class="form-label">AI Objectives</label>
+            <textarea name="objetivos" class="form-textarea" placeholder="Follow the instructions below to respond to customers politely..." required>{{ personalidade.objetivos or '' }}</textarea>
         </div>
 
         <div class="form-group">
-            <label class="form-label">Restrições</label>
-            <textarea name="restricoes" class="form-textarea" placeholder="Uma restrição por linha">{{ personalidade.restricoes or '' }}</textarea>
+            <label class="form-label">Restrictions</label>
+            <textarea name="restricoes" class="form-textarea" placeholder="One restriction per line">{{ personalidade.restricoes or '' }}</textarea>
         </div>
 
-        <button type="submit" class="btn-primary">💾 Salvar Personalidade</button>
+        <div class="form-group">
+            <label class="form-label">⏱️ Response Delay (seconds)</label>
+            <input type="number" name="response_delay" class="form-input" min="0" max="30" step="1" value="{{ personalidade.response_delay or 3 }}" placeholder="3">
+            <small style="color: #666; font-size: 0.9em; display: block; margin-top: 5px;">Time to wait before sending response (0-30 seconds). Recommended: 3-5 seconds.</small>
+        </div>
+
+        <button type="submit" class="btn-primary">💾 Save Personality</button>
     </form>
 </div>
 
@@ -243,21 +249,21 @@
 <div class="section-card">
     <div class="section-header">
         <span class="section-icon">📚</span>
-        <h2 class="section-title">Base de Conhecimento</h2>
+        <h2 class="section-title">Knowledge Base</h2>
     </div>
 
     <form method="POST" action="/admin/treinamento/conhecimento" style="margin-bottom: 25px;">
         <div class="form-group">
-            <label class="form-label">Título</label>
-            <input type="text" name="titulo" class="form-input" placeholder="Ex: Serviços de Tradução Jurídica" required>
+            <label class="form-label">Title</label>
+            <input type="text" name="titulo" class="form-input" placeholder="Ex: Legal Translation Services" required>
         </div>
 
         <div class="form-group">
-            <label class="form-label">Conteúdo</label>
-            <textarea name="conteudo" class="form-textarea" placeholder="Descreva as informações que a IA deve saber sobre este tópico..." required></textarea>
+            <label class="form-label">Content</label>
+            <textarea name="conteudo" class="form-textarea" placeholder="Describe the information the AI should know about this topic..." required></textarea>
         </div>
 
-        <button type="submit" class="btn-primary">➕ Adicionar Conhecimento</button>
+        <button type="submit" class="btn-primary">➕ Add Knowledge</button>
     </form>
 
     {% if conhecimentos %}
@@ -268,13 +274,13 @@
                 <div class="item-text">{{ item.conteudo[:100] }}...</div>
             </div>
             <div class="item-actions">
-                <button class="btn-edit" onclick="editarConhecimento('{{ item._id }}')">✏️ Editar</button>
-                <button class="btn-delete" onclick="deletarConhecimento('{{ item._id }}')">🗑️ Deletar</button>
+                <button class="btn-edit" onclick="editarConhecimento('{{ item._id }}')">✏️ Edit</button>
+                <button class="btn-delete" onclick="deletarConhecimento('{{ item._id }}')">🗑️ Delete</button>
             </div>
         </div>
         {% endfor %}
     {% else %}
-        <p style="text-align: center; color: #999; padding: 30px;">Nenhum conhecimento cadastrado ainda.</p>
+        <p style="text-align: center; color: #999; padding: 30px;">No knowledge registered yet.</p>
     {% endif %}
 </div>
 
@@ -282,21 +288,21 @@
 <div class="section-card">
     <div class="section-header">
         <span class="section-icon">❓</span>
-        <h2 class="section-title">FAQs Cadastradas</h2>
+        <h2 class="section-title">Registered FAQs</h2>
     </div>
 
     <form method="POST" action="/admin/treinamento/faq" style="margin-bottom: 25px;">
         <div class="form-group">
-            <label class="form-label">Pergunta</label>
-            <input type="text" name="pergunta" class="form-input" placeholder="Ex: Quanto custa uma tradução juramentada?" required>
+            <label class="form-label">Question</label>
+            <input type="text" name="pergunta" class="form-input" placeholder="Ex: How much does a sworn translation cost?" required>
         </div>
 
         <div class="form-group">
-            <label class="form-label">Resposta</label>
-            <textarea name="resposta" class="form-textarea" placeholder="Digite a resposta completa..." required></textarea>
+            <label class="form-label">Answer</label>
+            <textarea name="resposta" class="form-textarea" placeholder="Enter the complete answer..." required></textarea>
         </div>
 
-        <button type="submit" class="btn-primary">➕ Adicionar FAQ</button>
+        <button type="submit" class="btn-primary">➕ Add FAQ</button>
     </form>
 
     {% if faqs %}
@@ -307,13 +313,13 @@
                 <div class="item-text">{{ faq.resposta[:100] }}...</div>
             </div>
             <div class="item-actions">
-                <button class="btn-edit" onclick="editarFAQ('{{ faq._id }}')">✏️ Editar</button>
-                <button class="btn-delete" onclick="deletarFAQ('{{ faq._id }}')">🗑️ Deletar</button>
+                <button class="btn-edit" onclick="editarFAQ('{{ faq._id }}')">✏️ Edit</button>
+                <button class="btn-delete" onclick="deletarFAQ('{{ faq._id }}')">🗑️ Delete</button>
             </div>
         </div>
         {% endfor %}
     {% else %}
-        <p style="text-align: center; color: #999; padding: 30px;">Nenhuma FAQ cadastrada ainda.</p>
+        <p style="text-align: center; color: #999; padding: 30px;">No FAQ registered yet.</p>
     {% endif %}
 </div>
 {% endblock %}
@@ -321,22 +327,22 @@
 {% block extra_scripts %}
 <script>
     function editarConhecimento(id) {
-        alert('Edição em desenvolvimento. ID: ' + id);
+        alert('Editing in development. ID: ' + id);
     }
 
     function deletarConhecimento(id) {
-        if (confirm('Deletar este conhecimento?')) {
+        if (confirm('Delete este conhecimento?')) {
             fetch('/admin/treinamento/conhecimento/' + id, { method: 'DELETE' })
                 .then(() => location.reload());
         }
     }
 
     function editarFAQ(id) {
-        alert('Edição em desenvolvimento. ID: ' + id);
+        alert('Editing in development. ID: ' + id);
     }
 
     function deletarFAQ(id) {
-        if (confirm('Deletar esta FAQ?')) {
+        if (confirm('Delete esta FAQ?')) {
             fetch('/admin/treinamento/faq/' + id, { method: 'DELETE' })
                 .then(() => location.reload());
         }
