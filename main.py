@@ -62,8 +62,10 @@ templates = Jinja2Templates(directory="templates")
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # MongoDB
-MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-mongo_client = AsyncIOMotorClient(MONGODB_URL)
+MONGODB_URI = os.getenv("MONGODB_URI")
+if not MONGODB_URI:
+    raise ValueError("❌ MONGODB_URI não configurado nas variáveis de ambiente")
+mongo_client = AsyncIOMotorClient(MONGODB_URI)
 db = mongo_client.mia_bot
 
 # ============================================================
@@ -714,8 +716,35 @@ app.include_router(router_leads)
 # ROTAS BÁSICAS
 # ============================================================
 @app.get("/")
-async def root():
-    return RedirectResponse(url="/admin/login")
+def root():
+    return RedirectResponse(url="/login")
+
+@app.get("/login")
+def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/login")
+async def login(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    if username == "admin" and password == "admin123":
+        request.session["user"] = username
+        return RedirectResponse(url="/admin/", status_code=303)
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "error": "Credenciais inválidas"
+    })
+
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login")
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 @app.get("/health")
 async def health():
