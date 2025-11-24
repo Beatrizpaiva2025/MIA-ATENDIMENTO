@@ -96,11 +96,11 @@ async def admin_treinamento(request: Request):
 @router.post("/personalidade")
 async def salvar_personalidade(
     tone: str = Form(...),
-    description: str = Form(...),
     goals: str = Form(...),
     restrictions: str = Form(""),
     response_delay: int = Form(3)
 ):
+
     """Salvar personalidade do bot"""
     try:
         # Buscar bot Mia
