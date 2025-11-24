@@ -95,10 +95,10 @@ async def admin_treinamento(request: Request):
 
 @router.post("/personalidade")
 async def salvar_personalidade(
-    tom_voz: str = Form(...),
-    descricao: str = Form(...),
-    objetivos: str = Form(...),
-    restricoes: str = Form(""),
+    tone: str = Form(...),
+    description: str = Form(...),
+    goals: str = Form(...),
+    restrictions: str = Form(""),
     response_delay: int = Form(3)
 ):
     """Salvar personalidade do bot"""
@@ -115,9 +115,9 @@ async def salvar_personalidade(
             {
                 "$set": {
                     "personality": {
-                        "tone": tom_voz,
-                        "goals": objetivos,
-                        "restrictions": restricoes,
+                        "tone": tone,
+                        "goals": goals,
+                        "restrictions": restrictions,
                         "response_delay": response_delay
                     },
                     "updated_at": datetime.now()
@@ -156,7 +156,7 @@ async def adicionar_conhecimento(
             {"$push": {"knowledge_base": novo_item}}
         )
         
-        logger.info(f"✅ Conhecimento adicionado: {titulo}")
+        logger.info(f"✅ Conhecimento adicionado: {title}")
         
         return RedirectResponse(url="/admin/treinamento", status_code=303)
         
@@ -204,7 +204,7 @@ async def adicionar_faq(
             {"$push": {"faqs": novo_faq}}
         )
         
-        logger.info(f"✅ FAQ adicionado: {pergunta}")
+        logger.info(f"✅ FAQ adicionado: {question}")
         
         return RedirectResponse(url="/admin/treinamento", status_code=303)
         
