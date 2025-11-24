@@ -572,20 +572,24 @@ async def webhook_whatsapp(request: Request):
         # Processar mensagem
         response_text = ""
         
-        if message_type == "image":
+        # Verificar se há imagem (independente do message_type)
+        if data.get("image"):
             image_url = data.get("image", {}).get("imageUrl", "")
+            caption = data.get("image", {}).get("caption", "")
             if image_url:
                 await save_message(phone, "[Imagem recebida]", "user", "whatsapp", "image")
-                response_text = await process_image(image_url, message_text)
+                response_text = await process_image(image_url, caption or "Analise esta imagem")
         
-        elif message_type == "audio" or message_type == "ptt":
+        # Verificar se há áudio
+        elif data.get("audio"):
             audio_url = data.get("audio", {}).get("audioUrl", "")
             if audio_url:
                 transcription = await process_audio(audio_url)
                 await save_message(phone, f"[Áudio]: {transcription}", "user", "whatsapp", "audio")
                 response_text = await generate_ai_response(phone, transcription, "whatsapp")
         
-        elif message_type == "document":
+        # Verificar se há documento
+        elif data.get("document"):
             doc_url = data.get("document", {}).get("documentUrl", "")
             doc_name = data.get("document", {}).get("fileName", "")
             if doc_url and doc_name.lower().endswith('.pdf'):
@@ -593,7 +597,8 @@ async def webhook_whatsapp(request: Request):
                 await save_message(phone, f"[PDF]: {pdf_text[:200]}...", "user", "whatsapp", "document")
                 response_text = await generate_ai_response(phone, f"Cliente enviou PDF com conteúdo: {pdf_text}", "whatsapp")
         
-        else:  # text
+        # Texto simples
+        elif message_text:
             await save_message(phone, message_text, "user", "whatsapp", "text")
             
             # Detectar pedido de atendente
