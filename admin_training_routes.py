@@ -139,15 +139,15 @@ async def salvar_personalidade(
 
 @router.post("/conhecimento")
 async def adicionar_conhecimento(
-    titulo: str = Form(...),
-    conteudo: str = Form(...)
+    title: str = Form(...),
+    content: str = Form(...)
 ):
     """Adicionar item à base de conhecimento"""
     try:
         novo_item = {
             "_id": str(ObjectId()),
-            "titulo": titulo,
-            "conteudo": conteudo,
+            "title": title,
+            "content": content,
             "created_at": datetime.now()
         }
         
@@ -187,15 +187,15 @@ async def deletar_conhecimento(item_id: str):
 
 @router.post("/faq")
 async def adicionar_faq(
-    pergunta: str = Form(...),
-    resposta: str = Form(...)
+    question: str = Form(...),
+    answer: str = Form(...)
 ):
     """Adicionar FAQ"""
     try:
         novo_faq = {
             "_id": str(ObjectId()),
-            "question": pergunta,
-            "answer": resposta,
+            "question": question,
+            "answer": answer,
             "created_at": datetime.now()
         }
         
