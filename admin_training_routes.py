@@ -155,7 +155,7 @@ async def adicionar_conhecimento(
             {"$push": {"knowledge_base": novo_item}}
         )
         
-        logger.info(f"✅ Conhecimento adicionado: {titulo}")
+        logger.info(f"✅ Conhecimento adicionado: {title}")
         
         return RedirectResponse(url="/admin/treinamento", status_code=303)
         
