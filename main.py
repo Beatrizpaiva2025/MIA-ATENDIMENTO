@@ -35,6 +35,7 @@ from admin_training_routes import router as training_router
 from admin_controle_routes import router as controle_router
 from admin_learning_routes import router as learning_router
 from admin_atendimento_routes import router as atendimento_router
+from admin_conversas_routes import router as conversas_router
 
 # ============================================================
 # CONFIGURAÇÃO DE LOGGING
@@ -370,6 +371,7 @@ app.include_router(training_router)
 app.include_router(controle_router)
 app.include_router(learning_router)
 app.include_router(atendimento_router)
+app.include_router(conversas_router)
 
 # ============================================================
 # CONFIGURAÇÕES Z-API
