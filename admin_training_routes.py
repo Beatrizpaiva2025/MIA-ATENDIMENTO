@@ -180,6 +180,33 @@ async def deletar_conhecimento(item_id: str):
         logger.error(f"❌ Erro ao deletar conhecimento: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/conhecimento/editar/{item_id}")
+async def editar_conhecimento(
+    item_id: str,
+    title: str = Form(...),
+    content: str = Form(...)
+):
+    """Editar item da base de conhecimento"""
+    try:
+        result = await db.bots.update_one(
+            {"name": "Mia", "knowledge_base._id": item_id},
+            {
+                "$set": {
+                    "knowledge_base.$.title": title,
+                    "knowledge_base.$.content": content
+                }
+            }
+        )
+        
+        logger.info(f"✅ Conhecimento editado: {title}")
+        
+        return RedirectResponse(url="/admin/treinamento", status_code=303)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao editar conhecimento: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================
 # ROTAS DE EDIÇÃO - FAQs
 # ============================================================
