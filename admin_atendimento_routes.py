@@ -5,6 +5,9 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime
 import os
 import httpx
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -148,6 +151,17 @@ async def return_to_ia(phone: str):
                 }
             }
         )
+        
+        # Enviar mensagem automática para o cliente
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{ZAPI_URL}/send-text",
+                json={
+                    "phone": phone,
+                    "message": "✅ Você está de volta ao atendimento automático! Como posso ajudar?"
+                },
+                timeout=30.0
+            )
         
         return JSONResponse({"status": "success", "message": "Conversa devolvida para IA"})
         
