@@ -1,118 +1,660 @@
-{% extends "admin_base.html" %}
+👉 COPIE TODO ESTE CONTEÚDO ABAIXO (da linha que começa com {% extends até a última linha com {% endblock %}):
 
-{% block title %}Leads - MIA Admin{% endblock %}
+===================== INÍCIO DO CÓDIGO ====================={% extends "admin_base.html" %}
+
+{% block title %}Leads & Conversões - Legacy Translations{% endblock %}
 
 {% block extra_style %}
 <style>
-    .under-construction {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        min-height: 500px;
-        text-align: center;
-        background: white;
-        border-radius: 15px;
-        padding: 50px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    :root {
+        --primary-color: #667eea;
+        --secondary-color: #764ba2;
+        --success-color: #48bb78;
+        --warning-color: #ed8936;
+        --danger-color: #f56565;
+        --text-primary: #2d3748;
+        --text-secondary: #718096;
+        --bg-card: #ffffff;
+        --shadow: 0 8px 32px rgba(0,0,0,0.1);
     }
 
-    .construction-icon {
-        font-size: 120px;
+    .page-header {
         margin-bottom: 30px;
-        animation: bounce 2s infinite;
     }
 
-    @keyframes bounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-20px); }
+    .page-header h1 {
+        color: var(--text-primary);
+        font-size: 32px;
+        margin-bottom: 10px;
     }
 
-    .construction-title {
-        font-size: 2.5em;
-        color: #1e3a5f;
-        margin-bottom: 20px;
-        font-weight: 700;
+    .page-header p {
+        color: var(--text-secondary);
+        font-size: 16px;
     }
 
-    .construction-subtitle {
-        font-size: 1.3em;
-        color: #666;
+    .date-filters {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+    }
+
+    .date-filters select {
+        padding: 10px 15px;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+        cursor: pointer;
+        background: white;
+        transition: all 0.3s;
+    }
+
+    .date-filters select:hover {
+        border-color: var(--primary-color);
+    }
+
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .metric-card {
+        background: var(--bg-card);
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: var(--shadow);
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+    }
+
+    .metric-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         margin-bottom: 15px;
     }
 
-    .construction-description {
-        font-size: 1.1em;
-        color: #999;
-        max-width: 600px;
-        line-height: 1.6;
+    .metric-title {
+        font-size: 14px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
-    .feature-list {
-        margin-top: 40px;
-        text-align: left;
-        max-width: 500px;
-    }
-
-    .feature-item {
+    .metric-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
         display: flex;
         align-items: center;
-        padding: 15px;
+        justify-content: center;
+        font-size: 20px;
+    }
+
+    .icon-revenue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .icon-leads { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .icon-conversion { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .icon-ticket { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+
+    .metric-value {
+        font-size: 36px;
+        font-weight: bold;
+        color: var(--text-primary);
         margin-bottom: 10px;
-        background: #f8f9fa;
+    }
+
+    .metric-change {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .metric-change.positive {
+        color: var(--success-color);
+    }
+
+    .metric-change.negative {
+        color: var(--danger-color);
+    }
+
+    .arrow-up::before {
+        content: "↑";
+        font-size: 18px;
+    }
+
+    .arrow-down::before {
+        content: "↓";
+        font-size: 18px;
+    }
+
+    .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .chart-card {
+        background: var(--bg-card);
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: var(--shadow);
+    }
+
+    .chart-card h3 {
+        color: var(--text-primary);
+        font-size: 18px;
+        margin-bottom: 20px;
+        font-weight: 600;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 300px;
+    }
+
+    .full-width {
+        grid-column: 1 / -1;
+    }
+
+    .funnel-container {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        padding: 20px 0;
+    }
+
+    .funnel-stage {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .funnel-label {
+        min-width: 200px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .funnel-bar-container {
+        flex: 1;
+        height: 50px;
+        background: #f7fafc;
         border-radius: 10px;
-        border-left: 4px solid #ff9800;
+        overflow: hidden;
+        position: relative;
     }
 
-    .feature-icon {
-        font-size: 1.8em;
-        margin-right: 15px;
+    .funnel-bar {
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        display: flex;
+        align-items: center;
+        padding: 0 15px;
+        color: white;
+        font-weight: bold;
+        transition: width 1s ease;
     }
 
-    .feature-text {
-        font-size: 1.05em;
-        color: #1e3a5f;
+    .funnel-value {
+        min-width: 100px;
+        text-align: right;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    .kpi-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+
+    .kpi-table th {
+        background: #f7fafc;
+        padding: 15px;
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-primary);
+        border-bottom: 2px solid #e2e8f0;
+    }
+
+    .kpi-table td {
+        padding: 15px;
+        border-bottom: 1px solid #e2e8f0;
+        color: var(--text-secondary);
+    }
+
+    .kpi-table tr:hover {
+        background: #f7fafc;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .badge-success {
+        background: #c6f6d5;
+        color: #22543d;
+    }
+
+    .badge-warning {
+        background: #feebc8;
+        color: #7c2d12;
+    }
+
+    .badge-danger {
+        background: #fed7d7;
+        color: #742a2a;
+    }
+
+    @media (max-width: 768px) {
+        .charts-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .metric-value {
+            font-size: 28px;
+        }
+
+        .funnel-label {
+            min-width: 120px;
+            font-size: 14px;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>📊 Leads</h1>
-    <p>Lead management and conversion tracking</p>
+    <h1>📊 Dashboard - Leads & Conversões</h1>
+    <p>Acompanhamento de métricas e performance - Legacy Translations</p>
 </div>
 
-<div class="under-construction">
-    <div class="construction-icon">🚧</div>
-    
-    <h2 class="construction-title">Under Development</h2>
-    
-    <p class="construction-subtitle">This feature is coming soon!</p>
-    
-    <p class="construction-description">
-        We're creating a complete CRM system to manage leads, track conversions, and analyze your sales funnel.
-    </p>
+<!-- Filtros de Data -->
+<div class="date-filters">
+    <select id="periodSelect" onchange="updateDashboard()">
+        <option value="7">Últimos 7 dias</option>
+        <option value="30" selected>Últimos 30 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="365">Último ano</option>
+    </select>
+    <select id="segmentSelect" onchange="updateDashboard()">
+        <option value="all" selected>Todos os Segmentos</option>
+        <option value="b2c">B2C - Imigrantes</option>
+        <option value="b2b">B2B - Instituições</option>
+    </select>
+</div>
 
-    <div class="feature-list">
-        <div class="feature-item">
-            <span class="feature-icon">👥</span>
-            <span class="feature-text">Lead management</span>
+<!-- Métricas Principais -->
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-title">Receita Total</span>
+            <div class="metric-icon icon-revenue">💰</div>
         </div>
-        
-        <div class="feature-item">
-            <span class="feature-icon">💰</span>
-            <span class="feature-text">Conversion tracking</span>
+        <div class="metric-value" id="totalRevenue">$45,760</div>
+        <div class="metric-change positive">
+            <span class="arrow-up"></span>
+            <span>+18.5% vs. mês anterior</span>
         </div>
-        
-        <div class="feature-item">
-            <span class="feature-icon">📈</span>
-            <span class="feature-text">Sales funnel analytics</span>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-title">Leads Totais</span>
+            <div class="metric-icon icon-leads">👥</div>
         </div>
-        
-        <div class="feature-item">
-            <span class="feature-icon">🎯</span>
-            <span class="feature-text">Lead scoring</span>
+        <div class="metric-value" id="totalLeads">1,250</div>
+        <div class="metric-change positive">
+            <span class="arrow-up"></span>
+            <span>+5.3% crescimento</span>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-title">Taxa Conversão</span>
+            <div class="metric-icon icon-conversion">📈</div>
+        </div>
+        <div class="metric-value" id="conversionRate">18.4%</div>
+        <div class="metric-change positive">
+            <span class="arrow-up"></span>
+            <span>+2.1% vs. meta</span>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-title">Ticket Médio</span>
+            <div class="metric-icon icon-ticket">💵</div>
+        </div>
+        <div class="metric-value" id="avgTicket">$198</div>
+        <div class="metric-change negative">
+            <span class="arrow-down"></span>
+            <span>-3.2% vs. anterior</span>
         </div>
     </div>
 </div>
+
+<!-- Gráficos -->
+<div class="charts-grid">
+    <!-- Receita Mensal -->
+    <div class="chart-card">
+        <h3>📊 Receita Mensal</h3>
+        <div class="chart-container">
+            <canvas id="revenueChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Leads por Canal -->
+    <div class="chart-card">
+        <h3>👥 Leads por Canal</h3>
+        <div class="chart-container">
+            <canvas id="leadsChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Funil de Conversão -->
+    <div class="chart-card full-width">
+        <h3>🔄 Funil de Conversão - Últimos 30 Dias</h3>
+        <div class="funnel-container">
+            <div class="funnel-stage">
+                <div class="funnel-label">1. Visitantes do Site</div>
+                <div class="funnel-bar-container">
+                    <div class="funnel-bar" style="width: 100%;">
+                        <span>12,348 visitantes</span>
+                    </div>
+                </div>
+                <div class="funnel-value">100%</div>
+            </div>
+            <div class="funnel-stage">
+                <div class="funnel-label">2. Leads Capturados</div>
+                <div class="funnel-bar-container">
+                    <div class="funnel-bar" style="width: 10.1%;">
+                        <span>1,250 leads</span>
+                    </div>
+                </div>
+                <div class="funnel-value">10.1%</div>
+            </div>
+            <div class="funnel-stage">
+                <div class="funnel-label">3. Leads Qualificados (MQL)</div>
+                <div class="funnel-bar-container">
+                    <div class="funnel-bar" style="width: 6.8%;">
+                        <span>840 MQLs</span>
+                    </div>
+                </div>
+                <div class="funnel-value">6.8%</div>
+            </div>
+            <div class="funnel-stage">
+                <div class="funnel-label">4. Oportunidades (SQL)</div>
+                <div class="funnel-bar-container">
+                    <div class="funnel-bar" style="width: 3.4%;">
+                        <span>420 SQLs</span>
+                    </div>
+                </div>
+                <div class="funnel-value">3.4%</div>
+            </div>
+            <div class="funnel-stage">
+                <div class="funnel-label">5. Clientes Convertidos</div>
+                <div class="funnel-bar-container">
+                    <div class="funnel-bar" style="width: 1.87%;">
+                        <span>231 clientes</span>
+                    </div>
+                </div>
+                <div class="funnel-value">1.87%</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tráfego por Origem -->
+    <div class="chart-card">
+        <h3>🌐 Tráfego por Origem</h3>
+        <div class="chart-container">
+            <canvas id="trafficChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Taxa de Conversão - Tendência -->
+    <div class="chart-card">
+        <h3>📈 Taxa de Conversão - Tendência</h3>
+        <div class="chart-container">
+            <canvas id="conversionTrendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Tabela de KPIs -->
+<div class="chart-card full-width">
+    <h3>📋 Principais KPIs - Performance Detalhada</h3>
+    <table class="kpi-table">
+        <thead>
+            <tr>
+                <th>Métrica</th>
+                <th>Valor Atual</th>
+                <th>Meta</th>
+                <th>Status</th>
+                <th>Variação</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Custo por Lead (CPL)</strong></td>
+                <td>$12.50</td>
+                <td>$15.00</td>
+                <td><span class="badge badge-success">Acima da Meta</span></td>
+                <td style="color: #48bb78;">-16.7%</td>
+            </tr>
+            <tr>
+                <td><strong>Custo de Aquisição (CAC)</strong></td>
+                <td>$68.00</td>
+                <td>$80.00</td>
+                <td><span class="badge badge-success">Excelente</span></td>
+                <td style="color: #48bb78;">-15%</td>
+            </tr>
+            <tr>
+                <td><strong>Lifetime Value (LTV)</strong></td>
+                <td>$385</td>
+                <td>$400</td>
+                <td><span class="badge badge-warning">Atenção</span></td>
+                <td style="color: #ed8936;">-3.8%</td>
+            </tr>
+            <tr>
+                <td><strong>LTV:CAC Ratio</strong></td>
+                <td>5.7:1</td>
+                <td>3:1</td>
+                <td><span class="badge badge-success">Saudável</span></td>
+                <td style="color: #48bb78;">+90%</td>
+            </tr>
+            <tr>
+                <td><strong>Taxa Abandono Carrinho</strong></td>
+                <td>42%</td>
+                <td>35%</td>
+                <td><span class="badge badge-danger">Crítico</span></td>
+                <td style="color: #f56565;">+20%</td>
+            </tr>
+            <tr>
+                <td><strong>Tempo Médio Conversão</strong></td>
+                <td>3.2 dias</td>
+                <td>5 dias</td>
+                <td><span class="badge badge-success">Ótimo</span></td>
+                <td style="color: #48bb78;">-36%</td>
+            </tr>
+            <tr>
+                <td><strong>ROI Marketing</strong></td>
+                <td>4.8x</td>
+                <td>3.0x</td>
+                <td><span class="badge badge-success">Excelente</span></td>
+                <td style="color: #48bb78;">+60%</td>
+            </tr>
+            <tr>
+                <td><strong>Lead Velocity Rate (LVR)</strong></td>
+                <td>+22%</td>
+                <td>+15%</td>
+                <td><span class="badge badge-success">Crescendo</span></td>
+                <td style="color: #48bb78;">+46.7%</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    // Gráfico de Receita
+    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+    const revenueChart = new Chart(revenueCtx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+            datasets: [{
+                label: 'Receita ($)',
+                data: [28500, 32100, 35800, 38400, 41200, 39800, 42500, 45760, 43200, 46800, 48500, 51200],
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                tension: 0.4,
+                fill: true,
+                borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Gráfico de Leads por Canal
+    const leadsCtx = document.getElementById('leadsChart').getContext('2d');
+    const leadsChart = new Chart(leadsCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Google Ads', 'Facebook/Instagram', 'SEO Orgânico', 'Email Marketing', 'Referências', 'Direto'],
+            datasets: [{
+                data: [320, 280, 245, 180, 135, 90],
+                backgroundColor: ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#feca57'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+
+    // Gráfico de Tráfego
+    const trafficCtx = document.getElementById('trafficChart').getContext('2d');
+    const trafficChart = new Chart(trafficCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'],
+            datasets: [
+                {
+                    label: 'Tráfego Pago',
+                    data: [1850, 2100, 2350, 2680],
+                    backgroundColor: '#667eea'
+                },
+                {
+                    label: 'Tráfego Orgânico',
+                    data: [1420, 1580, 1750, 1890],
+                    backgroundColor: '#43e97b'
+                },
+                {
+                    label: 'Tráfego Direto',
+                    data: [680, 720, 845, 920],
+                    backgroundColor: '#f093fb'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            scales: {
+                x: { stacked: true },
+                y: { stacked: true, beginAtZero: true }
+            }
+        }
+    });
+
+    // Gráfico de Tendência de Conversão
+    const conversionTrendCtx = document.getElementById('conversionTrendChart').getContext('2d');
+    const conversionTrendChart = new Chart(conversionTrendCtx, {
+        type: 'line',
+        data: {
+            labels: ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5', 'Sem 6', 'Sem 7', 'Sem 8'],
+            datasets: [{
+                label: 'Taxa de Conversão (%)',
+                data: [14.2, 15.8, 16.5, 17.1, 17.8, 18.2, 18.4, 18.9],
+                borderColor: '#43e97b',
+                backgroundColor: 'rgba(67, 233, 123, 0.1)',
+                tension: 0.4,
+                fill: true,
+                borderWidth: 3
+            }, {
+                label: 'Meta (%)',
+                data: [16, 16, 16, 16, 16, 16, 16, 16],
+                borderColor: '#f56565',
+                borderDash: [5, 5],
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 25,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    function updateDashboard() {
+        console.log('Dashboard atualizado!');
+        // Aqui você pode adicionar lógica para atualizar os dados via API
+    }
+</script>
 {% endblock %}
+
+===================== FIM DO CÓDIGO =====================
