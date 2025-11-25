@@ -4,7 +4,7 @@ Sistema de gestão omnichannel com pipeline de vendas, CRM e análise de documen
 """
 
 from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
@@ -30,7 +30,13 @@ db = mongo_client["mia_bot"] if mongo_client else None
 # DASHBOARD PRINCIPAL
 # ============================================
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/")
+async def root():
+    """Redireciona para a página de login"""
+    return RedirectResponse(url="/login", status_code=307)
+
+
+@router.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     """Dashboard principal com estatísticas gerais"""
     try:
