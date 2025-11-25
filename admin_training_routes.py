@@ -95,10 +95,9 @@ async def admin_treinamento(request: Request):
 
 @router.post("/personalidade")
 async def salvar_personalidade(
-    tom_voz: str = Form(...),
-    descricao: str = Form(...),
-    objetivos: str = Form(...),
-    restricoes: str = Form(""),
+    tone: str = Form(...),
+    goals: str = Form(...),
+    restrictions: str = Form(""),
     response_delay: int = Form(3)
 ):
     """Salvar personalidade do bot"""
@@ -115,9 +114,9 @@ async def salvar_personalidade(
             {
                 "$set": {
                     "personality": {
-                        "tone": tom_voz,
-                        "goals": objetivos,
-                        "restrictions": restricoes,
+                        "tone": tone,
+                        "goals": goals,
+                        "restrictions": restrictions,
                         "response_delay": response_delay
                     },
                     "updated_at": datetime.now()
