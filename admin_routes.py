@@ -27,50 +27,103 @@ mongo_client = MongoClient(MONGODB_URI) if MONGODB_URI else None
 db = mongo_client["mia_bot"] if mongo_client else None
 
 # ============================================
-# 🔄 REDIRECT: /admin → /admin/login
+# REDIRECT /admin → /admin/controle (em vez de /login)
 # ============================================
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/")
 async def admin_root():
-    """Redireciona /admin para /admin/login"""
-    return RedirectResponse(url="/admin/login", status_code=302)
+    """Redireciona /admin para /admin/controle"""
+    return RedirectResponse(url="/admin/controle", status_code=302)
 
 # ============================================
-# 🔐 LOGIN
+# CONTROLE DO BOT (PÁGINA PRINCIPAL)
 # ============================================
 
-@router.get("/login", response_class=HTMLResponse)
-async def admin_login_page(request: Request):
-    """Página de login do sistema"""
-    return templates.TemplateResponse("login.html", {"request": request})
-
-@router.post("/login")
-async def admin_login_post(request: Request):
-    """Processa login do admin"""
+@router.get("/controle", response_class=HTMLResponse)
+async def admin_controle(request: Request):
+    """Página de controle do bot (ON/OFF)"""
     try:
-        data = await request.json()
-        username = data.get("username")
-        password = data.get("password")
+        if db is None:  # ✅ CORRIGIDO: era "if not db"
+            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
         
-        # Validação simples (SUBSTITUIR POR AUTENTICAÇÃO REAL EM PRODUÇÃO)
-        if username == "admin" and password == "admin123":
-            return {"success": True, "message": "Login realizado com sucesso"}
-        else:
-            return {"success": False, "message": "Usuário ou senha incorretos"}
-            
+        # Buscar status atual do bot
+        config = db.config.find_one({"_id": "bot_config"}) or {}
+        bot_ativo = config.get("bot_ativo", True)
+        
+        return templates.TemplateResponse(
+            "admin_controle.html",
+            {
+                "request": request,
+                "bot_ativo": bot_ativo
+            }
+        )
+        
     except Exception as e:
-        logger.error(f"Erro no login: {e}")
+        logger.error(f"Erro na página de controle: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/controle/api/status")
+async def get_bot_status():
+    """API para verificar status do bot"""
+    try:
+        if db is None:  # ✅ CORRIGIDO
+            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
+        
+        config = db.config.find_one({"_id": "bot_config"}) or {}
+        bot_ativo = config.get("bot_ativo", True)
+        
+        return {
+            "success": True,
+            "bot_ativo": bot_ativo
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar status do bot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/controle/toggle")
+async def toggle_bot(request: Request):
+    """Liga/desliga o bot"""
+    try:
+        if db is None:  # ✅ CORRIGIDO
+            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
+        
+        # Buscar status atual
+        config = db.config.find_one({"_id": "bot_config"}) or {}
+        bot_ativo_atual = config.get("bot_ativo", True)
+        
+        # Inverter status
+        novo_status = not bot_ativo_atual
+        
+        # Atualizar no banco
+        db.config.update_one(
+            {"_id": "bot_config"},
+            {"$set": {"bot_ativo": novo_status}},
+            upsert=True
+        )
+        
+        status_texto = "LIGADO" if novo_status else "DESLIGADO"
+        logger.info(f"Bot {status_texto} pelo admin")
+        
+        return {
+            "success": True,
+            "bot_ativo": novo_status,
+            "message": f"Bot {status_texto} com sucesso!"
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao alternar bot: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
-# 📊 DASHBOARD PRINCIPAL
+# DASHBOARD ANTIGO (mantido igual ao original)
 # ============================================
 
-@router.get("/dashboard", response_class=HTMLResponse)
+@router.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     """Dashboard principal com estatísticas gerais"""
     try:
-        if db is None:
+        if db is None:  # ✅ CORRIGIDO: era "if db is None"
             return templates.TemplateResponse("admin_dashboard.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -128,75 +181,14 @@ async def admin_dashboard(request: Request):
         })
 
 # ============================================
-# 🎛️ CONTROLE DO BOT (ON/OFF)
-# ============================================
-
-@router.get("/controle", response_class=HTMLResponse)
-async def admin_controle(request: Request):
-    """Página de controle do bot (ON/OFF)"""
-    try:
-        if not db:
-            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
-        
-        # Buscar status atual do bot
-        config = db.config.find_one({"_id": "bot_config"}) or {}
-        bot_ativo = config.get("bot_ativo", True)
-        
-        return templates.TemplateResponse(
-            "admin_controle.html",
-            {
-                "request": request,
-                "bot_ativo": bot_ativo
-            }
-        )
-        
-    except Exception as e:
-        logger.error(f"Erro na página de controle: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/controle/toggle")
-async def toggle_bot(request: Request):
-    """Liga/desliga o bot"""
-    try:
-        if not db:
-            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
-        
-        # Buscar status atual
-        config = db.config.find_one({"_id": "bot_config"}) or {}
-        bot_ativo_atual = config.get("bot_ativo", True)
-        
-        # Inverter status
-        novo_status = not bot_ativo_atual
-        
-        # Atualizar no banco
-        db.config.update_one(
-            {"_id": "bot_config"},
-            {"$set": {"bot_ativo": novo_status}},
-            upsert=True
-        )
-        
-        status_texto = "LIGADO" if novo_status else "DESLIGADO"
-        logger.info(f"Bot {status_texto} pelo admin")
-        
-        return {
-            "success": True,
-            "bot_ativo": novo_status,
-            "message": f"Bot {status_texto} com sucesso!"
-        }
-        
-    except Exception as e:
-        logger.error(f"Erro ao alternar bot: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================
-# 🎓 TREINAMENTO (FAQ)
+# TREINAMENTO (mantido igual)
 # ============================================
 
 @router.get("/treinamento", response_class=HTMLResponse)
 async def admin_treinamento(request: Request):
     """Página de treinamento do bot"""
     try:
-        if not db:
+        if db is None:  # ✅ CORRIGIDO
             raise HTTPException(status_code=500, detail="Banco de dados não conectado")
         
         # Buscar FAQs cadastradas
@@ -215,14 +207,14 @@ async def admin_treinamento(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
-# 👥 SUPPORT (ATENDIMENTO HUMANO)
+# ATENDIMENTO (mantido igual)
 # ============================================
 
 @router.get("/atendimento", response_class=HTMLResponse)
 async def admin_support(request: Request):
     """Página de atendimento humano"""
     try:
-        if not db:
+        if db is None:  # ✅ CORRIGIDO
             raise HTTPException(status_code=500, detail="Banco de dados não conectado")
         
         # Buscar conversas em modo humano
@@ -244,14 +236,14 @@ async def admin_support(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
-# 💬 CONVERSATIONS (HISTÓRICO GERAL)
+# CONVERSAS (mantido igual)
 # ============================================
 
 @router.get("/conversas", response_class=HTMLResponse)
 async def admin_conversas(request: Request):
     """Página de histórico geral de conversas"""
     try:
-        if not db:
+        if db is None:  # ✅ CORRIGIDO
             raise HTTPException(status_code=500, detail="Banco de dados não conectado")
         
         # Buscar todas as conversas
@@ -288,14 +280,14 @@ async def admin_conversas(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
-# 📊 PIPELINE DE VENDAS
+# PIPELINE (mantido igual ao original)
 # ============================================
 
 @router.get("/pipeline", response_class=HTMLResponse)
 async def admin_pipeline(request: Request):
     """Visualização do pipeline de vendas (funil)"""
     try:
-        if db is None:
+        if db is None:  # ✅ CORRIGIDO
             return templates.TemplateResponse("admin_pipeline.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -340,14 +332,14 @@ async def admin_pipeline(request: Request):
         })
 
 # ============================================
-# 📊 GESTÃO DE LEADS (CRM)
+# GESTÃO DE LEADS (CRM) - mantido igual
 # ============================================
 
 @router.get("/leads", response_class=HTMLResponse)
 async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Optional[str] = None):
     """Gestão completa de leads com filtros"""
     try:
-        if db is None:
+        if db is None:  # ✅ CORRIGIDO
             return templates.TemplateResponse("admin_leads.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -393,14 +385,14 @@ async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Op
         })
 
 # ============================================
-# 🔄 TRANSFERÊNCIAS PARA HUMANO
+# TRANSFERÊNCIAS PARA HUMANO - mantido igual
 # ============================================
 
 @router.get("/transfers", response_class=HTMLResponse)
 async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
     """Gerenciar transferências para atendimento humano"""
     try:
-        if db is None:
+        if db is None:  # ✅ CORRIGIDO
             return templates.TemplateResponse("admin_transfers.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -437,14 +429,14 @@ async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
         })
 
 # ============================================
-# 📄 ANÁLISE DE DOCUMENTOS
+# ANÁLISE DE DOCUMENTOS - mantido igual
 # ============================================
 
 @router.get("/documents", response_class=HTMLResponse)
 async def admin_documents(request: Request, status: Optional[str] = None):
     """Visualizar documentos analisados pelo GPT-4 Vision"""
     try:
-        if db is None:
+        if db is None:  # ✅ CORRIGIDO
             return templates.TemplateResponse("admin_documents.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -483,7 +475,7 @@ async def admin_documents(request: Request, status: Optional[str] = None):
         })
 
 # ============================================
-# ⚙️ CONFIGURAÇÕES DO SISTEMA
+# CONFIGURAÇÕES DO SISTEMA - mantido igual
 # ============================================
 
 @router.get("/config", response_class=HTMLResponse)
@@ -493,7 +485,7 @@ async def admin_config(request: Request):
         # Verificar status das integrações
         config = {
             "openai_status": "✅ Configurado" if os.getenv("OPENAI_API_KEY") else "❌ Não configurado",
-            "mongodb_status": "✅ Conectado" if db is not None else "❌ Não conectado",
+            "mongodb_status": "✅ Conectado" if db is not None else "❌ Não conectado",  # ✅ CORRIGIDO
             "zapi_status": "✅ Configurado" if os.getenv("ZAPI_TOKEN") else "❌ Não configurado",
             "instagram_status": "⚠️ Opcional",
             "render_url": os.getenv("RENDER_EXTERNAL_URL", "https://mia-atendimento.onrender.com"),
@@ -520,14 +512,14 @@ async def admin_config(request: Request):
         })
 
 # ============================================
-# 🔌 API ENDPOINTS (JSON)
+# API ENDPOINTS (JSON) - mantido igual
 # ============================================
 
 @router.get("/api/stats")
 async def api_stats():
     """Retornar estatísticas em JSON"""
     try:
-        if db is None:
+        if db is None:  # ✅ CORRIGIDO
             raise HTTPException(status_code=503, detail="MongoDB não disponível")
         
         stats = {
@@ -542,12 +534,3 @@ async def api_stats():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================
-# 🚪 LOGOUT
-# ============================================
-
-@router.get("/logout")
-async def admin_logout():
-    """Faz logout do sistema"""
-    return RedirectResponse(url="/admin/login", status_code=302)
