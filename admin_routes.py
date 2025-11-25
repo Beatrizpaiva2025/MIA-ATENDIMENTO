@@ -27,103 +27,20 @@ mongo_client = MongoClient(MONGODB_URI) if MONGODB_URI else None
 db = mongo_client["mia_bot"] if mongo_client else None
 
 # ============================================
-# REDIRECT /admin → /admin/controle (em vez de /login)
+# DASHBOARD PRINCIPAL
 # ============================================
 
 @router.get("/")
-async def admin_root():
-    """Redireciona /admin para /admin/controle"""
-    return RedirectResponse(url="/admin/controle", status_code=302)
+async def root():
+    """Redireciona para a página de login"""
+    return RedirectResponse(url="/login", status_code=307)
 
-# ============================================
-# CONTROLE DO BOT (PÁGINA PRINCIPAL)
-# ============================================
-
-@router.get("/controle", response_class=HTMLResponse)
-async def admin_controle(request: Request):
-    """Página de controle do bot (ON/OFF)"""
-    try:
-        if db is None:  # ✅ CORRIGIDO: era "if not db"
-            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
-        
-        # Buscar status atual do bot
-        config = db.config.find_one({"_id": "bot_config"}) or {}
-        bot_ativo = config.get("bot_ativo", True)
-        
-        return templates.TemplateResponse(
-            "admin_controle.html",
-            {
-                "request": request,
-                "bot_ativo": bot_ativo
-            }
-        )
-        
-    except Exception as e:
-        logger.error(f"Erro na página de controle: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/controle/api/status")
-async def get_bot_status():
-    """API para verificar status do bot"""
-    try:
-        if db is None:  # ✅ CORRIGIDO
-            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
-        
-        config = db.config.find_one({"_id": "bot_config"}) or {}
-        bot_ativo = config.get("bot_ativo", True)
-        
-        return {
-            "success": True,
-            "bot_ativo": bot_ativo
-        }
-        
-    except Exception as e:
-        logger.error(f"Erro ao buscar status do bot: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/controle/toggle")
-async def toggle_bot(request: Request):
-    """Liga/desliga o bot"""
-    try:
-        if db is None:  # ✅ CORRIGIDO
-            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
-        
-        # Buscar status atual
-        config = db.config.find_one({"_id": "bot_config"}) or {}
-        bot_ativo_atual = config.get("bot_ativo", True)
-        
-        # Inverter status
-        novo_status = not bot_ativo_atual
-        
-        # Atualizar no banco
-        db.config.update_one(
-            {"_id": "bot_config"},
-            {"$set": {"bot_ativo": novo_status}},
-            upsert=True
-        )
-        
-        status_texto = "LIGADO" if novo_status else "DESLIGADO"
-        logger.info(f"Bot {status_texto} pelo admin")
-        
-        return {
-            "success": True,
-            "bot_ativo": novo_status,
-            "message": f"Bot {status_texto} com sucesso!"
-        }
-        
-    except Exception as e:
-        logger.error(f"Erro ao alternar bot: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================
-# DASHBOARD ANTIGO (mantido igual ao original)
-# ============================================
 
 @router.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     """Dashboard principal com estatísticas gerais"""
     try:
-        if db is None:  # ✅ CORRIGIDO: era "if db is None"
+        if db is None:  # ✅ CORRIGIDO
             return templates.TemplateResponse("admin_dashboard.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -181,106 +98,7 @@ async def admin_dashboard(request: Request):
         })
 
 # ============================================
-# TREINAMENTO (mantido igual)
-# ============================================
-
-@router.get("/treinamento", response_class=HTMLResponse)
-async def admin_treinamento(request: Request):
-    """Página de treinamento do bot"""
-    try:
-        if db is None:  # ✅ CORRIGIDO
-            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
-        
-        # Buscar FAQs cadastradas
-        faqs = list(db.faq_training.find().sort("created_at", -1))
-        
-        return templates.TemplateResponse(
-            "admin_training.html",
-            {
-                "request": request,
-                "faqs": faqs
-            }
-        )
-        
-    except Exception as e:
-        logger.error(f"Erro na página de treinamento: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================
-# ATENDIMENTO (mantido igual)
-# ============================================
-
-@router.get("/atendimento", response_class=HTMLResponse)
-async def admin_support(request: Request):
-    """Página de atendimento humano"""
-    try:
-        if db is None:  # ✅ CORRIGIDO
-            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
-        
-        # Buscar conversas em modo humano
-        conversas_humano = list(
-            db.conversations.find({"modo_atendimento": "humano"})
-            .sort("timestamp", -1)
-        )
-        
-        return templates.TemplateResponse(
-            "admin_atendimento.html",
-            {
-                "request": request,
-                "conversas": conversas_humano
-            }
-        )
-        
-    except Exception as e:
-        logger.error(f"Erro na página de atendimento: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================
-# CONVERSAS (mantido igual)
-# ============================================
-
-@router.get("/conversas", response_class=HTMLResponse)
-async def admin_conversas(request: Request):
-    """Página de histórico geral de conversas"""
-    try:
-        if db is None:  # ✅ CORRIGIDO
-            raise HTTPException(status_code=500, detail="Banco de dados não conectado")
-        
-        # Buscar todas as conversas
-        conversas = list(
-            db.conversations.find()
-            .sort("timestamp", -1)
-            .limit(100)
-        )
-        
-        # Estatísticas
-        total_conversas = len(conversas)
-        conversas_ia = len([c for c in conversas if c.get("modo_atendimento") != "humano"])
-        conversas_humano = len([c for c in conversas if c.get("modo_atendimento") == "humano"])
-        conversas_whatsapp = len([c for c in conversas if c.get("canal") == "whatsapp"])
-        
-        stats = {
-            "total": total_conversas,
-            "ia": conversas_ia,
-            "humano": conversas_humano,
-            "whatsapp": conversas_whatsapp
-        }
-        
-        return templates.TemplateResponse(
-            "admin_conversas.html",
-            {
-                "request": request,
-                "conversas": conversas,
-                "stats": stats
-            }
-        )
-        
-    except Exception as e:
-        logger.error(f"Erro na página de conversas: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================
-# PIPELINE (mantido igual ao original)
+# PIPELINE DE VENDAS
 # ============================================
 
 @router.get("/pipeline", response_class=HTMLResponse)
@@ -332,7 +150,7 @@ async def admin_pipeline(request: Request):
         })
 
 # ============================================
-# GESTÃO DE LEADS (CRM) - mantido igual
+# GESTÃO DE LEADS (CRM)
 # ============================================
 
 @router.get("/leads", response_class=HTMLResponse)
@@ -385,7 +203,7 @@ async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Op
         })
 
 # ============================================
-# TRANSFERÊNCIAS PARA HUMANO - mantido igual
+# TRANSFERÊNCIAS PARA HUMANO
 # ============================================
 
 @router.get("/transfers", response_class=HTMLResponse)
@@ -429,7 +247,7 @@ async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
         })
 
 # ============================================
-# ANÁLISE DE DOCUMENTOS - mantido igual
+# ANÁLISE DE DOCUMENTOS
 # ============================================
 
 @router.get("/documents", response_class=HTMLResponse)
@@ -475,7 +293,7 @@ async def admin_documents(request: Request, status: Optional[str] = None):
         })
 
 # ============================================
-# CONFIGURAÇÕES DO SISTEMA - mantido igual
+# CONFIGURAÇÕES DO SISTEMA
 # ============================================
 
 @router.get("/config", response_class=HTMLResponse)
@@ -512,7 +330,7 @@ async def admin_config(request: Request):
         })
 
 # ============================================
-# API ENDPOINTS (JSON) - mantido igual
+# API ENDPOINTS (JSON)
 # ============================================
 
 @router.get("/api/stats")
