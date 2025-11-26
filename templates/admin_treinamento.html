@@ -187,7 +187,7 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>🎓 Training da IA</h1>
+    <h1>🎓 AI Training</h1>
     <p>Configure MIA's knowledge and personality</p>
 </div>
 
@@ -312,7 +312,7 @@
         alert('Editing in development. ID: ' + id);
     }
     function deletarConhecimento(id) {
-        if (confirm('Delete este conhecimento?')) {
+        if (confirm('Delete this knowledge?')) {
             fetch('/admin/treinamento/conhecimento/deletar/' + id, { method: 'POST' })
                 .then(() => location.reload());
         }
@@ -321,7 +321,7 @@
         alert('Editing in development. ID: ' + id);
     }
     function deletarFAQ(id) {
-        if (confirm('Delete esta FAQ?')) {
+        if (confirm('Delete this FAQ?')) {
             fetch('/admin/treinamento/faq/deletar/' + id, { method: 'POST' })
                 .then(() => location.reload());
         }
