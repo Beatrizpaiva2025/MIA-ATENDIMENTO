@@ -252,6 +252,13 @@
     .status-warning { background: #feebc8; color: #7c2d12; }
     .status-critical { background: #fed7d7; color: #742a2a; }
 
+    .loading {
+        text-align: center;
+        padding: 50px;
+        color: var(--text-secondary);
+        font-size: 18px;
+    }
+
     @media (max-width: 768px) {
         .metrics-grid {
             grid-template-columns: 1fr;
@@ -274,22 +281,15 @@
     <!-- Page Header -->
     <div class="page-header">
         <h1>📊 Dashboard - Leads & Conversions</h1>
-        <p>Metrics and performance tracking - Legacy Translations</p>
+        <p>Real-time metrics and performance tracking - Legacy Translations</p>
     </div>
 
     <!-- Date Filters -->
     <div class="date-filters">
-        <select id="periodFilter">
-            <option value="30">Last 30 days</option>
+        <select id="periodFilter" onchange="loadDashboardData()">
+            <option value="30" selected>Last 30 days</option>
             <option value="7">Last 7 days</option>
             <option value="90">Last 90 days</option>
-            <option value="365">Last year</option>
-        </select>
-        <select id="segmentFilter">
-            <option value="all">All Segments</option>
-            <option value="certified">Certified Translation</option>
-            <option value="sworn">Sworn Translation</option>
-            <option value="technical">Technical Translation</option>
         </select>
     </div>
 
@@ -300,9 +300,9 @@
                 <span class="metric-title">TOTAL REVENUE</span>
                 <div class="metric-icon icon-revenue">💰</div>
             </div>
-            <div class="metric-value">$45,760</div>
-            <div class="metric-change positive">
-                <span>↑ +18.5% vs. previous month</span>
+            <div class="metric-value" id="totalRevenue">$0</div>
+            <div class="metric-change neutral">
+                <span>💵 From converted leads</span>
             </div>
         </div>
 
@@ -311,9 +311,9 @@
                 <span class="metric-title">TOTAL LEADS</span>
                 <div class="metric-icon icon-leads">👥</div>
             </div>
-            <div class="metric-value">1,250</div>
-            <div class="metric-change positive">
-                <span>↑ +5.3% growth</span>
+            <div class="metric-value" id="totalLeads">0</div>
+            <div class="metric-change neutral">
+                <span id="convertedLeads">0 converted</span>
             </div>
         </div>
 
@@ -322,20 +322,20 @@
                 <span class="metric-title">CONVERSION RATE</span>
                 <div class="metric-icon icon-conversion">📈</div>
             </div>
-            <div class="metric-value">18.4%</div>
-            <div class="metric-change positive">
-                <span>↑ +2.1% vs. target</span>
+            <div class="metric-value" id="conversionRate">0%</div>
+            <div class="metric-change neutral">
+                <span>🎯 Lead to customer</span>
             </div>
         </div>
 
         <div class="metric-card">
             <div class="metric-header">
                 <span class="metric-title">AVERAGE TICKET</span>
-                <div class="metric-icon icon-ticket">💵</div>
+                <div class="metric-icon icon-ticket">🎫</div>
             </div>
-            <div class="metric-value">$198</div>
-            <div class="metric-change negative">
-                <span>↓ -3.2% vs. previous</span>
+            <div class="metric-value" id="avgTicket">$0</div>
+            <div class="metric-change neutral">
+                <span>📊 Per converted lead</span>
             </div>
         </div>
     </div>
@@ -344,99 +344,34 @@
     <div class="charts-grid">
         <div class="chart-card">
             <div class="chart-header">
-                <h3 class="chart-title">📊 Monthly Revenue</h3>
-                <p class="chart-subtitle">Last 6 months</p>
-            </div>
-            <canvas id="revenueChart"></canvas>
-        </div>
-
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3 class="chart-title">👥 Leads by Channel</h3>
-                <p class="chart-subtitle">Distribution by source</p>
+                <h3 class="chart-title">📍 Leads by Origin</h3>
+                <p class="chart-subtitle">Distribution by traffic source</p>
             </div>
             <canvas id="channelsChart"></canvas>
         </div>
 
         <div class="chart-card">
             <div class="chart-header">
-                <h3 class="chart-title">🌐 Traffic by Source</h3>
-                <p class="chart-subtitle">Visitor origin</p>
+                <h3 class="chart-title">💰 Marketing Investment</h3>
+                <p class="chart-subtitle">Last 30 days - Daily trend</p>
             </div>
-            <canvas id="trafficChart"></canvas>
+            <canvas id="marketingCostChart"></canvas>
         </div>
 
         <div class="chart-card">
             <div class="chart-header">
-                <h3 class="chart-title">📈 Conversion Rate - Trend</h3>
-                <p class="chart-subtitle">Last 12 weeks</p>
+                <h3 class="chart-title">👁️ Website Analytics</h3>
+                <p class="chart-subtitle">Visits & Engagement</p>
+            </div>
+            <canvas id="websiteChart"></canvas>
+        </div>
+
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3 class="chart-title">🔄 Daily Conversions</h3>
+                <p class="chart-subtitle">Conversion trend - Last 30 days</p>
             </div>
             <canvas id="conversionTrendChart"></canvas>
-        </div>
-    </div>
-
-    <!-- Conversion Funnel -->
-    <div class="funnel-container">
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3 class="chart-title">🔄 Conversion Funnel - Last 30 Days</h3>
-                <p class="chart-subtitle">Complete customer journey</p>
-            </div>
-            
-            <div class="funnel-stage">
-                <div class="funnel-header">
-                    <span class="funnel-name">1. Website Visitors</span>
-                    <span class="funnel-value">12,348</span>
-                </div>
-                <div class="funnel-bar">
-                    <div class="funnel-fill" style="width: 100%"></div>
-                </div>
-                <div class="funnel-percentage">100% of total traffic</div>
-            </div>
-
-            <div class="funnel-stage">
-                <div class="funnel-header">
-                    <span class="funnel-name">2. Captured Leads</span>
-                    <span class="funnel-value">1,250</span>
-                </div>
-                <div class="funnel-bar">
-                    <div class="funnel-fill" style="width: 10.1%"></div>
-                </div>
-                <div class="funnel-percentage">10.1% conversion</div>
-            </div>
-
-            <div class="funnel-stage">
-                <div class="funnel-header">
-                    <span class="funnel-name">3. Qualified Leads (MQL)</span>
-                    <span class="funnel-value">845</span>
-                </div>
-                <div class="funnel-bar">
-                    <div class="funnel-fill" style="width: 6.8%"></div>
-                </div>
-                <div class="funnel-percentage">6.8% of total traffic</div>
-            </div>
-
-            <div class="funnel-stage">
-                <div class="funnel-header">
-                    <span class="funnel-name">4. Opportunities (SQL)</span>
-                    <span class="funnel-value">423</span>
-                </div>
-                <div class="funnel-bar">
-                    <div class="funnel-fill" style="width: 3.4%"></div>
-                </div>
-                <div class="funnel-percentage">3.4% of total traffic</div>
-            </div>
-
-            <div class="funnel-stage">
-                <div class="funnel-header">
-                    <span class="funnel-name">5. Converted Clients</span>
-                    <span class="funnel-value">231</span>
-                </div>
-                <div class="funnel-bar">
-                    <div class="funnel-fill" style="width: 1.87%"></div>
-                </div>
-                <div class="funnel-percentage">1.87% final conversion</div>
-            </div>
         </div>
     </div>
 
@@ -445,70 +380,14 @@
         <table>
             <thead>
                 <tr>
-                    <th>📋 Key KPIs - Detailed Performance</th>
+                    <th>🎯 Key Performance Indicators (KPIs)</th>
                     <th>Current Value</th>
-                    <th>Target</th>
                     <th>Status</th>
-                    <th>Variation</th>
+                    <th>Description</th>
                 </tr>
             </thead>
-            <tbody>
-                <tr>
-                    <td><strong>Cost per Lead (CPL)</strong></td>
-                    <td>$12.50</td>
-                    <td>$15.00</td>
-                    <td><span class="status-badge status-excellent">Above Target</span></td>
-                    <td style="color: var(--success-color);">-16.7%</td>
-                </tr>
-                <tr>
-                    <td><strong>Customer Acquisition Cost (CAC)</strong></td>
-                    <td>$68.00</td>
-                    <td>$80.00</td>
-                    <td><span class="status-badge status-excellent">Excellent</span></td>
-                    <td style="color: var(--success-color);">-15%</td>
-                </tr>
-                <tr>
-                    <td><strong>Lifetime Value (LTV)</strong></td>
-                    <td>$385</td>
-                    <td>$400</td>
-                    <td><span class="status-badge status-warning">Attention</span></td>
-                    <td style="color: var(--danger-color);">-3.8%</td>
-                </tr>
-                <tr>
-                    <td><strong>LTV:CAC Ratio</strong></td>
-                    <td>5.7:1</td>
-                    <td>3:1</td>
-                    <td><span class="status-badge status-excellent">Healthy</span></td>
-                    <td style="color: var(--success-color);">+90%</td>
-                </tr>
-                <tr>
-                    <td><strong>Cart Abandonment Rate</strong></td>
-                    <td>42%</td>
-                    <td>35%</td>
-                    <td><span class="status-badge status-critical">Critical</span></td>
-                    <td style="color: var(--danger-color);">+20%</td>
-                </tr>
-                <tr>
-                    <td><strong>Average Conversion Time</strong></td>
-                    <td>3.2 days</td>
-                    <td>5 days</td>
-                    <td><span class="status-badge status-excellent">Optimal</span></td>
-                    <td style="color: var(--success-color);">-36%</td>
-                </tr>
-                <tr>
-                    <td><strong>Marketing ROI</strong></td>
-                    <td>4.8x</td>
-                    <td>3.0x</td>
-                    <td><span class="status-badge status-excellent">Excellent</span></td>
-                    <td style="color: var(--success-color);">+60%</td>
-                </tr>
-                <tr>
-                    <td><strong>Lead Velocity Rate (LVR)</strong></td>
-                    <td>+22%</td>
-                    <td>+15%</td>
-                    <td><span class="status-badge status-excellent">Growing</span></td>
-                    <td style="color: var(--success-color);">+46.7%</td>
-                </tr>
+            <tbody id="kpiTableBody">
+                <tr><td colspan="4" class="loading">Loading KPIs...</td></tr>
             </tbody>
         </table>
     </div>
@@ -516,69 +395,245 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// Revenue Chart
-const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-new Chart(revenueCtx, {
-    type: 'line',
-    data: {
-        labels: ['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'],
-        datasets: [{
-            label: 'Revenue ($)',
-            data: [32400, 35800, 38200, 41500, 43200, 45760],
-            borderColor: '#667eea',
-            backgroundColor: 'rgba(102, 126, 234, 0.1)',
-            tension: 0.4,
-            fill: true
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: { display: false }
+let channelsChart, marketingCostChart, websiteChart, conversionTrendChart;
+
+// Load dashboard data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+});
+
+async function loadDashboardData() {
+    const days = document.getElementById('periodFilter').value;
+    
+    try {
+        // Fetch data from API
+        const response = await fetch(`/admin/api/dashboard-data?days=${days}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update main metrics
+            updateMainMetrics(data.lead_stats);
+            
+            // Update charts
+            updateChannelsChart(data.lead_stats.leads_by_origin);
+            updateMarketingCharts(data.marketing_stats);
+            
+            // Update KPI table
+            updateKPITable(data.kpis);
+        } else {
+            console.error('Error loading data:', data.error);
         }
+    } catch (error) {
+        console.error('Error fetching dashboard data:', error);
     }
-});
+}
 
-// Channels Chart
-const channelsCtx = document.getElementById('channelsChart').getContext('2d');
-new Chart(channelsCtx, {
-    type: 'doughnut',
-    data: {
-        labels: ['Google Ads', 'Facebook/Instagram', 'Organic SEO', 'Email Marketing', 'Referrals', 'Direct'],
-        datasets: [{
-            data: [320, 280, 215, 145, 180, 110],
-            backgroundColor: ['#667eea', '#f093fb', '#48bb78', '#ed8936', '#4facfe', '#43e97b']
-        }]
-    }
-});
+function updateMainMetrics(leadStats) {
+    document.getElementById('totalRevenue').textContent = '$' + leadStats.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('totalLeads').textContent = leadStats.total_leads;
+    document.getElementById('conversionRate').textContent = leadStats.conversion_rate.toFixed(2) + '%';
+    document.getElementById('avgTicket').textContent = '$' + leadStats.avg_ticket.toFixed(2);
+    document.getElementById('convertedLeads').textContent = leadStats.converted_leads + ' converted';
+}
 
-// Traffic Chart
-const trafficCtx = document.getElementById('trafficChart').getContext('2d');
-new Chart(trafficCtx, {
-    type: 'bar',
-    data: {
-        labels: ['Google', 'Facebook', 'Instagram', 'Direct', 'Email', 'Referral'],
-        datasets: [{
-            label: 'Visitors',
-            data: [4250, 2840, 2110, 1680, 920, 548],
-            backgroundColor: '#667eea'
-        }]
+function updateChannelsChart(leadsByOrigin) {
+    const ctx = document.getElementById('channelsChart').getContext('2d');
+    
+    const labels = Object.keys(leadsByOrigin);
+    const dataValues = Object.values(leadsByOrigin);
+    const colors = ['#667eea', '#f093fb', '#48bb78', '#ed8936', '#4facfe', '#43e97b'];
+    
+    if (channelsChart) {
+        channelsChart.destroy();
     }
-});
+    
+    channelsChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: dataValues,
+                backgroundColor: colors.slice(0, labels.length)
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
 
-// Conversion Trend Chart
-const conversionCtx = document.getElementById('conversionTrendChart').getContext('2d');
-new Chart(conversionCtx, {
-    type: 'line',
-    data: {
-        labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7', 'Week 8', 'Week 9', 'Week 10', 'Week 11', 'Week 12'],
-        datasets: [{
-            label: 'Conversion Rate (%)',
-            data: [15.2, 16.1, 15.8, 17.2, 16.9, 18.1, 17.5, 18.8, 18.2, 19.1, 18.6, 18.4],
-            borderColor: '#48bb78',
-            tension: 0.4
-        }]
+function updateMarketingCharts(marketingStats) {
+    // Prepare data
+    const dates = marketingStats.map(s => new Date(s.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}));
+    const metaCosts = marketingStats.map(s => s.meta_ads?.cost || 0);
+    const googleCosts = marketingStats.map(s => s.google_ads?.cost || 0);
+    const websiteVisits = marketingStats.map(s => s.website?.visits || 0);
+    const conversions = marketingStats.map(s => s.conversions?.count || 0);
+    
+    // Marketing Cost Chart
+    const costCtx = document.getElementById('marketingCostChart').getContext('2d');
+    if (marketingCostChart) {
+        marketingCostChart.destroy();
     }
-});
+    
+    marketingCostChart = new Chart(costCtx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [
+                {
+                    label: 'Meta Ads ($)',
+                    data: metaCosts,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Google Ads ($)',
+                    data: googleCosts,
+                    borderColor: '#f093fb',
+                    backgroundColor: 'rgba(240, 147, 251, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Website Analytics Chart
+    const websiteCtx = document.getElementById('websiteChart').getContext('2d');
+    if (websiteChart) {
+        websiteChart.destroy();
+    }
+    
+    websiteChart = new Chart(websiteCtx, {
+        type: 'bar',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Daily Visits',
+                data: websiteVisits,
+                backgroundColor: '#48bb78'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Conversion Trend Chart
+    const conversionCtx = document.getElementById('conversionTrendChart').getContext('2d');
+    if (conversionTrendChart) {
+        conversionTrendChart.destroy();
+    }
+    
+    conversionTrendChart = new Chart(conversionCtx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Daily Conversions',
+                data: conversions,
+                borderColor: '#ed8936',
+                backgroundColor: 'rgba(237, 137, 54, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function updateKPITable(kpis) {
+    const tbody = document.getElementById('kpiTableBody');
+    
+    const kpiData = [
+        {
+            name: 'Cost per Lead (CPL)',
+            value: '$' + kpis.cpl.toFixed(2),
+            status: kpis.cpl < 20 ? 'excellent' : kpis.cpl < 30 ? 'good' : 'warning',
+            statusText: kpis.cpl < 20 ? 'Excellent' : kpis.cpl < 30 ? 'Good' : 'Needs Improvement',
+            description: 'Average cost to acquire one lead'
+        },
+        {
+            name: 'Customer Acquisition Cost (CAC)',
+            value: '$' + kpis.cac.toFixed(2),
+            status: kpis.cac < 100 ? 'excellent' : kpis.cac < 150 ? 'good' : 'warning',
+            statusText: kpis.cac < 100 ? 'Excellent' : kpis.cac < 150 ? 'Good' : 'High',
+            description: 'Total cost to acquire a paying customer'
+        },
+        {
+            name: 'Lifetime Value (LTV)',
+            value: '$' + kpis.ltv,
+            status: kpis.ltv > 300 ? 'excellent' : kpis.ltv > 200 ? 'good' : 'warning',
+            statusText: kpis.ltv > 300 ? 'Excellent' : kpis.ltv > 200 ? 'Good' : 'Low',
+            description: 'Average revenue per customer lifetime'
+        },
+        {
+            name: 'LTV:CAC Ratio',
+            value: kpis.ltv_cac_ratio.toFixed(2) + ':1',
+            status: kpis.ltv_cac_ratio > 3 ? 'excellent' : kpis.ltv_cac_ratio > 2 ? 'good' : 'critical',
+            statusText: kpis.ltv_cac_ratio > 3 ? 'Healthy' : kpis.ltv_cac_ratio > 2 ? 'Fair' : 'Critical',
+            description: 'Customer value vs acquisition cost ratio'
+        },
+        {
+            name: 'Marketing ROI',
+            value: kpis.marketing_roi.toFixed(2) + '%',
+            status: kpis.marketing_roi > 100 ? 'excellent' : kpis.marketing_roi > 50 ? 'good' : 'warning',
+            statusText: kpis.marketing_roi > 100 ? 'Profitable' : kpis.marketing_roi > 50 ? 'Positive' : 'Needs Review',
+            description: 'Return on marketing investment'
+        }
+    ];
+    
+    tbody.innerHTML = kpiData.map(kpi => `
+        <tr>
+            <td><strong>${kpi.name}</strong></td>
+            <td>${kpi.value}</td>
+            <td><span class="status-badge status-${kpi.status}">${kpi.statusText}</span></td>
+            <td>${kpi.description}</td>
+        </tr>
+    `).join('');
+}
 </script>
 {% endblock %}
