@@ -2,136 +2,250 @@
 
 {% block title %}Conversations - MIA Admin{% endblock %}
 
+{% block extra_style %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border-left: 4px solid;
+        transition: all 0.3s;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+
+    .stat-card.total { border-left-color: #3498db; }
+    .stat-card.ai { border-left-color: #2ecc71; }
+    .stat-card.human { border-left-color: #f39c12; }
+    .stat-card.whatsapp { border-left-color: #25d366; }
+
+    .stat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .stat-icon {
+        font-size: 2.5em;
+        opacity: 0.2;
+    }
+
+    .total .stat-icon { color: #3498db; }
+    .ai .stat-icon { color: #2ecc71; }
+    .human .stat-icon { color: #f39c12; }
+    .whatsapp .stat-icon { color: #25d366; }
+
+    .stat-label {
+        color: #7f8c8d;
+        font-size: 0.9em;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-number {
+        font-size: 2.5em;
+        font-weight: bold;
+        color: #1e3a5f;
+    }
+
+    .filters-card {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .filters-title {
+        font-size: 1.2em;
+        font-weight: 600;
+        color: #1e3a5f;
+        margin-bottom: 20px;
+    }
+
+    .filters-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        align-items: end;
+    }
+
+    .form-group-inline {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-label-inline {
+        font-weight: 600;
+        color: #1e3a5f;
+        margin-bottom: 8px;
+        font-size: 0.95em;
+    }
+
+    .form-select, .form-control {
+        padding: 10px 15px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 1em;
+        transition: all 0.3s;
+    }
+
+    .form-select:focus, .form-control:focus {
+        outline: none;
+        border-color: #5dade2;
+        box-shadow: 0 0 0 3px rgba(93, 173, 226, 0.1);
+    }
+
+    .btn-apply {
+        background: linear-gradient(135deg, #5dade2 0%, #4a9dd1 100%);
+        color: white;
+        padding: 10px 25px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 4px 12px rgba(93, 173, 226, 0.3);
+    }
+
+    .btn-apply:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(93, 173, 226, 0.4);
+    }
+
+    .conversations-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+
+    .empty-icon {
+        font-size: 5em;
+        color: #bdc3c7;
+        margin-bottom: 20px;
+    }
+
+    .empty-title {
+        font-size: 1.5em;
+        color: #7f8c8d;
+        margin-bottom: 10px;
+    }
+
+    .empty-text {
+        color: #95a5a6;
+        font-size: 1em;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col-12">
-            <h2 class="mb-3">💬 Conversations</h2>
-            <p class="text-muted">Complete history of all system conversations</p>
+<div class="page-header">
+    <h1>💬 Conversations</h1>
+    <p>Complete history of all system conversations</p>
+</div>
+
+<!-- Statistics Cards -->
+<div class="stats-grid">
+    <div class="stat-card total">
+        <div class="stat-header">
+            <div class="stat-label">📊 Total</div>
+            <div class="stat-icon">💬</div>
         </div>
+        <div class="stat-number" id="total-conversations">0</div>
     </div>
 
-    <!-- Statistics Cards -->
-    <div class="row mb-4">
-        <div class="col-md-3 mb-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-1 small">Total</p>
-                            <h3 class="mb-0" id="total-conversations">0</h3>
-                        </div>
-                        <div class="bg-primary bg-opacity-10 p-3 rounded">
-                            <i class="fas fa-comments text-primary fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <div class="stat-card ai">
+        <div class="stat-header">
+            <div class="stat-label">🤖 AI</div>
+            <div class="stat-icon">🤖</div>
         </div>
-        
-        <div class="col-md-3 mb-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-1 small">AI</p>
-                            <h3 class="mb-0" id="ai-conversations">0</h3>
-                        </div>
-                        <div class="bg-success bg-opacity-10 p-3 rounded">
-                            <i class="fas fa-robot text-success fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-3 mb-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-1 small">Human</p>
-                            <h3 class="mb-0" id="human-conversations">0</h3>
-                        </div>
-                        <div class="bg-warning bg-opacity-10 p-3 rounded">
-                            <i class="fas fa-user text-warning fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-3 mb-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-1 small">WhatsApp</p>
-                            <h3 class="mb-0" id="whatsapp-conversations">0</h3>
-                        </div>
-                        <div class="bg-info bg-opacity-10 p-3 rounded">
-                            <i class="fab fa-whatsapp text-info fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <div class="stat-number" id="ai-conversations">0</div>
     </div>
 
-    <!-- Filters -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">Filter by:</h5>
-                    <div class="row">
-                        <div class="col-md-3 mb-2">
-                            <select class="form-select" id="filter-type">
-                                <option value="all">All Types</option>
-                                <option value="ai">AI</option>
-                                <option value="human">Human</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3 mb-2">
-                            <select class="form-select" id="filter-channel">
-                                <option value="all">All Channels</option>
-                                <option value="whatsapp">WhatsApp</option>
-                                <option value="web">Web</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3 mb-2">
-                            <input type="date" class="form-control" id="filter-date" placeholder="Date">
-                        </div>
-                        <div class="col-md-3 mb-2">
-                            <button class="btn btn-primary w-100" onclick="applyFilters()">
-                                <i class="fas fa-filter me-2"></i>Apply Filters
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <div class="stat-card human">
+        <div class="stat-header">
+            <div class="stat-label">👤 Human</div>
+            <div class="stat-icon">👤</div>
         </div>
+        <div class="stat-number" id="human-conversations">0</div>
     </div>
 
-    <!-- Conversations List -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="table-responsive" id="conversations-container">
-                        <!-- Empty State -->
-                        <div class="text-center py-5">
-                            <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
-                            <h4 class="text-muted">No conversations recorded</h4>
-                            <p class="text-muted">Conversations will appear here as customers interact with the bot.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <div class="stat-card whatsapp">
+        <div class="stat-header">
+            <div class="stat-label">📱 WhatsApp</div>
+            <div class="stat-icon">📱</div>
+        </div>
+        <div class="stat-number" id="whatsapp-conversations">0</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="filters-card">
+    <h5 class="filters-title">🔍 Filter by:</h5>
+    <div class="filters-row">
+        <div class="form-group-inline">
+            <label class="form-label-inline">Type</label>
+            <select class="form-select" id="filter-type">
+                <option value="all">All Types</option>
+                <option value="ai">AI</option>
+                <option value="human">Human</option>
+            </select>
+        </div>
+        <div class="form-group-inline">
+            <label class="form-label-inline">Channel</label>
+            <select class="form-select" id="filter-channel">
+                <option value="all">All Channels</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="web">Web</option>
+            </select>
+        </div>
+        <div class="form-group-inline">
+            <label class="form-label-inline">Date</label>
+            <input type="date" class="form-control" id="filter-date">
+        </div>
+        <div class="form-group-inline">
+            <label class="form-label-inline">&nbsp;</label>
+            <button class="btn-apply" onclick="applyFilters()">
+                <i class="fas fa-filter"></i> Apply Filters
+            </button>
         </div>
     </div>
 </div>
 
+<!-- Conversations List -->
+<div class="conversations-card">
+    <div id="conversations-container">
+        <!-- Empty State -->
+        <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <h4 class="empty-title">No conversations recorded</h4>
+            <p class="empty-text">Conversations will appear here as customers interact with the bot.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
 <script>
 function applyFilters() {
     const type = document.getElementById('filter-type').value;
