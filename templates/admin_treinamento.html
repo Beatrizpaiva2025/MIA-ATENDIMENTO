@@ -309,51 +309,7 @@
 {% block extra_scripts %}
 <script>
     function editarConhecimento(id) {
-        // Encontrar o item na página
-        const conhecimentos = {{ conhecimentos|tojson }};
-        const item = conhecimentos.find(k => k._id === id);
-        
-        if (!item) {
-            alert('Conhecimento não encontrado');
-            return;
-        }
-        
-        // Preencher os campos do formulário
-        const form = document.querySelector('form[action="/admin/treinamento/conhecimento"]');
-        const titleInput = form.querySelector('input[name="title"]');
-        const contentInput = form.querySelector('textarea[name="content"]');
-        
-        titleInput.value = item.title;
-        contentInput.value = item.content;
-        
-        // Alterar a ação do formulário para editar
-        form.action = '/admin/treinamento/conhecimento/editar/' + id;
-        
-        // Mudar texto do botão
-        const submitBtn = form.querySelector('button[type="submit"]');
-        submitBtn.innerHTML = '✏️ Update Knowledge';
-        submitBtn.style.backgroundColor = '#ff9800';
-        
-        // Adicionar botão de cancelar
-        if (!form.querySelector('.btn-cancel-edit')) {
-            const cancelBtn = document.createElement('button');
-            cancelBtn.type = 'button';
-            cancelBtn.className = 'btn-cancel-edit';
-            cancelBtn.innerHTML = '✖️ Cancel';
-            cancelBtn.style.cssText = 'background: #666; color: white; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; margin-left: 10px;';
-            cancelBtn.onclick = function() {
-                form.action = '/admin/treinamento/conhecimento';
-                titleInput.value = '';
-                contentInput.value = '';
-                submitBtn.innerHTML = '➕ Add Knowledge';
-                submitBtn.style.backgroundColor = '';
-                cancelBtn.remove();
-            };
-            submitBtn.parentNode.appendChild(cancelBtn);
-        }
-        
-        // Scroll para o formulário
-        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        alert('Editing in development. ID: ' + id);
     }
     function deletarConhecimento(id) {
         if (confirm('Delete este conhecimento?')) {
