@@ -1,0 +1,2025 @@
+{
+  "leads": [
+    {
+      "name": "Robert Wilson",
+      "email": "robert.wilson1@example.com",
+      "phone": "+1-555-489-1080",
+      "origin": "Referral",
+      "campaign_name": null,
+      "utm_source": "referral",
+      "utm_medium": "organic",
+      "translation_type": "sworn_en_pt",
+      "status": "quoted",
+      "service_value": 594.69,
+      "currency": "USD",
+      "first_visit_date": "2025-10-24T14:15:41.850486",
+      "pages_visited": 4,
+      "time_on_site": 193,
+      "device": "mobile",
+      "browser": "Chrome",
+      "location": "Toronto, Canada",
+      "created_at": "2025-10-27T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 12.6,
+      "notes": null,
+      "updated_at": "2025-10-27T14:15:41.850486"
+    },
+    {
+      "name": "Patricia Davis",
+      "email": "patricia.davis2@example.com",
+      "phone": "+1-555-769-9513",
+      "origin": "Google Ads",
+      "campaign_name": "Translation Services Q4",
+      "utm_source": "google_ads",
+      "utm_medium": "cpc",
+      "translation_type": "other",
+      "status": "quoted",
+      "service_value": 146.52,
+      "currency": "USD",
+      "first_visit_date": "2025-10-28T14:15:41.850486",
+      "pages_visited": 3,
+      "time_on_site": 510,
+      "device": "mobile",
+      "browser": "Firefox",
+      "location": "Los Angeles, USA",
+      "created_at": "2025-10-28T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 15.65,
+      "notes": null,
+      "updated_at": "2025-10-28T14:15:41.850486"
+    },
+    {
+      "name": "John Johnson",
+      "email": "john.johnson3@example.com",
+      "phone": "+1-555-264-8177",
+      "origin": "Meta Ads",
+      "campaign_name": "Legal Translation Services",
+      "utm_source": "meta_ads",
+      "utm_medium": "cpc",
+      "translation_type": "other",
+      "status": "new",
+      "service_value": 210.58,
+      "currency": "USD",
+      "first_visit_date": "2025-10-29T14:15:41.850486",
+      "pages_visited": 8,
+      "time_on_site": 224,
+      "device": "mobile",
+      "browser": "Chrome",
+      "location": "Paris, France",
+      "created_at": "2025-10-29T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 34.84,
+      "notes": null,
+      "updated_at": "2025-10-29T14:15:41.850486"
+    },
+    {
+      "name": "Michael Miller",
+      "email": "michael.miller4@example.com",
+      "phone": "+1-555-799-8001",
+      "origin": "Direct",
+      "campaign_name": null,
+      "utm_source": "direct",
+      "utm_medium": "organic",
+      "translation_type": "sworn_en_pt",
+      "status": "contacted",
+      "service_value": 448.76,
+      "currency": "USD",
+      "first_visit_date": "2025-10-27T14:15:41.850486",
+      "pages_visited": 4,
+      "time_on_site": 281,
+      "device": "desktop",
+      "browser": "Chrome",
+      "location": "Miami, USA",
+      "created_at": "2025-10-30T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 13.3,
+      "notes": "Lead from Direct",
+      "updated_at": "2025-10-30T14:15:41.850486"
+    },
+    {
+      "name": "Sarah Johnson",
+      "email": "sarah.johnson5@example.com",
+      "phone": "+1-555-691-9718",
+      "origin": "Direct",
+      "campaign_name": null,
+      "utm_source": "direct",
+      "utm_medium": "organic",
+      "translation_type": "sworn_en_pt",
+      "status": "new",
+      "service_value": 489.53,
+      "currency": "USD",
+      "first_visit_date": "2025-10-29T14:15:41.850486",
+      "pages_visited": 3,
+      "time_on_site": 182,
+      "device": "tablet",
+      "browser": "Chrome",
+      "location": "Miami, USA",
+      "created_at": "2025-10-31T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 17.94,
+      "notes": null,
+      "updated_at": "2025-10-31T14:15:41.850486"
+    },
+    {
+      "name": "Patricia Anderson",
+      "email": "patricia.anderson6@example.com",
+      "phone": "+1-555-582-3267",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "certified_pt_en",
+      "status": "new",
+      "service_value": 218.67,
+      "currency": "USD",
+      "first_visit_date": "2025-11-01T14:15:41.850486",
+      "pages_visited": 3,
+      "time_on_site": 311,
+      "device": "tablet",
+      "browser": "Edge",
+      "location": "New York, USA",
+      "created_at": "2025-11-01T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 6.68,
+      "notes": null,
+      "updated_at": "2025-11-01T14:15:41.850486"
+    },
+    {
+      "name": "Emma Moore",
+      "email": "emma.moore7@example.com",
+      "phone": "+1-555-318-5583",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "certified_pt_en",
+      "status": "new",
+      "service_value": 228.96,
+      "currency": "USD",
+      "first_visit_date": "2025-10-31T14:15:41.850486",
+      "pages_visited": 2,
+      "time_on_site": 533,
+      "device": "mobile",
+      "browser": "Edge",
+      "location": "New York, USA",
+      "created_at": "2025-11-02T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 10.94,
+      "notes": null,
+      "updated_at": "2025-11-02T14:15:41.850486"
+    },
+    {
+      "name": "Carlos Miller",
+      "email": "carlos.miller8@example.com",
+      "phone": "+1-555-477-6686",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "certified_pt_en",
+      "status": "new",
+      "service_value": 316.93,
+      "currency": "USD",
+      "first_visit_date": "2025-11-03T14:15:41.850486",
+      "pages_visited": 8,
+      "time_on_site": 398,
+      "device": "tablet",
+      "browser": "Firefox",
+      "location": "New York, USA",
+      "created_at": "2025-11-03T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 9.11,
+      "notes": null,
+      "updated_at": "2025-11-03T14:15:41.850486"
+    },
+    {
+      "name": "Jose Taylor",
+      "email": "jose.taylor9@example.com",
+      "phone": "+1-555-121-2811",
+      "origin": "Meta Ads",
+      "campaign_name": "Legal Translation Services",
+      "utm_source": "meta_ads",
+      "utm_medium": "cpc",
+      "translation_type": "sworn_en_pt",
+      "status": "contacted",
+      "service_value": 487.59,
+      "currency": "USD",
+      "first_visit_date": "2025-11-02T14:15:41.850486",
+      "pages_visited": 6,
+      "time_on_site": 334,
+      "device": "tablet",
+      "browser": "Chrome",
+      "location": "Sydney, Australia",
+      "created_at": "2025-11-04T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 21.51,
+      "notes": "Lead from Meta Ads",
+      "updated_at": "2025-11-04T14:15:41.850486"
+    },
+    {
+      "name": "Francisco Taylor",
+      "email": "francisco.taylor10@example.com",
+      "phone": "+1-555-657-7989",
+      "origin": "Meta Ads",
+      "campaign_name": "Instagram Translation Ad",
+      "utm_source": "meta_ads",
+      "utm_medium": "cpc",
+      "translation_type": "certified_pt_en",
+      "status": "contacted",
+      "service_value": 342.62,
+      "currency": "USD",
+      "first_visit_date": "2025-11-05T14:15:41.850486",
+      "pages_visited": 8,
+      "time_on_site": 261,
+      "device": "tablet",
+      "browser": "Safari",
+      "location": "Dublin, Ireland",
+      "created_at": "2025-11-05T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 37.69,
+      "notes": "Lead from Meta Ads",
+      "updated_at": "2025-11-05T14:15:41.850486"
+    },
+    {
+      "name": "Richard Garcia",
+      "email": "richard.garcia11@example.com",
+      "phone": "+1-555-762-2134",
+      "origin": "Google Ads",
+      "campaign_name": "Sworn Translation Services",
+      "utm_source": "google_ads",
+      "utm_medium": "cpc",
+      "translation_type": "sworn_en_pt",
+      "status": "lost",
+      "service_value": 490.71,
+      "currency": "USD",
+      "first_visit_date": "2025-11-03T14:15:41.850486",
+      "pages_visited": 8,
+      "time_on_site": 128,
+      "device": "desktop",
+      "browser": "Safari",
+      "location": "Dublin, Ireland",
+      "created_at": "2025-11-06T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 21.67,
+      "notes": null,
+      "updated_at": "2025-11-06T14:15:41.850486"
+    },
+    {
+      "name": "Nancy Taylor",
+      "email": "nancy.taylor12@example.com",
+      "phone": "+1-555-968-2855",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "certified_es_en",
+      "status": "lost",
+      "service_value": 152.45,
+      "currency": "USD",
+      "first_visit_date": "2025-11-06T14:15:41.850486",
+      "pages_visited": 2,
+      "time_on_site": 401,
+      "device": "mobile",
+      "browser": "Safari",
+      "location": "Los Angeles, USA",
+      "created_at": "2025-11-07T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 12.35,
+      "notes": "Lead from Organic SEO",
+      "updated_at": "2025-11-07T14:15:41.850486"
+    },
+    {
+      "name": "Francisco Smith",
+      "email": "francisco.smith13@example.com",
+      "phone": "+1-555-439-2389",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "sworn_en_pt",
+      "status": "quoted",
+      "service_value": 543.4,
+      "currency": "USD",
+      "first_visit_date": "2025-11-06T14:15:41.850486",
+      "pages_visited": 7,
+      "time_on_site": 127,
+      "device": "desktop",
+      "browser": "Safari",
+      "location": "Lisbon, Portugal",
+      "created_at": "2025-11-08T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 14.54,
+      "notes": null,
+      "updated_at": "2025-11-08T14:15:41.850486"
+    },
+    {
+      "name": "William Smith",
+      "email": "william.smith14@example.com",
+      "phone": "+1-555-189-3358",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "certified_pt_en",
+      "status": "converted",
+      "service_value": 222.01,
+      "currency": "USD",
+      "first_visit_date": "2025-11-06T14:15:41.850486",
+      "pages_visited": 5,
+      "time_on_site": 337,
+      "device": "mobile",
+      "browser": "Edge",
+      "location": "Sydney, Australia",
+      "created_at": "2025-11-09T14:15:41.850486",
+      "converted_at": "2025-11-11T14:15:41.850486",
+      "delivery_date": null,
+      "acquisition_cost": 8.17,
+      "notes": "Lead from Organic SEO",
+      "updated_at": "2025-11-09T14:15:41.850486"
+    },
+    {
+      "name": "Jennifer Santos",
+      "email": "jennifer.santos15@example.com",
+      "phone": "+1-555-809-1369",
+      "origin": "Referral",
+      "campaign_name": null,
+      "utm_source": "referral",
+      "utm_medium": "organic",
+      "translation_type": "certified_pt_en",
+      "status": "converted",
+      "service_value": 216.32,
+      "currency": "USD",
+      "first_visit_date": "2025-11-09T14:15:41.850486",
+      "pages_visited": 6,
+      "time_on_site": 266,
+      "device": "mobile",
+      "browser": "Edge",
+      "location": "Los Angeles, USA",
+      "created_at": "2025-11-10T14:15:41.850486",
+      "converted_at": "2025-11-13T14:15:41.850486",
+      "delivery_date": null,
+      "acquisition_cost": 15.46,
+      "notes": null,
+      "updated_at": "2025-11-10T14:15:41.850486"
+    },
+    {
+      "name": "Linda Miller",
+      "email": "linda.miller16@example.com",
+      "phone": "+1-555-570-4906",
+      "origin": "Google Ads",
+      "campaign_name": "Document Translation USA",
+      "utm_source": "google_ads",
+      "utm_medium": "cpc",
+      "translation_type": "sworn_en_pt",
+      "status": "contacted",
+      "service_value": 375.88,
+      "currency": "USD",
+      "first_visit_date": "2025-11-09T14:15:41.850486",
+      "pages_visited": 6,
+      "time_on_site": 353,
+      "device": "desktop",
+      "browser": "Safari",
+      "location": "Miami, USA",
+      "created_at": "2025-11-11T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 19.33,
+      "notes": null,
+      "updated_at": "2025-11-11T14:15:41.850486"
+    },
+    {
+      "name": "Nancy Taylor",
+      "email": "nancy.taylor17@example.com",
+      "phone": "+1-555-994-3871",
+      "origin": "Direct",
+      "campaign_name": null,
+      "utm_source": "direct",
+      "utm_medium": "organic",
+      "translation_type": "sworn_en_pt",
+      "status": "quoted",
+      "service_value": 376.32,
+      "currency": "USD",
+      "first_visit_date": "2025-11-12T14:15:41.850486",
+      "pages_visited": 7,
+      "time_on_site": 150,
+      "device": "tablet",
+      "browser": "Chrome",
+      "location": "Boston, USA",
+      "created_at": "2025-11-12T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 12.9,
+      "notes": "Lead from Direct",
+      "updated_at": "2025-11-12T14:15:41.850486"
+    },
+    {
+      "name": "Jessica Taylor",
+      "email": "jessica.taylor18@example.com",
+      "phone": "+1-555-747-2451",
+      "origin": "Google Ads",
+      "campaign_name": "Translation Services Q4",
+      "utm_source": "google_ads",
+      "utm_medium": "cpc",
+      "translation_type": "sworn_en_pt",
+      "status": "converted",
+      "service_value": 470.78,
+      "currency": "USD",
+      "first_visit_date": "2025-11-10T14:15:41.850486",
+      "pages_visited": 3,
+      "time_on_site": 184,
+      "device": "tablet",
+      "browser": "Edge",
+      "location": "Toronto, Canada",
+      "created_at": "2025-11-13T14:15:41.850486",
+      "converted_at": "2025-11-14T14:15:41.850486",
+      "delivery_date": null,
+      "acquisition_cost": 23.84,
+      "notes": "Lead from Google Ads",
+      "updated_at": "2025-11-13T14:15:41.850486"
+    },
+    {
+      "name": "Robert Garcia",
+      "email": "robert.garcia19@example.com",
+      "phone": "+1-555-777-2386",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "other",
+      "status": "converted",
+      "service_value": 167.58,
+      "currency": "USD",
+      "first_visit_date": "2025-11-13T14:15:41.850486",
+      "pages_visited": 5,
+      "time_on_site": 306,
+      "device": "desktop",
+      "browser": "Safari",
+      "location": "Sydney, Australia",
+      "created_at": "2025-11-14T14:15:41.850486",
+      "converted_at": "2025-11-16T14:15:41.850486",
+      "delivery_date": null,
+      "acquisition_cost": 6.31,
+      "notes": null,
+      "updated_at": "2025-11-14T14:15:41.850486"
+    },
+    {
+      "name": "Nancy Rodriguez",
+      "email": "nancy.rodriguez20@example.com",
+      "phone": "+1-555-273-3087",
+      "origin": "Direct",
+      "campaign_name": null,
+      "utm_source": "direct",
+      "utm_medium": "organic",
+      "translation_type": "certified_es_en",
+      "status": "lost",
+      "service_value": 242.04,
+      "currency": "USD",
+      "first_visit_date": "2025-11-15T14:15:41.850486",
+      "pages_visited": 2,
+      "time_on_site": 564,
+      "device": "tablet",
+      "browser": "Chrome",
+      "location": "Los Angeles, USA",
+      "created_at": "2025-11-15T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 19.05,
+      "notes": null,
+      "updated_at": "2025-11-15T14:15:41.850486"
+    },
+    {
+      "name": "Ana Davis",
+      "email": "ana.davis21@example.com",
+      "phone": "+1-555-917-2166",
+      "origin": "Referral",
+      "campaign_name": null,
+      "utm_source": "referral",
+      "utm_medium": "organic",
+      "translation_type": "certified_pt_en",
+      "status": "new",
+      "service_value": 264.89,
+      "currency": "USD",
+      "first_visit_date": "2025-11-14T14:15:41.850486",
+      "pages_visited": 6,
+      "time_on_site": 168,
+      "device": "mobile",
+      "browser": "Safari",
+      "location": "Miami, USA",
+      "created_at": "2025-11-16T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 12.04,
+      "notes": null,
+      "updated_at": "2025-11-16T14:15:41.850486"
+    },
+    {
+      "name": "Michael Santos",
+      "email": "michael.santos22@example.com",
+      "phone": "+1-555-711-4246",
+      "origin": "Google Ads",
+      "campaign_name": "Sworn Translation Services",
+      "utm_source": "google_ads",
+      "utm_medium": "cpc",
+      "translation_type": "sworn_en_pt",
+      "status": "contacted",
+      "service_value": 360.98,
+      "currency": "USD",
+      "first_visit_date": "2025-11-16T14:15:41.850486",
+      "pages_visited": 3,
+      "time_on_site": 139,
+      "device": "mobile",
+      "browser": "Firefox",
+      "location": "Madrid, Spain",
+      "created_at": "2025-11-17T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 30.24,
+      "notes": null,
+      "updated_at": "2025-11-17T14:15:41.850486"
+    },
+    {
+      "name": "Patricia Smith",
+      "email": "patricia.smith23@example.com",
+      "phone": "+1-555-280-4074",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "sworn_en_pt",
+      "status": "quoted",
+      "service_value": 589.88,
+      "currency": "USD",
+      "first_visit_date": "2025-11-15T14:15:41.850486",
+      "pages_visited": 8,
+      "time_on_site": 556,
+      "device": "tablet",
+      "browser": "Firefox",
+      "location": "São Paulo, Brazil",
+      "created_at": "2025-11-18T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 6.71,
+      "notes": null,
+      "updated_at": "2025-11-18T14:15:41.850486"
+    },
+    {
+      "name": "Jose Smith",
+      "email": "jose.smith24@example.com",
+      "phone": "+1-555-222-8779",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "other",
+      "status": "lost",
+      "service_value": 106.27,
+      "currency": "USD",
+      "first_visit_date": "2025-11-19T14:15:41.850486",
+      "pages_visited": 5,
+      "time_on_site": 432,
+      "device": "desktop",
+      "browser": "Chrome",
+      "location": "Toronto, Canada",
+      "created_at": "2025-11-19T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 13.9,
+      "notes": null,
+      "updated_at": "2025-11-19T14:15:41.850486"
+    },
+    {
+      "name": "Maria Martinez",
+      "email": "maria.martinez25@example.com",
+      "phone": "+1-555-537-4575",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "other",
+      "status": "new",
+      "service_value": 235.81,
+      "currency": "USD",
+      "first_visit_date": "2025-11-18T14:15:41.850486",
+      "pages_visited": 3,
+      "time_on_site": 469,
+      "device": "mobile",
+      "browser": "Edge",
+      "location": "Madrid, Spain",
+      "created_at": "2025-11-20T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 6.14,
+      "notes": null,
+      "updated_at": "2025-11-20T14:15:41.850486"
+    },
+    {
+      "name": "Michelle Davis",
+      "email": "michelle.davis26@example.com",
+      "phone": "+1-555-500-6166",
+      "origin": "Meta Ads",
+      "campaign_name": "Facebook Translation Services",
+      "utm_source": "meta_ads",
+      "utm_medium": "cpc",
+      "translation_type": "certified_es_en",
+      "status": "quoted",
+      "service_value": 332.79,
+      "currency": "USD",
+      "first_visit_date": "2025-11-18T14:15:41.850486",
+      "pages_visited": 6,
+      "time_on_site": 476,
+      "device": "desktop",
+      "browser": "Safari",
+      "location": "Boston, USA",
+      "created_at": "2025-11-21T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 21.97,
+      "notes": "Lead from Meta Ads",
+      "updated_at": "2025-11-21T14:15:41.850486"
+    },
+    {
+      "name": "Emma Martinez",
+      "email": "emma.martinez27@example.com",
+      "phone": "+1-555-306-8405",
+      "origin": "Direct",
+      "campaign_name": null,
+      "utm_source": "direct",
+      "utm_medium": "organic",
+      "translation_type": "sworn_en_pt",
+      "status": "new",
+      "service_value": 493.16,
+      "currency": "USD",
+      "first_visit_date": "2025-11-22T14:15:41.850486",
+      "pages_visited": 5,
+      "time_on_site": 160,
+      "device": "desktop",
+      "browser": "Edge",
+      "location": "Los Angeles, USA",
+      "created_at": "2025-11-22T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 16.72,
+      "notes": null,
+      "updated_at": "2025-11-22T14:15:41.850486"
+    },
+    {
+      "name": "Antonio Anderson",
+      "email": "antonio.anderson28@example.com",
+      "phone": "+1-555-935-9712",
+      "origin": "Direct",
+      "campaign_name": null,
+      "utm_source": "direct",
+      "utm_medium": "organic",
+      "translation_type": "sworn_en_pt",
+      "status": "quoted",
+      "service_value": 589.93,
+      "currency": "USD",
+      "first_visit_date": "2025-11-23T14:15:41.850486",
+      "pages_visited": 8,
+      "time_on_site": 572,
+      "device": "mobile",
+      "browser": "Safari",
+      "location": "London, UK",
+      "created_at": "2025-11-23T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 9.95,
+      "notes": null,
+      "updated_at": "2025-11-23T14:15:41.850486"
+    },
+    {
+      "name": "Robert Taylor",
+      "email": "robert.taylor29@example.com",
+      "phone": "+1-555-489-6294",
+      "origin": "Referral",
+      "campaign_name": null,
+      "utm_source": "referral",
+      "utm_medium": "organic",
+      "translation_type": "certified_es_en",
+      "status": "quoted",
+      "service_value": 321.77,
+      "currency": "USD",
+      "first_visit_date": "2025-11-24T14:15:41.850486",
+      "pages_visited": 4,
+      "time_on_site": 490,
+      "device": "tablet",
+      "browser": "Safari",
+      "location": "Madrid, Spain",
+      "created_at": "2025-11-24T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 15.82,
+      "notes": null,
+      "updated_at": "2025-11-24T14:15:41.850486"
+    },
+    {
+      "name": "James Taylor",
+      "email": "james.taylor30@example.com",
+      "phone": "+1-555-943-4227",
+      "origin": "Organic SEO",
+      "campaign_name": null,
+      "utm_source": "organic_seo",
+      "utm_medium": "organic",
+      "translation_type": "sworn_en_pt",
+      "status": "contacted",
+      "service_value": 384.11,
+      "currency": "USD",
+      "first_visit_date": "2025-11-25T14:15:41.850486",
+      "pages_visited": 8,
+      "time_on_site": 385,
+      "device": "desktop",
+      "browser": "Chrome",
+      "location": "Miami, USA",
+      "created_at": "2025-11-25T14:15:41.850486",
+      "converted_at": null,
+      "delivery_date": null,
+      "acquisition_cost": 6.04,
+      "notes": "Lead from Organic SEO",
+      "updated_at": "2025-11-25T14:15:41.850486"
+    }
+  ],
+  "marketing_stats": [
+    {
+      "date": "2025-10-27T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3452,
+        "clicks": 92,
+        "cpm": 23.12,
+        "ctr": 2.67,
+        "conversions": 2,
+        "cost": 79.81,
+        "cost_per_lead": 39.91
+      },
+      "google_ads": {
+        "impressions": 2941,
+        "clicks": 252,
+        "cpc": 0.75,
+        "ctr": 8.57,
+        "conversions": 13,
+        "cost": 189.23,
+        "cost_per_conversion": 14.56
+      },
+      "website": {
+        "visits": 383,
+        "unique_visitors": 319,
+        "bounce_rate": 39.3,
+        "avg_session_duration": 273,
+        "pages_per_session": 2.3,
+        "traffic_sources": {
+          "organic": 153,
+          "paid": 119,
+          "direct": 55,
+          "referral": 54
+        }
+      },
+      "conversions": {
+        "leads_captured": 15,
+        "leads_contacted": 10,
+        "quotes_sent": 5,
+        "closed_deals": 1,
+        "revenue": 182.48
+      }
+    },
+    {
+      "date": "2025-10-28T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4759,
+        "clicks": 130,
+        "cpm": 27.41,
+        "ctr": 2.73,
+        "conversions": 3,
+        "cost": 130.44,
+        "cost_per_lead": 43.48
+      },
+      "google_ads": {
+        "impressions": 3555,
+        "clicks": 239,
+        "cpc": 0.78,
+        "ctr": 6.72,
+        "conversions": 10,
+        "cost": 186.96,
+        "cost_per_conversion": 18.7
+      },
+      "website": {
+        "visits": 356,
+        "unique_visitors": 277,
+        "bounce_rate": 47.8,
+        "avg_session_duration": 272,
+        "pages_per_session": 2.6,
+        "traffic_sources": {
+          "organic": 168,
+          "paid": 117,
+          "direct": 54,
+          "referral": 14
+        }
+      },
+      "conversions": {
+        "leads_captured": 13,
+        "leads_contacted": 8,
+        "quotes_sent": 4,
+        "closed_deals": 1,
+        "revenue": 218.03
+      }
+    },
+    {
+      "date": "2025-10-29T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4033,
+        "clicks": 85,
+        "cpm": 16.95,
+        "ctr": 2.11,
+        "conversions": 2,
+        "cost": 68.36,
+        "cost_per_lead": 34.18
+      },
+      "google_ads": {
+        "impressions": 2936,
+        "clicks": 231,
+        "cpc": 0.77,
+        "ctr": 7.87,
+        "conversions": 11,
+        "cost": 178.76,
+        "cost_per_conversion": 16.25
+      },
+      "website": {
+        "visits": 456,
+        "unique_visitors": 361,
+        "bounce_rate": 41.1,
+        "avg_session_duration": 223,
+        "pages_per_session": 2.4,
+        "traffic_sources": {
+          "organic": 194,
+          "paid": 150,
+          "direct": 69,
+          "referral": 40
+        }
+      },
+      "conversions": {
+        "leads_captured": 13,
+        "leads_contacted": 9,
+        "quotes_sent": 5,
+        "closed_deals": 2,
+        "revenue": 392.2
+      }
+    },
+    {
+      "date": "2025-10-30T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4584,
+        "clicks": 145,
+        "cpm": 28.51,
+        "ctr": 3.16,
+        "conversions": 5,
+        "cost": 130.67,
+        "cost_per_lead": 26.13
+      },
+      "google_ads": {
+        "impressions": 2506,
+        "clicks": 163,
+        "cpc": 1.04,
+        "ctr": 6.5,
+        "conversions": 7,
+        "cost": 168.87,
+        "cost_per_conversion": 24.12
+      },
+      "website": {
+        "visits": 468,
+        "unique_visitors": 374,
+        "bounce_rate": 41.9,
+        "avg_session_duration": 205,
+        "pages_per_session": 3.2,
+        "traffic_sources": {
+          "organic": 208,
+          "paid": 139,
+          "direct": 67,
+          "referral": 52
+        }
+      },
+      "conversions": {
+        "leads_captured": 12,
+        "leads_contacted": 8,
+        "quotes_sent": 4,
+        "closed_deals": 1,
+        "revenue": 237.39
+      }
+    },
+    {
+      "date": "2025-10-31T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3717,
+        "clicks": 116,
+        "cpm": 34.84,
+        "ctr": 3.12,
+        "conversions": 3,
+        "cost": 129.49,
+        "cost_per_lead": 43.16
+      },
+      "google_ads": {
+        "impressions": 3323,
+        "clicks": 248,
+        "cpc": 0.76,
+        "ctr": 7.46,
+        "conversions": 9,
+        "cost": 187.84,
+        "cost_per_conversion": 20.87
+      },
+      "website": {
+        "visits": 428,
+        "unique_visitors": 347,
+        "bounce_rate": 38.9,
+        "avg_session_duration": 283,
+        "pages_per_session": 3.4,
+        "traffic_sources": {
+          "organic": 203,
+          "paid": 138,
+          "direct": 51,
+          "referral": 34
+        }
+      },
+      "conversions": {
+        "leads_captured": 12,
+        "leads_contacted": 8,
+        "quotes_sent": 4,
+        "closed_deals": 1,
+        "revenue": 212.61
+      }
+    },
+    {
+      "date": "2025-11-01T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4557,
+        "clicks": 96,
+        "cpm": 18.99,
+        "ctr": 2.11,
+        "conversions": 3,
+        "cost": 86.52,
+        "cost_per_lead": 28.84
+      },
+      "google_ads": {
+        "impressions": 3775,
+        "clicks": 281,
+        "cpc": 1.13,
+        "ctr": 7.44,
+        "conversions": 14,
+        "cost": 318.18,
+        "cost_per_conversion": 22.73
+      },
+      "website": {
+        "visits": 361,
+        "unique_visitors": 297,
+        "bounce_rate": 46,
+        "avg_session_duration": 267,
+        "pages_per_session": 2.4,
+        "traffic_sources": {
+          "organic": 166,
+          "paid": 124,
+          "direct": 57,
+          "referral": 13
+        }
+      },
+      "conversions": {
+        "leads_captured": 17,
+        "leads_contacted": 11,
+        "quotes_sent": 6,
+        "closed_deals": 2,
+        "revenue": 382.01
+      }
+    },
+    {
+      "date": "2025-11-02T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4224,
+        "clicks": 113,
+        "cpm": 32.81,
+        "ctr": 2.68,
+        "conversions": 4,
+        "cost": 138.61,
+        "cost_per_lead": 34.65
+      },
+      "google_ads": {
+        "impressions": 3979,
+        "clicks": 345,
+        "cpc": 1.06,
+        "ctr": 8.67,
+        "conversions": 10,
+        "cost": 366.13,
+        "cost_per_conversion": 36.61
+      },
+      "website": {
+        "visits": 491,
+        "unique_visitors": 377,
+        "bounce_rate": 45,
+        "avg_session_duration": 279,
+        "pages_per_session": 2.7,
+        "traffic_sources": {
+          "organic": 212,
+          "paid": 139,
+          "direct": 68,
+          "referral": 70
+        }
+      },
+      "conversions": {
+        "leads_captured": 14,
+        "leads_contacted": 9,
+        "quotes_sent": 4,
+        "closed_deals": 1,
+        "revenue": 246.28
+      }
+    },
+    {
+      "date": "2025-11-03T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4392,
+        "clicks": 89,
+        "cpm": 27.82,
+        "ctr": 2.03,
+        "conversions": 2,
+        "cost": 122.19,
+        "cost_per_lead": 61.09
+      },
+      "google_ads": {
+        "impressions": 3138,
+        "clicks": 208,
+        "cpc": 0.87,
+        "ctr": 6.63,
+        "conversions": 11,
+        "cost": 180.05,
+        "cost_per_conversion": 16.37
+      },
+      "website": {
+        "visits": 446,
+        "unique_visitors": 317,
+        "bounce_rate": 38.6,
+        "avg_session_duration": 237,
+        "pages_per_session": 3.2,
+        "traffic_sources": {
+          "organic": 190,
+          "paid": 136,
+          "direct": 54,
+          "referral": 65
+        }
+      },
+      "conversions": {
+        "leads_captured": 13,
+        "leads_contacted": 9,
+        "quotes_sent": 4,
+        "closed_deals": 1,
+        "revenue": 231.98
+      }
+    },
+    {
+      "date": "2025-11-04T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3283,
+        "clicks": 75,
+        "cpm": 31.44,
+        "ctr": 2.28,
+        "conversions": 2,
+        "cost": 103.23,
+        "cost_per_lead": 51.62
+      },
+      "google_ads": {
+        "impressions": 3262,
+        "clicks": 286,
+        "cpc": 0.84,
+        "ctr": 8.77,
+        "conversions": 10,
+        "cost": 241.51,
+        "cost_per_conversion": 24.15
+      },
+      "website": {
+        "visits": 454,
+        "unique_visitors": 347,
+        "bounce_rate": 46.9,
+        "avg_session_duration": 294,
+        "pages_per_session": 2.8,
+        "traffic_sources": {
+          "organic": 193,
+          "paid": 155,
+          "direct": 63,
+          "referral": 41
+        }
+      },
+      "conversions": {
+        "leads_captured": 12,
+        "leads_contacted": 7,
+        "quotes_sent": 3,
+        "closed_deals": 1,
+        "revenue": 211.23
+      }
+    },
+    {
+      "date": "2025-11-05T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3614,
+        "clicks": 87,
+        "cpm": 26.44,
+        "ctr": 2.41,
+        "conversions": 2,
+        "cost": 95.55,
+        "cost_per_lead": 47.77
+      },
+      "google_ads": {
+        "impressions": 2635,
+        "clicks": 162,
+        "cpc": 0.97,
+        "ctr": 6.15,
+        "conversions": 6,
+        "cost": 157.01,
+        "cost_per_conversion": 26.17
+      },
+      "website": {
+        "visits": 395,
+        "unique_visitors": 315,
+        "bounce_rate": 43.2,
+        "avg_session_duration": 286,
+        "pages_per_session": 2.7,
+        "traffic_sources": {
+          "organic": 177,
+          "paid": 134,
+          "direct": 62,
+          "referral": 21
+        }
+      },
+      "conversions": {
+        "leads_captured": 8,
+        "leads_contacted": 5,
+        "quotes_sent": 2,
+        "closed_deals": 0,
+        "revenue": 0
+      }
+    },
+    {
+      "date": "2025-11-06T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4870,
+        "clicks": 124,
+        "cpm": 22.58,
+        "ctr": 2.55,
+        "conversions": 2,
+        "cost": 109.97,
+        "cost_per_lead": 54.98
+      },
+      "google_ads": {
+        "impressions": 3123,
+        "clicks": 226,
+        "cpc": 1.13,
+        "ctr": 7.24,
+        "conversions": 10,
+        "cost": 254.39,
+        "cost_per_conversion": 25.44
+      },
+      "website": {
+        "visits": 488,
+        "unique_visitors": 393,
+        "bounce_rate": 47.5,
+        "avg_session_duration": 191,
+        "pages_per_session": 2.9,
+        "traffic_sources": {
+          "organic": 232,
+          "paid": 141,
+          "direct": 70,
+          "referral": 44
+        }
+      },
+      "conversions": {
+        "leads_captured": 12,
+        "leads_contacted": 8,
+        "quotes_sent": 4,
+        "closed_deals": 1,
+        "revenue": 210.53
+      }
+    },
+    {
+      "date": "2025-11-07T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4160,
+        "clicks": 100,
+        "cpm": 20.45,
+        "ctr": 2.4,
+        "conversions": 3,
+        "cost": 85.06,
+        "cost_per_lead": 28.35
+      },
+      "google_ads": {
+        "impressions": 4025,
+        "clicks": 344,
+        "cpc": 1.08,
+        "ctr": 8.55,
+        "conversions": 19,
+        "cost": 372.92,
+        "cost_per_conversion": 19.63
+      },
+      "website": {
+        "visits": 435,
+        "unique_visitors": 344,
+        "bounce_rate": 46.6,
+        "avg_session_duration": 246,
+        "pages_per_session": 3.1,
+        "traffic_sources": {
+          "organic": 197,
+          "paid": 136,
+          "direct": 66,
+          "referral": 34
+        }
+      },
+      "conversions": {
+        "leads_captured": 22,
+        "leads_contacted": 14,
+        "quotes_sent": 7,
+        "closed_deals": 2,
+        "revenue": 429.04
+      }
+    },
+    {
+      "date": "2025-11-08T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4487,
+        "clicks": 103,
+        "cpm": 34.16,
+        "ctr": 2.3,
+        "conversions": 2,
+        "cost": 153.26,
+        "cost_per_lead": 76.63
+      },
+      "google_ads": {
+        "impressions": 3429,
+        "clicks": 296,
+        "cpc": 0.78,
+        "ctr": 8.63,
+        "conversions": 11,
+        "cost": 231.81,
+        "cost_per_conversion": 21.07
+      },
+      "website": {
+        "visits": 411,
+        "unique_visitors": 329,
+        "bounce_rate": 47.1,
+        "avg_session_duration": 204,
+        "pages_per_session": 2.9,
+        "traffic_sources": {
+          "organic": 183,
+          "paid": 126,
+          "direct": 54,
+          "referral": 45
+        }
+      },
+      "conversions": {
+        "leads_captured": 13,
+        "leads_contacted": 9,
+        "quotes_sent": 4,
+        "closed_deals": 1,
+        "revenue": 196.87
+      }
+    },
+    {
+      "date": "2025-11-09T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3044,
+        "clicks": 90,
+        "cpm": 39.53,
+        "ctr": 2.96,
+        "conversions": 3,
+        "cost": 120.33,
+        "cost_per_lead": 40.11
+      },
+      "google_ads": {
+        "impressions": 3073,
+        "clicks": 223,
+        "cpc": 0.73,
+        "ctr": 7.26,
+        "conversions": 7,
+        "cost": 163.02,
+        "cost_per_conversion": 23.29
+      },
+      "website": {
+        "visits": 473,
+        "unique_visitors": 357,
+        "bounce_rate": 43.4,
+        "avg_session_duration": 221,
+        "pages_per_session": 3.3,
+        "traffic_sources": {
+          "organic": 213,
+          "paid": 149,
+          "direct": 75,
+          "referral": 34
+        }
+      },
+      "conversions": {
+        "leads_captured": 10,
+        "leads_contacted": 6,
+        "quotes_sent": 3,
+        "closed_deals": 1,
+        "revenue": 183.99
+      }
+    },
+    {
+      "date": "2025-11-10T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4234,
+        "clicks": 115,
+        "cpm": 36.59,
+        "ctr": 2.72,
+        "conversions": 2,
+        "cost": 154.92,
+        "cost_per_lead": 77.46
+      },
+      "google_ads": {
+        "impressions": 3756,
+        "clicks": 334,
+        "cpc": 1.14,
+        "ctr": 8.89,
+        "conversions": 13,
+        "cost": 382.23,
+        "cost_per_conversion": 29.4
+      },
+      "website": {
+        "visits": 467,
+        "unique_visitors": 388,
+        "bounce_rate": 47.5,
+        "avg_session_duration": 202,
+        "pages_per_session": 2.6,
+        "traffic_sources": {
+          "organic": 211,
+          "paid": 131,
+          "direct": 57,
+          "referral": 66
+        }
+      },
+      "conversions": {
+        "leads_captured": 15,
+        "leads_contacted": 10,
+        "quotes_sent": 5,
+        "closed_deals": 2,
+        "revenue": 463.43
+      }
+    },
+    {
+      "date": "2025-11-11T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3198,
+        "clicks": 78,
+        "cpm": 28.47,
+        "ctr": 2.44,
+        "conversions": 2,
+        "cost": 91.05,
+        "cost_per_lead": 45.52
+      },
+      "google_ads": {
+        "impressions": 3519,
+        "clicks": 309,
+        "cpc": 1.04,
+        "ctr": 8.78,
+        "conversions": 13,
+        "cost": 321.18,
+        "cost_per_conversion": 24.71
+      },
+      "website": {
+        "visits": 500,
+        "unique_visitors": 359,
+        "bounce_rate": 44.9,
+        "avg_session_duration": 209,
+        "pages_per_session": 3.2,
+        "traffic_sources": {
+          "organic": 206,
+          "paid": 164,
+          "direct": 80,
+          "referral": 48
+        }
+      },
+      "conversions": {
+        "leads_captured": 15,
+        "leads_contacted": 10,
+        "quotes_sent": 4,
+        "closed_deals": 1,
+        "revenue": 219.2
+      }
+    },
+    {
+      "date": "2025-11-12T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4491,
+        "clicks": 103,
+        "cpm": 32.51,
+        "ctr": 2.29,
+        "conversions": 3,
+        "cost": 146,
+        "cost_per_lead": 48.67
+      },
+      "google_ads": {
+        "impressions": 2654,
+        "clicks": 178,
+        "cpc": 1.17,
+        "ctr": 6.71,
+        "conversions": 6,
+        "cost": 207.5,
+        "cost_per_conversion": 34.58
+      },
+      "website": {
+        "visits": 428,
+        "unique_visitors": 310,
+        "bounce_rate": 41.1,
+        "avg_session_duration": 204,
+        "pages_per_session": 3.2,
+        "traffic_sources": {
+          "organic": 195,
+          "paid": 128,
+          "direct": 61,
+          "referral": 42
+        }
+      },
+      "conversions": {
+        "leads_captured": 9,
+        "leads_contacted": 6,
+        "quotes_sent": 3,
+        "closed_deals": 1,
+        "revenue": 207.64
+      }
+    },
+    {
+      "date": "2025-11-13T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3784,
+        "clicks": 131,
+        "cpm": 33.32,
+        "ctr": 3.46,
+        "conversions": 5,
+        "cost": 126.08,
+        "cost_per_lead": 25.22
+      },
+      "google_ads": {
+        "impressions": 4479,
+        "clicks": 349,
+        "cpc": 1.17,
+        "ctr": 7.79,
+        "conversions": 20,
+        "cost": 407.91,
+        "cost_per_conversion": 20.4
+      },
+      "website": {
+        "visits": 380,
+        "unique_visitors": 280,
+        "bounce_rate": 43.1,
+        "avg_session_duration": 247,
+        "pages_per_session": 3.2,
+        "traffic_sources": {
+          "organic": 158,
+          "paid": 107,
+          "direct": 67,
+          "referral": 46
+        }
+      },
+      "conversions": {
+        "leads_captured": 25,
+        "leads_contacted": 16,
+        "quotes_sent": 8,
+        "closed_deals": 2,
+        "revenue": 481.58
+      }
+    },
+    {
+      "date": "2025-11-14T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3059,
+        "clicks": 99,
+        "cpm": 44.46,
+        "ctr": 3.24,
+        "conversions": 2,
+        "cost": 136.01,
+        "cost_per_lead": 68
+      },
+      "google_ads": {
+        "impressions": 3502,
+        "clicks": 283,
+        "cpc": 0.74,
+        "ctr": 8.08,
+        "conversions": 14,
+        "cost": 209.52,
+        "cost_per_conversion": 14.97
+      },
+      "website": {
+        "visits": 352,
+        "unique_visitors": 292,
+        "bounce_rate": 42.4,
+        "avg_session_duration": 264,
+        "pages_per_session": 3.4,
+        "traffic_sources": {
+          "organic": 168,
+          "paid": 116,
+          "direct": 47,
+          "referral": 19
+        }
+      },
+      "conversions": {
+        "leads_captured": 16,
+        "leads_contacted": 11,
+        "quotes_sent": 6,
+        "closed_deals": 2,
+        "revenue": 398.47
+      }
+    },
+    {
+      "date": "2025-11-15T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3252,
+        "clicks": 92,
+        "cpm": 29.74,
+        "ctr": 2.83,
+        "conversions": 2,
+        "cost": 96.7,
+        "cost_per_lead": 48.35
+      },
+      "google_ads": {
+        "impressions": 2891,
+        "clicks": 196,
+        "cpc": 1.04,
+        "ctr": 6.78,
+        "conversions": 10,
+        "cost": 203.38,
+        "cost_per_conversion": 20.34
+      },
+      "website": {
+        "visits": 414,
+        "unique_visitors": 292,
+        "bounce_rate": 38.5,
+        "avg_session_duration": 221,
+        "pages_per_session": 3.3,
+        "traffic_sources": {
+          "organic": 206,
+          "paid": 140,
+          "direct": 53,
+          "referral": 13
+        }
+      },
+      "conversions": {
+        "leads_captured": 12,
+        "leads_contacted": 8,
+        "quotes_sent": 4,
+        "closed_deals": 1,
+        "revenue": 236.8
+      }
+    },
+    {
+      "date": "2025-11-16T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3611,
+        "clicks": 89,
+        "cpm": 22.47,
+        "ctr": 2.46,
+        "conversions": 2,
+        "cost": 81.13,
+        "cost_per_lead": 40.56
+      },
+      "google_ads": {
+        "impressions": 3827,
+        "clicks": 283,
+        "cpc": 1.01,
+        "ctr": 7.39,
+        "conversions": 16,
+        "cost": 285.35,
+        "cost_per_conversion": 17.83
+      },
+      "website": {
+        "visits": 474,
+        "unique_visitors": 385,
+        "bounce_rate": 39.7,
+        "avg_session_duration": 254,
+        "pages_per_session": 3.3,
+        "traffic_sources": {
+          "organic": 217,
+          "paid": 156,
+          "direct": 63,
+          "referral": 36
+        }
+      },
+      "conversions": {
+        "leads_captured": 18,
+        "leads_contacted": 11,
+        "quotes_sent": 5,
+        "closed_deals": 1,
+        "revenue": 220.26
+      }
+    },
+    {
+      "date": "2025-11-17T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3883,
+        "clicks": 119,
+        "cpm": 39.8,
+        "ctr": 3.06,
+        "conversions": 3,
+        "cost": 154.55,
+        "cost_per_lead": 51.52
+      },
+      "google_ads": {
+        "impressions": 2751,
+        "clicks": 184,
+        "cpc": 1.03,
+        "ctr": 6.69,
+        "conversions": 7,
+        "cost": 189.55,
+        "cost_per_conversion": 27.08
+      },
+      "website": {
+        "visits": 458,
+        "unique_visitors": 334,
+        "bounce_rate": 41.3,
+        "avg_session_duration": 238,
+        "pages_per_session": 2.9,
+        "traffic_sources": {
+          "organic": 208,
+          "paid": 143,
+          "direct": 79,
+          "referral": 25
+        }
+      },
+      "conversions": {
+        "leads_captured": 10,
+        "leads_contacted": 7,
+        "quotes_sent": 3,
+        "closed_deals": 1,
+        "revenue": 182.77
+      }
+    },
+    {
+      "date": "2025-11-18T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3061,
+        "clicks": 102,
+        "cpm": 31.68,
+        "ctr": 3.33,
+        "conversions": 3,
+        "cost": 96.96,
+        "cost_per_lead": 32.32
+      },
+      "google_ads": {
+        "impressions": 2571,
+        "clicks": 205,
+        "cpc": 0.85,
+        "ctr": 7.97,
+        "conversions": 7,
+        "cost": 173.46,
+        "cost_per_conversion": 24.78
+      },
+      "website": {
+        "visits": 469,
+        "unique_visitors": 377,
+        "bounce_rate": 43.5,
+        "avg_session_duration": 250,
+        "pages_per_session": 2.5,
+        "traffic_sources": {
+          "organic": 226,
+          "paid": 131,
+          "direct": 79,
+          "referral": 31
+        }
+      },
+      "conversions": {
+        "leads_captured": 10,
+        "leads_contacted": 6,
+        "quotes_sent": 3,
+        "closed_deals": 1,
+        "revenue": 206.84
+      }
+    },
+    {
+      "date": "2025-11-19T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3545,
+        "clicks": 94,
+        "cpm": 32.82,
+        "ctr": 2.65,
+        "conversions": 2,
+        "cost": 116.35,
+        "cost_per_lead": 58.17
+      },
+      "google_ads": {
+        "impressions": 3724,
+        "clicks": 334,
+        "cpc": 0.98,
+        "ctr": 8.97,
+        "conversions": 13,
+        "cost": 328.34,
+        "cost_per_conversion": 25.26
+      },
+      "website": {
+        "visits": 452,
+        "unique_visitors": 350,
+        "bounce_rate": 42.8,
+        "avg_session_duration": 272,
+        "pages_per_session": 3.3,
+        "traffic_sources": {
+          "organic": 224,
+          "paid": 157,
+          "direct": 61,
+          "referral": 9
+        }
+      },
+      "conversions": {
+        "leads_captured": 15,
+        "leads_contacted": 9,
+        "quotes_sent": 5,
+        "closed_deals": 1,
+        "revenue": 236.23
+      }
+    },
+    {
+      "date": "2025-11-20T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4096,
+        "clicks": 97,
+        "cpm": 26.23,
+        "ctr": 2.37,
+        "conversions": 3,
+        "cost": 107.43,
+        "cost_per_lead": 35.81
+      },
+      "google_ads": {
+        "impressions": 3270,
+        "clicks": 236,
+        "cpc": 0.96,
+        "ctr": 7.22,
+        "conversions": 12,
+        "cost": 226.96,
+        "cost_per_conversion": 18.91
+      },
+      "website": {
+        "visits": 497,
+        "unique_visitors": 391,
+        "bounce_rate": 45.8,
+        "avg_session_duration": 214,
+        "pages_per_session": 3.3,
+        "traffic_sources": {
+          "organic": 217,
+          "paid": 162,
+          "direct": 71,
+          "referral": 45
+        }
+      },
+      "conversions": {
+        "leads_captured": 15,
+        "leads_contacted": 10,
+        "quotes_sent": 5,
+        "closed_deals": 2,
+        "revenue": 425.61
+      }
+    },
+    {
+      "date": "2025-11-21T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4312,
+        "clicks": 87,
+        "cpm": 16.92,
+        "ctr": 2.02,
+        "conversions": 2,
+        "cost": 72.94,
+        "cost_per_lead": 36.47
+      },
+      "google_ads": {
+        "impressions": 3677,
+        "clicks": 244,
+        "cpc": 0.87,
+        "ctr": 6.64,
+        "conversions": 7,
+        "cost": 212.26,
+        "cost_per_conversion": 30.32
+      },
+      "website": {
+        "visits": 437,
+        "unique_visitors": 310,
+        "bounce_rate": 40.1,
+        "avg_session_duration": 249,
+        "pages_per_session": 2.9,
+        "traffic_sources": {
+          "organic": 192,
+          "paid": 138,
+          "direct": 73,
+          "referral": 31
+        }
+      },
+      "conversions": {
+        "leads_captured": 9,
+        "leads_contacted": 6,
+        "quotes_sent": 3,
+        "closed_deals": 1,
+        "revenue": 213.9
+      }
+    },
+    {
+      "date": "2025-11-22T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3128,
+        "clicks": 63,
+        "cpm": 28.31,
+        "ctr": 2.01,
+        "conversions": 2,
+        "cost": 88.55,
+        "cost_per_lead": 44.27
+      },
+      "google_ads": {
+        "impressions": 3842,
+        "clicks": 274,
+        "cpc": 1.1,
+        "ctr": 7.13,
+        "conversions": 15,
+        "cost": 300.7,
+        "cost_per_conversion": 20.05
+      },
+      "website": {
+        "visits": 481,
+        "unique_visitors": 407,
+        "bounce_rate": 38,
+        "avg_session_duration": 243,
+        "pages_per_session": 2.7,
+        "traffic_sources": {
+          "organic": 205,
+          "paid": 166,
+          "direct": 79,
+          "referral": 29
+        }
+      },
+      "conversions": {
+        "leads_captured": 17,
+        "leads_contacted": 11,
+        "quotes_sent": 5,
+        "closed_deals": 1,
+        "revenue": 203.05
+      }
+    },
+    {
+      "date": "2025-11-23T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 3219,
+        "clicks": 108,
+        "cpm": 41.62,
+        "ctr": 3.36,
+        "conversions": 4,
+        "cost": 133.96,
+        "cost_per_lead": 33.49
+      },
+      "google_ads": {
+        "impressions": 4132,
+        "clicks": 316,
+        "cpc": 0.96,
+        "ctr": 7.65,
+        "conversions": 13,
+        "cost": 304.22,
+        "cost_per_conversion": 23.4
+      },
+      "website": {
+        "visits": 432,
+        "unique_visitors": 322,
+        "bounce_rate": 38.6,
+        "avg_session_duration": 255,
+        "pages_per_session": 2.6,
+        "traffic_sources": {
+          "organic": 174,
+          "paid": 125,
+          "direct": 60,
+          "referral": 71
+        }
+      },
+      "conversions": {
+        "leads_captured": 17,
+        "leads_contacted": 11,
+        "quotes_sent": 6,
+        "closed_deals": 2,
+        "revenue": 492.78
+      }
+    },
+    {
+      "date": "2025-11-24T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4786,
+        "clicks": 136,
+        "cpm": 41.23,
+        "ctr": 2.84,
+        "conversions": 2,
+        "cost": 197.32,
+        "cost_per_lead": 98.66
+      },
+      "google_ads": {
+        "impressions": 2892,
+        "clicks": 177,
+        "cpc": 1.14,
+        "ctr": 6.12,
+        "conversions": 5,
+        "cost": 201.03,
+        "cost_per_conversion": 40.21
+      },
+      "website": {
+        "visits": 421,
+        "unique_visitors": 321,
+        "bounce_rate": 47.3,
+        "avg_session_duration": 227,
+        "pages_per_session": 3.2,
+        "traffic_sources": {
+          "organic": 210,
+          "paid": 140,
+          "direct": 56,
+          "referral": 14
+        }
+      },
+      "conversions": {
+        "leads_captured": 7,
+        "leads_contacted": 5,
+        "quotes_sent": 2,
+        "closed_deals": 0,
+        "revenue": 0
+      }
+    },
+    {
+      "date": "2025-11-25T14:15:41.851731",
+      "period": "daily",
+      "meta_ads": {
+        "impressions": 4691,
+        "clicks": 159,
+        "cpm": 28.1,
+        "ctr": 3.39,
+        "conversions": 6,
+        "cost": 131.83,
+        "cost_per_lead": 21.97
+      },
+      "google_ads": {
+        "impressions": 3545,
+        "clicks": 281,
+        "cpc": 0.88,
+        "ctr": 7.93,
+        "conversions": 10,
+        "cost": 247.82,
+        "cost_per_conversion": 24.78
+      },
+      "website": {
+        "visits": 382,
+        "unique_visitors": 307,
+        "bounce_rate": 38.2,
+        "avg_session_duration": 209,
+        "pages_per_session": 3.3,
+        "traffic_sources": {
+          "organic": 170,
+          "paid": 109,
+          "direct": 45,
+          "referral": 55
+        }
+      },
+      "conversions": {
+        "leads_captured": 16,
+        "leads_contacted": 11,
+        "quotes_sent": 6,
+        "closed_deals": 2,
+        "revenue": 494.12
+      }
+    }
+  ],
+  "metadata": {
+    "generated_at": "2025-11-26T14:15:41.852719",
+    "total_leads": 30,
+    "total_days": 30,
+    "date_range": {
+      "start": "2025-10-27T14:15:41.851731",
+      "end": "2025-11-25T14:15:41.851731"
+    }
+  }
+}
