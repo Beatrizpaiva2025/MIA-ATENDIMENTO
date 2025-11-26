@@ -25,7 +25,7 @@ router = APIRouter(prefix="/admin", tags=["Admin Panel"])
 # Conectar MongoDB
 MONGODB_URI = os.getenv("MONGODB_URI")
 mongo_client = MongoClient(MONGODB_URI) if MONGODB_URI else None
-db = mongo_client["mia_bot"] if mongo_client else None
+db = mongo_client["mia_production"] if mongo_client else None
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -475,3 +475,4 @@ async def api_stats():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
