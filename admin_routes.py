@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 import os
 from pymongo import MongoClient
+from bson import ObjectId
 import logging
 
 # Configurar logging
@@ -26,10 +27,7 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 mongo_client = MongoClient(MONGODB_URI) if MONGODB_URI else None
 db = mongo_client["mia_bot"] if mongo_client else None
 
-# ==================== LEADS & MARKETING STATS API ====================
-
-from datetime import datetime, timedelta
-from bson import ObjectId
+# ==================== HELPER FUNCTIONS ====================
 
 def serialize_doc(doc):
     """Convert MongoDB document to JSON-serializable dict"""
@@ -37,10 +35,15 @@ def serialize_doc(doc):
         doc['_id'] = str(doc['_id'])
     return doc
 
-@router.get("/admin/api/leads/stats")
+# ==================== LEADS & MARKETING STATS API ====================
+
+@router.get("/api/leads/stats")
 async def get_leads_stats(days: int = 30):
     """Get lead statistics for dashboard"""
     try:
+        if db is None:
+            return {"success": False, "error": "MongoDB not configured"}
+            
         start_date = datetime.utcnow() - timedelta(days=days)
         
         # Get leads from MongoDB
@@ -71,12 +74,16 @@ async def get_leads_stats(days: int = 30):
             "leads_by_origin": origins
         }
     except Exception as e:
+        logger.error(f"Error in get_leads_stats: {e}")
         return {"success": False, "error": str(e)}
 
-@router.get("/admin/api/marketing-stats")
+@router.get("/api/marketing-stats")
 async def get_marketing_stats(days: int = 30):
     """Get marketing statistics"""
     try:
+        if db is None:
+            return {"success": False, "error": "MongoDB not configured"}
+            
         start_date = datetime.utcnow() - timedelta(days=days)
         
         stats = list(db['marketing_stats'].find({
@@ -100,12 +107,16 @@ async def get_marketing_stats(days: int = 30):
             }
         }
     except Exception as e:
+        logger.error(f"Error in get_marketing_stats: {e}")
         return {"success": False, "error": str(e)}
 
-@router.get("/admin/api/dashboard-data")
+@router.get("/api/dashboard-data")
 async def get_dashboard_data(days: int = 30):
     """Get complete dashboard data"""
     try:
+        if db is None:
+            return {"success": False, "error": "MongoDB not configured"}
+            
         # Get lead stats
         lead_stats_response = await get_leads_stats(days)
         
@@ -135,6 +146,7 @@ async def get_dashboard_data(days: int = 30):
             }
         }
     except Exception as e:
+        logger.error(f"Error in get_dashboard_data: {e}")
         return {"success": False, "error": str(e)}
 
 # ============================================
@@ -151,7 +163,7 @@ async def root():
 async def admin_dashboard(request: Request):
     """Dashboard principal com estatísticas gerais"""
     try:
-        if db is None:  # ✅ CORRIGIDO
+        if db is None:
             return templates.TemplateResponse("admin_dashboard.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -216,7 +228,7 @@ async def admin_dashboard(request: Request):
 async def admin_pipeline(request: Request):
     """Visualização do pipeline de vendas (funil)"""
     try:
-        if db is None:  # ✅ CORRIGIDO
+        if db is None:
             return templates.TemplateResponse("admin_pipeline.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -268,7 +280,7 @@ async def admin_pipeline(request: Request):
 async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Optional[str] = None):
     """Gestão completa de leads com filtros"""
     try:
-        if db is None:  # ✅ CORRIGIDO
+        if db is None:
             return templates.TemplateResponse("admin_leads.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -321,7 +333,7 @@ async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Op
 async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
     """Gerenciar transferências para atendimento humano"""
     try:
-        if db is None:  # ✅ CORRIGIDO
+        if db is None:
             return templates.TemplateResponse("admin_transfers.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -365,7 +377,7 @@ async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
 async def admin_documents(request: Request, status: Optional[str] = None):
     """Visualizar documentos analisados pelo GPT-4 Vision"""
     try:
-        if db is None:  # ✅ CORRIGIDO
+        if db is None:
             return templates.TemplateResponse("admin_documents.html", {
                 "request": request,
                 "error": "MongoDB não configurado"
@@ -414,7 +426,7 @@ async def admin_config(request: Request):
         # Verificar status das integrações
         config = {
             "openai_status": "✅ Configurado" if os.getenv("OPENAI_API_KEY") else "❌ Não configurado",
-            "mongodb_status": "✅ Conectado" if db is not None else "❌ Não conectado",  # ✅ CORRIGIDO
+            "mongodb_status": "✅ Conectado" if db is not None else "❌ Não conectado",
             "zapi_status": "✅ Configurado" if os.getenv("ZAPI_TOKEN") else "❌ Não configurado",
             "instagram_status": "⚠️ Opcional",
             "render_url": os.getenv("RENDER_EXTERNAL_URL", "https://mia-atendimento.onrender.com"),
@@ -448,7 +460,7 @@ async def admin_config(request: Request):
 async def api_stats():
     """Retornar estatísticas em JSON"""
     try:
-        if db is None:  # ✅ CORRIGIDO
+        if db is None:
             raise HTTPException(status_code=503, detail="MongoDB não disponível")
         
         stats = {
@@ -463,5 +475,3 @@ async def api_stats():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
