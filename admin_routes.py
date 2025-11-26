@@ -32,7 +32,7 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 
 def serialize_doc(doc):
-       """Convert MongoDB document to JSON-serializable dict"""
+    """Convert MongoDB document to JSON-serializable dict"""
     if doc and '_id' in doc:
         doc['_id'] = str(doc['_id'])
     return doc
@@ -463,4 +463,5 @@ async def api_stats():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
