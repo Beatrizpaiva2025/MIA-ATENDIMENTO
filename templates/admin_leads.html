@@ -1,639 +1,403 @@
-{% extends "admin_base.html" %}
-
-{% block title %}Leads & Conversions - Legacy Translations{% endblock %}
-
-{% block extra_style %}
-<style>
-    :root {
-        --primary-color: #667eea;
-        --secondary-color: #764ba2;
-        --success-color: #48bb78;
-        --warning-color: #ed8936;
-        --danger-color: #f56565;
-        --text-primary: #2d3748;
-        --text-secondary: #718096;
-        --bg-card: #ffffff;
-        --shadow: 0 8px 32px rgba(0,0,0,0.1);
-    }
-
-    .page-header {
-        margin-bottom: 30px;
-    }
-
-    .page-header h1 {
-        color: var(--text-primary);
-        font-size: 32px;
-        margin-bottom: 10px;
-    }
-
-    .page-header p {
-        color: var(--text-secondary);
-        font-size: 16px;
-    }
-
-    .date-filters {
-        display: flex;
-        gap: 15px;
-        margin-bottom: 30px;
-        flex-wrap: wrap;
-    }
-
-    .date-filters select {
-        padding: 10px 15px;
-        border: 2px solid #e2e8f0;
-        border-radius: 8px;
-        font-size: 14px;
-        cursor: pointer;
-        background: white;
-        transition: all 0.3s;
-    }
-
-    .date-filters select:hover {
-        border-color: var(--primary-color);
-    }
-
-    .metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
-    }
-
-    .metric-card {
-        background: var(--bg-card);
-        padding: 25px;
-        border-radius: 15px;
-        box-shadow: var(--shadow);
-        transition: transform 0.3s, box-shadow 0.3s;
-    }
-
-    .metric-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 40px rgba(0,0,0,0.15);
-    }
-
-    .metric-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-    }
-
-    .metric-title {
-        font-size: 14px;
-        color: var(--text-secondary);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .metric-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-    }
-
-    .icon-revenue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .icon-leads { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-    .icon-conversion { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-    .icon-ticket { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
-
-    .metric-value {
-        font-size: 36px;
-        font-weight: bold;
-        color: var(--text-primary);
-        margin-bottom: 10px;
-    }
-
-    .metric-change {
-        font-size: 13px;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-    .metric-change.positive { color: var(--success-color); }
-    .metric-change.negative { color: var(--danger-color); }
-    .metric-change.neutral { color: var(--text-secondary); }
-
-    .charts-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-        gap: 25px;
-        margin-bottom: 30px;
-    }
-
-    .chart-card {
-        background: var(--bg-card);
-        padding: 25px;
-        border-radius: 15px;
-        box-shadow: var(--shadow);
-    }
-
-    .chart-header {
-        margin-bottom: 20px;
-    }
-
-    .chart-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin-bottom: 5px;
-    }
-
-    .chart-subtitle {
-        font-size: 13px;
-        color: var(--text-secondary);
-    }
-
-    .funnel-container {
-        margin-bottom: 30px;
-    }
-
-    .funnel-stage {
-        background: white;
-        padding: 20px;
-        margin-bottom: 15px;
-        border-radius: 12px;
-        box-shadow: var(--shadow);
-        transition: all 0.3s;
-    }
-
-    .funnel-stage:hover {
-        transform: translateX(10px);
-        box-shadow: 0 12px 40px rgba(0,0,0,0.15);
-    }
-
-    .funnel-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-
-    .funnel-name {
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--text-primary);
-    }
-
-    .funnel-value {
-        font-size: 18px;
-        font-weight: bold;
-        color: var(--primary-color);
-    }
-
-    .funnel-bar {
-        height: 8px;
-        background: #e2e8f0;
-        border-radius: 10px;
-        overflow: hidden;
-        margin-bottom: 8px;
-    }
-
-    .funnel-fill {
-        height: 100%;
-        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-        transition: width 0.5s ease;
-    }
-
-    .funnel-percentage {
-        font-size: 13px;
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
-
-    .kpi-table {
-        background: white;
-        border-radius: 15px;
-        box-shadow: var(--shadow);
-        overflow: hidden;
-    }
-
-    .kpi-table table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .kpi-table th {
-        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-        color: white;
-        padding: 15px;
-        text-align: left;
-        font-weight: 600;
-        font-size: 14px;
-    }
-
-    .kpi-table td {
-        padding: 15px;
-        border-bottom: 1px solid #e2e8f0;
-        font-size: 14px;
-    }
-
-    .kpi-table tr:hover {
-        background: #f7fafc;
-    }
-
-    .status-badge {
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        display: inline-block;
-    }
-
-    .status-excellent { background: #c6f6d5; color: #22543d; }
-    .status-good { background: #bee3f8; color: #2c5282; }
-    .status-warning { background: #feebc8; color: #7c2d12; }
-    .status-critical { background: #fed7d7; color: #742a2a; }
-
-    .loading {
-        text-align: center;
-        padding: 50px;
-        color: var(--text-secondary);
-        font-size: 18px;
-    }
-
-    @media (max-width: 768px) {
-        .metrics-grid {
-            grid-template-columns: 1fr;
-        }
-        .charts-grid {
-            grid-template-columns: 1fr;
-        }
-        .page-header h1 {
-            font-size: 24px;
-        }
-        .metric-value {
-            font-size: 28px;
-        }
-    }
-</style>
-{% endblock %}
-
-{% block content %}
-<div class="container-fluid">
-    <!-- Page Header -->
-    <div class="page-header">
-        <h1>📊 Dashboard - Leads & Conversions</h1>
-        <p>Real-time metrics and performance tracking - Legacy Translations</p>
-    </div>
-
-    <!-- Date Filters -->
-    <div class="date-filters">
-        <select id="periodFilter" onchange="loadDashboardData()">
-            <option value="30" selected>Last 30 days</option>
-            <option value="7">Last 7 days</option>
-            <option value="90">Last 90 days</option>
-        </select>
-    </div>
-
-    <!-- Main Metrics -->
-    <div class="metrics-grid">
-        <div class="metric-card">
-            <div class="metric-header">
-                <span class="metric-title">TOTAL REVENUE</span>
-                <div class="metric-icon icon-revenue">💰</div>
-            </div>
-            <div class="metric-value" id="totalRevenue">$0</div>
-            <div class="metric-change neutral">
-                <span>💵 From converted leads</span>
-            </div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-header">
-                <span class="metric-title">TOTAL LEADS</span>
-                <div class="metric-icon icon-leads">👥</div>
-            </div>
-            <div class="metric-value" id="totalLeads">0</div>
-            <div class="metric-change neutral">
-                <span id="convertedLeads">0 converted</span>
-            </div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-header">
-                <span class="metric-title">CONVERSION RATE</span>
-                <div class="metric-icon icon-conversion">📈</div>
-            </div>
-            <div class="metric-value" id="conversionRate">0%</div>
-            <div class="metric-change neutral">
-                <span>🎯 Lead to customer</span>
-            </div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-header">
-                <span class="metric-title">AVERAGE TICKET</span>
-                <div class="metric-icon icon-ticket">🎫</div>
-            </div>
-            <div class="metric-value" id="avgTicket">$0</div>
-            <div class="metric-change neutral">
-                <span>📊 Per converted lead</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Charts -->
-    <div class="charts-grid">
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3 class="chart-title">📍 Leads by Origin</h3>
-                <p class="chart-subtitle">Distribution by traffic source</p>
-            </div>
-            <canvas id="channelsChart"></canvas>
-        </div>
-
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3 class="chart-title">💰 Marketing Investment</h3>
-                <p class="chart-subtitle">Last 30 days - Daily trend</p>
-            </div>
-            <canvas id="marketingCostChart"></canvas>
-        </div>
-
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3 class="chart-title">👁️ Website Analytics</h3>
-                <p class="chart-subtitle">Visits & Engagement</p>
-            </div>
-            <canvas id="websiteChart"></canvas>
-        </div>
-
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3 class="chart-title">🔄 Daily Conversions</h3>
-                <p class="chart-subtitle">Conversion trend - Last 30 days</p>
-            </div>
-            <canvas id="conversionTrendChart"></canvas>
-        </div>
-    </div>
-
-    <!-- KPI Table -->
-    <div class="kpi-table">
-        <table>
-            <thead>
-                <tr>
-                    <th>🎯 Key Performance Indicators (KPIs)</th>
-                    <th>Current Value</th>
-                    <th>Status</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody id="kpiTableBody">
-                <tr><td colspan="4" class="loading">Loading KPIs...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script>
-let channelsChart, marketingCostChart, websiteChart, conversionTrendChart;
-
-// Load dashboard data on page load
-document.addEventListener('DOMContentLoaded', function() {
-    loadDashboardData();
-});
-
-async function loadDashboardData() {
-    const days = document.getElementById('periodFilter').value;
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Leads & Conversions | MIA Atendimento</title>
     
-    try {
-        // Fetch data from API
-        const response = await fetch(`/admin/api/dashboard-data?days=${days}`);
-        const data = await response.json();
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         
-        if (data.success) {
-            // Update main metrics
-            updateMainMetrics(data.lead_stats);
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #2c3e50;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .stat-value {
+            color: #2c3e50;
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .stat-info {
+            color: #95a5a6;
+            font-size: 12px;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .chart-header {
+            margin-bottom: 20px;
+        }
+        
+        .chart-title {
+            color: #2c3e50;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .chart-subtitle {
+            color: #95a5a6;
+            font-size: 12px;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        #origin-legend {
+            margin-top: 20px;
+        }
+        
+        .origin-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .origin-item:last-child {
+            border-bottom: none;
+        }
+        
+        .origin-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+        
+        .origin-label {
+            flex: 1;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        
+        .origin-value {
+            color: #7f8c8d;
+            font-weight: 600;
+        }
+        
+        .table-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .table-responsive {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead th {
+            background: #f8f9fa;
+            color: #2c3e50;
+            font-weight: 600;
+            text-align: left;
+            padding: 15px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        tbody td {
+            padding: 15px;
+            border-bottom: 1px solid #ecf0f1;
+            color: #2c3e50;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .kpi-value {
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-good {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-neutral {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-bad {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #95a5a6;
+        }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+        }
+        
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
             
-            // Update charts
-            updateChannelsChart(data.lead_stats.leads_by_origin);
-            updateMarketingCharts(data.marketing_stats);
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
             
-            // Update KPI table
-            updateKPITable(data.kpis);
-        } else {
-            console.error('Error loading data:', data.error);
-        }
-    } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-    }
-}
-
-function updateMainMetrics(leadStats) {
-    document.getElementById('totalRevenue').textContent = '$' + leadStats.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    document.getElementById('totalLeads').textContent = leadStats.total_leads;
-    document.getElementById('conversionRate').textContent = leadStats.conversion_rate.toFixed(2) + '%';
-    document.getElementById('avgTicket').textContent = '$' + leadStats.avg_ticket.toFixed(2);
-    document.getElementById('convertedLeads').textContent = leadStats.converted_leads + ' converted';
-}
-
-function updateChannelsChart(leadsByOrigin) {
-    const ctx = document.getElementById('channelsChart').getContext('2d');
-    
-    const labels = Object.keys(leadsByOrigin);
-    const dataValues = Object.values(leadsByOrigin);
-    const colors = ['#667eea', '#f093fb', '#48bb78', '#ed8936', '#4facfe', '#43e97b'];
-    
-    if (channelsChart) {
-        channelsChart.destroy();
-    }
-    
-    channelsChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: dataValues,
-                backgroundColor: colors.slice(0, labels.length)
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .stat-value {
+                font-size: 28px;
             }
         }
-    });
-}
-
-function updateMarketingCharts(marketingStats) {
-    // Prepare data
-    const dates = marketingStats.map(s => new Date(s.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}));
-    const metaCosts = marketingStats.map(s => s.meta_ads?.cost || 0);
-    const googleCosts = marketingStats.map(s => s.google_ads?.cost || 0);
-    const websiteVisits = marketingStats.map(s => s.website?.visits || 0);
-    const conversions = marketingStats.map(s => s.conversions?.count || 0);
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Dashboard - Leads & Conversions</h1>
+            <p>Real-time metrics and performance tracking - Legacy Translations</p>
+            
+            <div class="header-actions">
+                <button id="refresh-btn" class="btn btn-primary">🔄 Refresh Data</button>
+                <button class="btn btn-primary" onclick="window.location.href='/admin/controle'">← Back to Control Panel</button>
+            </div>
+        </div>
+        
+        <div class="alert alert-info">
+            <strong>🔗 Connected to MIA Ads API:</strong> Data is automatically synced from Facebook Ads and Google Ads every 5 minutes.
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Investment</div>
+                <div class="stat-value" id="total-revenue">$0</div>
+                <div class="stat-info">From ad campaigns</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Total Leads</div>
+                <div class="stat-value" id="total-leads">0</div>
+                <div class="stat-info"><span id="converted-leads">0</span> from ads</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Click-Through Rate</div>
+                <div class="stat-value" id="conversion-rate">0%</div>
+                <div class="stat-info">Impressions to clicks</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Cost Per Lead (CPL)</div>
+                <div class="stat-value" id="average-ticket">$0</div>
+                <div class="stat-info">Average acquisition cost</div>
+            </div>
+        </div>
+        
+        <div class="charts-grid">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div class="chart-title">Leads by Origin</div>
+                    <div class="chart-subtitle">Distribution by traffic source</div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="leads-origin-chart"></canvas>
+                </div>
+                <div id="origin-legend"></div>
+            </div>
+            
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div class="chart-title">Marketing Investment</div>
+                    <div class="chart-subtitle period-text">Last 30 days - Daily trend</div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="investment-chart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div class="chart-title">Daily Conversions</div>
+                    <div class="chart-subtitle period-text">Conversion trend - Last 30 days</div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="conversions-chart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="table-card">
+            <div class="chart-header">
+                <div class="chart-title">Key Performance Indicators (KPIs)</div>
+                <div class="chart-subtitle">Detailed metrics and status</div>
+            </div>
+            
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>KPI Name</th>
+                            <th class="text-center">Current Value</th>
+                            <th class="text-center">Status</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kpi-table-body">
+                        <tr>
+                            <td colspan="4" class="loading">Loading KPIs...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
     
-    // Marketing Cost Chart
-    const costCtx = document.getElementById('marketingCostChart').getContext('2d');
-    if (marketingCostChart) {
-        marketingCostChart.destroy();
-    }
-    
-    marketingCostChart = new Chart(costCtx, {
-        type: 'line',
-        data: {
-            labels: dates,
-            datasets: [
-                {
-                    label: 'Meta Ads ($)',
-                    data: metaCosts,
-                    borderColor: '#667eea',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                },
-                {
-                    label: 'Google Ads ($)',
-                    data: googleCosts,
-                    borderColor: '#f093fb',
-                    backgroundColor: 'rgba(240, 147, 251, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-    
-    // Website Analytics Chart
-    const websiteCtx = document.getElementById('websiteChart').getContext('2d');
-    if (websiteChart) {
-        websiteChart.destroy();
-    }
-    
-    websiteChart = new Chart(websiteCtx, {
-        type: 'bar',
-        data: {
-            labels: dates,
-            datasets: [{
-                label: 'Daily Visits',
-                data: websiteVisits,
-                backgroundColor: '#48bb78'
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-    
-    // Conversion Trend Chart
-    const conversionCtx = document.getElementById('conversionTrendChart').getContext('2d');
-    if (conversionTrendChart) {
-        conversionTrendChart.destroy();
-    }
-    
-    conversionTrendChart = new Chart(conversionCtx, {
-        type: 'line',
-        data: {
-            labels: dates,
-            datasets: [{
-                label: 'Daily Conversions',
-                data: conversions,
-                borderColor: '#ed8936',
-                backgroundColor: 'rgba(237, 137, 54, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-}
-
-function updateKPITable(kpis) {
-    const tbody = document.getElementById('kpiTableBody');
-    
-    const kpiData = [
-        {
-            name: 'Cost per Lead (CPL)',
-            value: '$' + kpis.cpl.toFixed(2),
-            status: kpis.cpl < 20 ? 'excellent' : kpis.cpl < 30 ? 'good' : 'warning',
-            statusText: kpis.cpl < 20 ? 'Excellent' : kpis.cpl < 30 ? 'Good' : 'Needs Improvement',
-            description: 'Average cost to acquire one lead'
-        },
-        {
-            name: 'Customer Acquisition Cost (CAC)',
-            value: '$' + kpis.cac.toFixed(2),
-            status: kpis.cac < 100 ? 'excellent' : kpis.cac < 150 ? 'good' : 'warning',
-            statusText: kpis.cac < 100 ? 'Excellent' : kpis.cac < 150 ? 'Good' : 'High',
-            description: 'Total cost to acquire a paying customer'
-        },
-        {
-            name: 'Lifetime Value (LTV)',
-            value: '$' + kpis.ltv,
-            status: kpis.ltv > 300 ? 'excellent' : kpis.ltv > 200 ? 'good' : 'warning',
-            statusText: kpis.ltv > 300 ? 'Excellent' : kpis.ltv > 200 ? 'Good' : 'Low',
-            description: 'Average revenue per customer lifetime'
-        },
-        {
-            name: 'LTV:CAC Ratio',
-            value: kpis.ltv_cac_ratio.toFixed(2) + ':1',
-            status: kpis.ltv_cac_ratio > 3 ? 'excellent' : kpis.ltv_cac_ratio > 2 ? 'good' : 'critical',
-            statusText: kpis.ltv_cac_ratio > 3 ? 'Healthy' : kpis.ltv_cac_ratio > 2 ? 'Fair' : 'Critical',
-            description: 'Customer value vs acquisition cost ratio'
-        },
-        {
-            name: 'Marketing ROI',
-            value: kpis.marketing_roi.toFixed(2) + '%',
-            status: kpis.marketing_roi > 100 ? 'excellent' : kpis.marketing_roi > 50 ? 'good' : 'warning',
-            statusText: kpis.marketing_roi > 100 ? 'Profitable' : kpis.marketing_roi > 50 ? 'Positive' : 'Needs Review',
-            description: 'Return on marketing investment'
-        }
-    ];
-    
-    tbody.innerHTML = kpiData.map(kpi => `
-        <tr>
-            <td><strong>${kpi.name}</strong></td>
-            <td>${kpi.value}</td>
-            <td><span class="status-badge status-${kpi.status}">${kpi.statusText}</span></td>
-            <td>${kpi.description}</td>
-        </tr>
-    `).join('');
-}
-</script>
-{% endblock %}
+    <script src="/static/js/leads-integration.js"></script>
+</body>
+</html>
