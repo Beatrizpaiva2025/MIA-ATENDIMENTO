@@ -96,6 +96,13 @@ async function loadLeadsByOrigin() {
                 chartData.values.push(data.google.count);
             }
             
+            // Se não houver dados, mostrar mensagem
+            if (chartData.labels.length === 0) {
+                chartData.labels.push('No Data');
+                chartData.values.push(1);
+                chartData.colors = ['#95a5a6'];
+            }
+            
             renderPieChart('leads-origin-chart', chartData);
             updateOriginLegend(data);
         }
@@ -116,19 +123,30 @@ async function loadMarketingInvestment() {
         if (result.success && result.data) {
             const data = result.data;
             
+            // Verificar se os dados existem e são arrays
+            if (!data.facebook || !Array.isArray(data.facebook) || 
+                !data.google || !Array.isArray(data.google)) {
+                console.warn('Investment data format incorrect:', data);
+                return;
+            }
+            
+            // Se não houver dados, criar array vazio
+            const facebookData = data.facebook.length > 0 ? data.facebook : [{ date: 'No data', spend: 0 }];
+            const googleData = data.google.length > 0 ? data.google : [{ date: 'No data', spend: 0 }];
+            
             const chartData = {
-                labels: data.facebook.map(item => item.date),
+                labels: facebookData.map(item => item.date || item.day || 'N/A'),
                 datasets: [
                     {
                         label: 'Facebook Ads',
-                        data: data.facebook.map(item => item.spend),
+                        data: facebookData.map(item => item.spend || 0),
                         borderColor: '#1877F2',
                         backgroundColor: 'rgba(24, 119, 242, 0.1)',
                         tension: 0.4
                     },
                     {
                         label: 'Google Ads',
-                        data: data.google.map(item => item.spend),
+                        data: googleData.map(item => item.spend || 0),
                         borderColor: '#4285F4',
                         backgroundColor: 'rgba(66, 133, 244, 0.1)',
                         tension: 0.4
@@ -155,17 +173,28 @@ async function loadDailyConversions() {
         if (result.success && result.data) {
             const data = result.data;
             
+            // Verificar se os dados existem e são arrays
+            if (!data.facebook || !Array.isArray(data.facebook) || 
+                !data.google || !Array.isArray(data.google)) {
+                console.warn('Conversions data format incorrect:', data);
+                return;
+            }
+            
+            // Se não houver dados, criar array vazio
+            const facebookData = data.facebook.length > 0 ? data.facebook : [{ date: 'No data', conversions: 0 }];
+            const googleData = data.google.length > 0 ? data.google : [{ date: 'No data', conversions: 0 }];
+            
             const chartData = {
-                labels: data.facebook.map(item => item.date),
+                labels: facebookData.map(item => item.date || item.day || 'N/A'),
                 datasets: [
                     {
                         label: 'Facebook Ads',
-                        data: data.facebook.map(item => item.conversions),
+                        data: facebookData.map(item => item.conversions || 0),
                         backgroundColor: '#1877F2'
                     },
                     {
                         label: 'Google Ads',
-                        data: data.google.map(item => item.conversions),
+                        data: googleData.map(item => item.conversions || 0),
                         backgroundColor: '#4285F4'
                     }
                 ]
@@ -256,7 +285,7 @@ function renderPieChart(canvasId, data) {
                             const label = context.label || '';
                             const value = context.parsed || 0;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((value / total) * 100).toFixed(1);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                             return `${label}: ${value} (${percentage}%)`;
                         }
                     }
