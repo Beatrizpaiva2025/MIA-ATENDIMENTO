@@ -1,10 +1,11 @@
 """
-admin_training_routes.py - CORRIGIDO COM FORM DATA + DELAY
+admin_training_routes.py - VERSÃO COMPLETA COM ENDPOINTS JSON
 Rotas para gerenciamento de treinamento da IA
+Inclui endpoints Form Data (HTML) + JSON (API)
 """
 
 from fastapi import APIRouter, Request, HTTPException, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
@@ -12,6 +13,8 @@ import os
 from datetime import datetime
 import logging
 from dotenv import load_dotenv
+from pydantic import BaseModel
+from typing import Optional
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -23,6 +26,18 @@ logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="templates")
 
 router = APIRouter(prefix="/admin/treinamento", tags=["Admin Training"])
+
+# ============================================================
+# MODELS PYDANTIC PARA API JSON
+# ============================================================
+
+class KnowledgeUpdate(BaseModel):
+    title: str
+    content: str
+
+class FAQUpdate(BaseModel):
+    question: str
+    answer: str
 
 # ============================================================
 # CONEXÃO MONGODB
@@ -51,89 +66,62 @@ def get_database():
 db = get_database()
 
 # ============================================================
-# PÁGINA DE TREINAMENTO
+# ROTA PRINCIPAL - EXIBIR PÁGINA DE TREINAMENTO
 # ============================================================
 
 @router.get("/", response_class=HTMLResponse)
-async def admin_treinamento(request: Request):
-    """Página de treinamento da IA"""
+async def pagina_treinamento(request: Request):
+    """Renderizar página de treinamento da IA"""
     try:
-        # Buscar bot "Mia"
-        bot = await db.bots.find_one({"name": "Mia"})
+        # Buscar dados do bot
+        bot_data = await db.bots.find_one({"name": "Mia"})
         
-        if not bot:
-            # Criar bot padrão
-            bot = {
+        if not bot_data:
+            # Criar bot padrão se não existir
+            bot_data = {
                 "name": "Mia",
-                "personality": {
-                    "tone": "Professional",
-                    "goals": "",
-                    "restrictions": "",
-                    "response_delay": 3
-                },
+                "personality": "Você é Mia, assistente virtual da Legacy Translations...",
                 "knowledge_base": [],
-                "faqs": [],
-                "created_at": datetime.now()
+                "faqs": []
             }
-            result = await db.bots.insert_one(bot)
-            bot["_id"] = result.inserted_id
-            logger.info("✅ Bot Mia criado no MongoDB")
+            await db.bots.insert_one(bot_data)
         
-        return templates.TemplateResponse("admin_treinamento.html", {
-            "request": request,
-            "personalidade": bot.get("personality", {}),
-            "conhecimentos": bot.get("knowledge_base", []),
-            "faqs": bot.get("faqs", [])
-        })
+        return templates.TemplateResponse(
+            "admin_treinamento.html",
+            {
+                "request": request,
+                "bot": bot_data
+            }
+        )
     except Exception as e:
-        logger.error(f"❌ Erro ao carregar página de treinamento: {e}")
+        logger.error(f"❌ Erro ao carregar página: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================
-# ROTAS DE EDIÇÃO - PERSONALIDADE
+# ROTAS FORM DATA (HTML) - PERSONALIDADE
 # ============================================================
 
 @router.post("/personalidade")
-async def salvar_personalidade(
-    tone: str = Form(...),
-    goals: str = Form(...),
-    restrictions: str = Form(""),
-    response_delay: int = Form(3)
+async def atualizar_personalidade(
+    personality: str = Form(...)
 ):
-    """Salvar personalidade do bot"""
+    """Atualizar personalidade do bot"""
     try:
-        # Buscar bot Mia
-        bot = await db.bots.find_one({"name": "Mia"})
-        
-        if not bot:
-            raise HTTPException(status_code=404, detail="Bot Mia não encontrado")
-        
-        # Atualizar personalidade
         result = await db.bots.update_one(
             {"name": "Mia"},
-            {
-                "$set": {
-                    "personality": {
-                        "tone": tone,
-                        "goals": goals,
-                        "restrictions": restrictions,
-                        "response_delay": response_delay
-                    },
-                    "updated_at": datetime.now()
-                }
-            }
+            {"$set": {"personality": personality}}
         )
         
-        logger.info(f"✅ Personalidade atualizada! Delay: {response_delay}s")
+        logger.info("✅ Personalidade atualizada")
         
         return RedirectResponse(url="/admin/treinamento", status_code=303)
         
     except Exception as e:
-        logger.error(f"❌ Erro ao salvar personalidade: {e}")
+        logger.error(f"❌ Erro ao atualizar personalidade: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================
-# ROTAS DE EDIÇÃO - BASE DE CONHECIMENTO
+# ROTAS FORM DATA (HTML) - KNOWLEDGE BASE
 # ============================================================
 
 @router.post("/conhecimento")
@@ -181,12 +169,12 @@ async def deletar_conhecimento(item_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/conhecimento/editar/{item_id}")
-async def editar_conhecimento(
+async def editar_conhecimento_form(
     item_id: str,
     title: str = Form(...),
     content: str = Form(...)
 ):
-    """Editar item da base de conhecimento"""
+    """Editar item da base de conhecimento (Form Data)"""
     try:
         result = await db.bots.update_one(
             {"name": "Mia", "knowledge_base._id": item_id},
@@ -206,9 +194,8 @@ async def editar_conhecimento(
         logger.error(f"❌ Erro ao editar conhecimento: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # ============================================================
-# ROTAS DE EDIÇÃO - FAQs
+# ROTAS FORM DATA (HTML) - FAQs
 # ============================================================
 
 @router.post("/faq")
@@ -230,7 +217,7 @@ async def adicionar_faq(
             {"$push": {"faqs": novo_faq}}
         )
         
-        logger.info(f"✅ FAQ adicionado: {pergunta}")
+        logger.info(f"✅ FAQ adicionado: {question}")
         
         return RedirectResponse(url="/admin/treinamento", status_code=303)
         
@@ -253,4 +240,152 @@ async def deletar_faq(item_id: str):
         
     except Exception as e:
         logger.error(f"❌ Erro ao deletar FAQ: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/faq/editar/{item_id}")
+async def editar_faq_form(
+    item_id: str,
+    question: str = Form(...),
+    answer: str = Form(...)
+):
+    """Editar FAQ (Form Data) - NOVO ENDPOINT"""
+    try:
+        result = await db.bots.update_one(
+            {"name": "Mia", "faqs._id": item_id},
+            {
+                "$set": {
+                    "faqs.$.question": question,
+                    "faqs.$.answer": answer
+                }
+            }
+        )
+        
+        logger.info(f"✅ FAQ editado: {question}")
+        
+        return RedirectResponse(url="/admin/treinamento", status_code=303)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao editar FAQ: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================
+# API ENDPOINTS JSON - KNOWLEDGE BASE
+# ============================================================
+
+@router.get("/api/knowledge/{item_id}")
+async def get_knowledge_item(item_id: str):
+    """Buscar item específico de conhecimento (JSON)"""
+    try:
+        bot_data = await db.bots.find_one(
+            {"name": "Mia"},
+            {"knowledge_base": {"$elemMatch": {"_id": item_id}}}
+        )
+        
+        if not bot_data or "knowledge_base" not in bot_data:
+            raise HTTPException(status_code=404, detail="Item não encontrado")
+        
+        item = bot_data["knowledge_base"][0]
+        
+        return JSONResponse({
+            "id": item["_id"],
+            "title": item["title"],
+            "content": item["content"]
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar conhecimento: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/api/knowledge/{item_id}")
+async def update_knowledge_item(item_id: str, data: KnowledgeUpdate):
+    """Editar item da base de conhecimento (JSON API)"""
+    try:
+        result = await db.bots.update_one(
+            {"name": "Mia", "knowledge_base._id": item_id},
+            {
+                "$set": {
+                    "knowledge_base.$.title": data.title,
+                    "knowledge_base.$.content": data.content
+                }
+            }
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Item não encontrado")
+        
+        logger.info(f"✅ Conhecimento editado via API: {data.title}")
+        
+        return JSONResponse({
+            "success": True,
+            "message": "Conhecimento atualizado com sucesso",
+            "id": item_id
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erro ao editar conhecimento via API: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================
+# API ENDPOINTS JSON - FAQs
+# ============================================================
+
+@router.get("/api/faq/{item_id}")
+async def get_faq_item(item_id: str):
+    """Buscar FAQ específico (JSON)"""
+    try:
+        bot_data = await db.bots.find_one(
+            {"name": "Mia"},
+            {"faqs": {"$elemMatch": {"_id": item_id}}}
+        )
+        
+        if not bot_data or "faqs" not in bot_data:
+            raise HTTPException(status_code=404, detail="FAQ não encontrado")
+        
+        item = bot_data["faqs"][0]
+        
+        return JSONResponse({
+            "id": item["_id"],
+            "question": item["question"],
+            "answer": item["answer"]
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar FAQ: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/api/faq/{item_id}")
+async def update_faq_item(item_id: str, data: FAQUpdate):
+    """Editar FAQ (JSON API) - NOVO ENDPOINT"""
+    try:
+        result = await db.bots.update_one(
+            {"name": "Mia", "faqs._id": item_id},
+            {
+                "$set": {
+                    "faqs.$.question": data.question,
+                    "faqs.$.answer": data.answer
+                }
+            }
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="FAQ não encontrado")
+        
+        logger.info(f"✅ FAQ editado via API: {data.question}")
+        
+        return JSONResponse({
+            "success": True,
+            "message": "FAQ atualizado com sucesso",
+            "id": item_id
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erro ao editar FAQ via API: {e}")
         raise HTTPException(status_code=500, detail=str(e))
