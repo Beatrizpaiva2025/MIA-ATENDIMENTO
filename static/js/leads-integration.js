@@ -1,269 +1,264 @@
-/**
- * MIA ADS INTEGRATION - Leads Dashboard
- * Integração com API de Facebook Ads e Google Ads
- * 
- * API Base URL: https://mia-ads-api.onrender.com
- */
+// ============================================
+// LEADS INTEGRATION V2 - DASHBOARD COMPLETO
+// Arquivo: leads-integration-v2.js
+// ============================================
 
 // Configuração da API
-const API_BASE_URL = 'https://mia-ads-api.onrender.com';
-const DEFAULT_PERIOD_DAYS = 30;
+const API_CONFIG = {
+    baseURL: 'https://mia-ads-api.onrender.com',
+    refreshInterval: 300000, // 5 minutos
+    timeout: 15000
+};
 
-// Utility: Formatar moeda
-function formatCurrency(value) {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 2
-    }).format(value || 0);
+// Estado Global
+let dashboardState = {
+    lastUpdate: null,
+    isLoading: false,
+    chartInstances: {},
+    rawData: null
+};
+
+// ============================================
+// INICIALIZAÇÃO
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Iniciando Dashboard MIA Leads v2...');
+    
+    // Configurar eventos
+    setupEventListeners();
+    
+    // Carregar dados iniciais
+    loadDashboardData();
+    
+    // Auto-refresh a cada 5 minutos
+    setInterval(loadDashboardData, API_CONFIG.refreshInterval);
+});
+
+// ============================================
+// EVENT LISTENERS
+// ============================================
+function setupEventListeners() {
+    // Botão Refresh
+    const refreshBtn = document.getElementById('refreshData');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            loadDashboardData(true);
+        });
+    }
+    
+    // Botão Export Excel
+    const exportBtn = document.getElementById('exportExcel');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportToExcel);
+    }
 }
 
-// Utility: Formatar porcentagem
-function formatPercentage(value) {
-    return `${(value || 0).toFixed(2)}%`;
+// ============================================
+// CARREGAR DADOS DA API
+// ============================================
+async function loadDashboardData(showLoading = false) {
+    if (dashboardState.isLoading) return;
+    
+    dashboardState.isLoading = true;
+    
+    if (showLoading) {
+        showLoadingState();
+    }
+    
+    try {
+        console.log('📡 Buscando dados da API...');
+        
+        // Buscar dados de múltiplos endpoints
+        const [kpisData, leadsData] = await Promise.all([
+            fetchWithTimeout(`${API_CONFIG.baseURL}/api/kpis`),
+            fetchWithTimeout(`${API_CONFIG.baseURL}/api/leads/summary`)
+        ]);
+        
+        console.log('✅ Dados recebidos:', { kpisData, leadsData });
+        
+        // Armazenar dados brutos
+        dashboardState.rawData = { kpisData, leadsData };
+        dashboardState.lastUpdate = new Date();
+        
+        // Processar e exibir dados
+        updateDashboard(kpisData, leadsData);
+        
+        // Atualizar timestamp
+        updateLastRefreshTime();
+        
+    } catch (error) {
+        console.error('❌ Erro ao carregar dados:', error);
+        showErrorState(error.message);
+    } finally {
+        dashboardState.isLoading = false;
+        hideLoadingState();
+    }
 }
 
-// Utility: Formatar número
-function formatNumber(value) {
-    return new Intl.NumberFormat('en-US').format(value || 0);
+// ============================================
+// FETCH COM TIMEOUT
+// ============================================
+async function fetchWithTimeout(url, timeout = API_CONFIG.timeout) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error('Timeout: A API não respondeu em tempo hábil');
+        }
+        throw error;
+    }
 }
 
-// Utility: Determinar classe de status
-function getStatusClass(status) {
-    const statusMap = {
-        'good': 'status-good',
-        'neutral': 'status-neutral',
-        'warning': 'status-warning',
-        'bad': 'status-bad'
+// ============================================
+// ATUALIZAR DASHBOARD
+// ============================================
+function updateDashboard(kpisData, leadsData) {
+    console.log('🔄 Atualizando dashboard...');
+    
+    // Extrair métricas
+    const metrics = extractMetrics(kpisData, leadsData);
+    
+    // Atualizar cards
+    updateStatCards(metrics);
+    
+    // Atualizar gráficos
+    updateCharts(leadsData);
+    
+    // Atualizar tabela KPIs
+    updateKPIsTable(kpisData);
+    
+    console.log('✅ Dashboard atualizado com sucesso!');
+}
+
+// ============================================
+// EXTRAIR MÉTRICAS
+// ============================================
+function extractMetrics(kpisData, leadsData) {
+    // Converter valores removendo símbolos
+    const parseValue = (value) => {
+        if (!value) return 0;
+        const str = String(value).replace(/[$R\s,]/g, '').replace('%', '');
+        return parseFloat(str) || 0;
     };
-    return statusMap[status] || 'status-neutral';
-}
-
-/**
- * 1. CARREGAR RESUMO DE LEADS
- */
-async function loadLeadsSummary() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/leads/summary?days=${DEFAULT_PERIOD_DAYS}`);
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            const data = result.data;
-            
-            // Atualizar cards principais
-            document.getElementById('total-revenue').textContent = formatCurrency(data.total_spend);
-            document.getElementById('total-leads').textContent = formatNumber(data.total_leads);
-            document.getElementById('conversion-rate').textContent = formatPercentage(data.ctr);
-            document.getElementById('average-ticket').textContent = formatCurrency(data.cpl);
-            
-            // Atualizar período
-            const periodText = `${data.date_start} to ${data.date_end}`;
-            document.querySelectorAll('.period-text').forEach(el => {
-                el.textContent = periodText;
-            });
-        }
-    } catch (error) {
-        console.error('Error loading leads summary:', error);
-        showError('Failed to load leads summary');
-    }
-}
-
-/**
- * 2. CARREGAR LEADS POR ORIGEM
- */
-async function loadLeadsByOrigin() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/leads/by-origin?days=${DEFAULT_PERIOD_DAYS}`);
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            const data = result.data;
-            
-            // Preparar dados para o gráfico
-            const chartData = {
-                labels: [],
-                values: [],
-                colors: ['#1877F2', '#4285F4', '#34A853']
-            };
-            
-            if (data.facebook && data.facebook.count > 0) {
-                chartData.labels.push('Facebook Ads');
-                chartData.values.push(data.facebook.count);
-            }
-            
-            if (data.google && data.google.count > 0) {
-                chartData.labels.push('Google Ads');
-                chartData.values.push(data.google.count);
-            }
-            
-            // Se não houver dados, mostrar mensagem
-            if (chartData.labels.length === 0) {
-                chartData.labels.push('No Data');
-                chartData.values.push(1);
-                chartData.colors = ['#95a5a6'];
-            }
-            
-            renderPieChart('leads-origin-chart', chartData);
-            updateOriginLegend(data);
-        }
-    } catch (error) {
-        console.error('Error loading leads by origin:', error);
-        showError('Failed to load leads by origin');
-    }
-}
-
-/**
- * 3. CARREGAR INVESTIMENTO DIÁRIO
- */
-async function loadMarketingInvestment() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/marketing/investment?days=${DEFAULT_PERIOD_DAYS}`);
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            const data = result.data;
-            
-            // Verificar se os dados existem e são arrays
-            if (!data.facebook || !Array.isArray(data.facebook) || 
-                !data.google || !Array.isArray(data.google)) {
-                console.warn('Investment data format incorrect:', data);
-                return;
-            }
-            
-            // Se não houver dados, criar array vazio
-            const facebookData = data.facebook.length > 0 ? data.facebook : [{ date: 'No data', spend: 0 }];
-            const googleData = data.google.length > 0 ? data.google : [{ date: 'No data', spend: 0 }];
-            
-            const chartData = {
-                labels: facebookData.map(item => item.date || item.day || 'N/A'),
-                datasets: [
-                    {
-                        label: 'Facebook Ads',
-                        data: facebookData.map(item => item.spend || 0),
-                        borderColor: '#1877F2',
-                        backgroundColor: 'rgba(24, 119, 242, 0.1)',
-                        tension: 0.4
-                    },
-                    {
-                        label: 'Google Ads',
-                        data: googleData.map(item => item.spend || 0),
-                        borderColor: '#4285F4',
-                        backgroundColor: 'rgba(66, 133, 244, 0.1)',
-                        tension: 0.4
-                    }
-                ]
-            };
-            
-            renderLineChart('investment-chart', chartData);
-        }
-    } catch (error) {
-        console.error('Error loading marketing investment:', error);
-        showError('Failed to load marketing investment');
-    }
-}
-
-/**
- * 4. CARREGAR CONVERSÕES DIÁRIAS
- */
-async function loadDailyConversions() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/analytics/conversions?days=${DEFAULT_PERIOD_DAYS}`);
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            const data = result.data;
-            
-            // Verificar se os dados existem e são arrays
-            if (!data.facebook || !Array.isArray(data.facebook) || 
-                !data.google || !Array.isArray(data.google)) {
-                console.warn('Conversions data format incorrect:', data);
-                return;
-            }
-            
-            // Se não houver dados, criar array vazio
-            const facebookData = data.facebook.length > 0 ? data.facebook : [{ date: 'No data', conversions: 0 }];
-            const googleData = data.google.length > 0 ? data.google : [{ date: 'No data', conversions: 0 }];
-            
-            const chartData = {
-                labels: facebookData.map(item => item.date || item.day || 'N/A'),
-                datasets: [
-                    {
-                        label: 'Facebook Ads',
-                        data: facebookData.map(item => item.conversions || 0),
-                        backgroundColor: '#1877F2'
-                    },
-                    {
-                        label: 'Google Ads',
-                        data: googleData.map(item => item.conversions || 0),
-                        backgroundColor: '#4285F4'
-                    }
-                ]
-            };
-            
-            renderBarChart('conversions-chart', chartData);
-        }
-    } catch (error) {
-        console.error('Error loading daily conversions:', error);
-        showError('Failed to load daily conversions');
-    }
-}
-
-/**
- * 5. CARREGAR KPIs
- */
-async function loadKPIs() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/kpis?days=${DEFAULT_PERIOD_DAYS}`);
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            const kpis = result.data;
-            const kpiTableBody = document.getElementById('kpi-table-body');
-            
-            if (kpiTableBody) {
-                kpiTableBody.innerHTML = '';
-                
-                kpis.forEach(kpi => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td><strong>${kpi.name}</strong></td>
-                        <td class="text-center"><span class="kpi-value">${kpi.value}</span></td>
-                        <td class="text-center">
-                            <span class="status-badge ${getStatusClass(kpi.status)}">
-                                ${kpi.status.toUpperCase()}
-                            </span>
-                        </td>
-                        <td>${kpi.description}</td>
-                    `;
-                    kpiTableBody.appendChild(row);
-                });
-            }
-        }
-    } catch (error) {
-        console.error('Error loading KPIs:', error);
-        showError('Failed to load KPIs');
-    }
-}
-
-/**
- * RENDERIZAR GRÁFICO DE PIZZA
- */
-function renderPieChart(canvasId, data) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
     
-    if (window.chartsInstances && window.chartsInstances[canvasId]) {
-        window.chartsInstances[canvasId].destroy();
+    return {
+        totalInvestment: parseValue(kpisData.google_ads?.total_cost || 0) + 
+                        parseValue(kpisData.facebook_ads?.total_cost || 0),
+        totalLeads: parseValue(leadsData.total_leads || 0),
+        totalClicks: parseValue(kpisData.google_ads?.total_clicks || 0) + 
+                    parseValue(kpisData.facebook_ads?.total_clicks || 0),
+        totalImpressions: parseValue(kpisData.google_ads?.total_impressions || 0) + 
+                         parseValue(kpisData.facebook_ads?.total_impressions || 0),
+        ctr: parseValue(kpisData.average_ctr || 0),
+        cpl: 0 // Será calculado
+    };
+}
+
+// ============================================
+// ATUALIZAR CARDS ESTATÍSTICOS
+// ============================================
+function updateStatCards(metrics) {
+    // Total Investment
+    updateCard('totalInvestment', metrics.totalInvestment, 'currency');
+    
+    // Total Leads
+    updateCard('totalLeads', metrics.totalLeads, 'number');
+    
+    // CTR
+    updateCard('ctr', metrics.ctr, 'percentage');
+    
+    // CPL (Cost Per Lead)
+    const cpl = metrics.totalLeads > 0 ? 
+                metrics.totalInvestment / metrics.totalLeads : 0;
+    updateCard('cpl', cpl, 'currency');
+}
+
+function updateCard(cardId, value, format) {
+    const element = document.getElementById(cardId);
+    if (!element) return;
+    
+    let formattedValue;
+    
+    switch(format) {
+        case 'currency':
+            formattedValue = `R$ ${value.toFixed(2).replace('.', ',')}`;
+            break;
+        case 'percentage':
+            formattedValue = `${value.toFixed(2)}%`;
+            break;
+        case 'number':
+            formattedValue = value.toLocaleString('pt-BR');
+            break;
+        default:
+            formattedValue = value;
     }
     
-    const ctx = canvas.getContext('2d');
-    const chart = new Chart(ctx, {
+    element.textContent = formattedValue;
+    
+    // Animação de atualização
+    element.classList.add('updated');
+    setTimeout(() => element.classList.remove('updated'), 500);
+}
+
+// ============================================
+// ATUALIZAR GRÁFICOS
+// ============================================
+function updateCharts(leadsData) {
+    // Gráfico de Leads por Origem
+    updateLeadsByOriginChart(leadsData);
+    
+    // Gráfico de Investimento
+    updateInvestmentChart(leadsData);
+    
+    // Gráfico de Conversões Diárias
+    updateDailyConversionsChart(leadsData);
+}
+
+function updateLeadsByOriginChart(data) {
+    const ctx = document.getElementById('leadsByOriginChart');
+    if (!ctx) return;
+    
+    // Destruir gráfico anterior
+    if (dashboardState.chartInstances.leadsByOrigin) {
+        dashboardState.chartInstances.leadsByOrigin.destroy();
+    }
+    
+    // Dados
+    const origins = data.by_origin || {};
+    const labels = Object.keys(origins);
+    const values = Object.values(origins);
+    
+    // Criar novo gráfico
+    dashboardState.chartInstances.leadsByOrigin = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: data.labels,
+            labels: labels,
             datasets: [{
-                data: data.values,
-                backgroundColor: data.colors,
+                data: values,
+                backgroundColor: [
+                    '#4285F4', // Google Blue
+                    '#1877F2', // Facebook Blue
+                    '#25D366', // WhatsApp Green
+                    '#FF6B6B', // Red
+                    '#FFD93D'  // Yellow
+                ],
                 borderWidth: 2,
                 borderColor: '#fff'
             }]
@@ -285,7 +280,7 @@ function renderPieChart(canvasId, data) {
                             const label = context.label || '';
                             const value = context.parsed || 0;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            const percentage = ((value / total) * 100).toFixed(1);
                             return `${label}: ${value} (${percentage}%)`;
                         }
                     }
@@ -293,38 +288,40 @@ function renderPieChart(canvasId, data) {
             }
         }
     });
-    
-    if (!window.chartsInstances) window.chartsInstances = {};
-    window.chartsInstances[canvasId] = chart;
 }
 
-/**
- * RENDERIZAR GRÁFICO DE LINHA
- */
-function renderLineChart(canvasId, data) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
+function updateInvestmentChart(data) {
+    const ctx = document.getElementById('investmentChart');
+    if (!ctx) return;
     
-    if (window.chartsInstances && window.chartsInstances[canvasId]) {
-        window.chartsInstances[canvasId].destroy();
+    if (dashboardState.chartInstances.investment) {
+        dashboardState.chartInstances.investment.destroy();
     }
     
-    const ctx = canvas.getContext('2d');
-    const chart = new Chart(ctx, {
-        type: 'line',
-        data: data,
+    // Dados de investimento por plataforma
+    const googleAds = parseFloat(data.google_ads_cost || 0);
+    const facebookAds = parseFloat(data.facebook_ads_cost || 0);
+    
+    dashboardState.chartInstances.investment = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Google Ads', 'Facebook Ads'],
+            datasets: [{
+                label: 'Investimento (R$)',
+                data: [googleAds, facebookAds],
+                backgroundColor: ['#4285F4', '#1877F2'],
+                borderWidth: 0,
+                borderRadius: 8
+            }]
+        },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'top' },
+                legend: { display: false },
                 tooltip: {
-                    mode: 'index',
-                    intersect: false,
                     callbacks: {
-                        label: function(context) {
-                            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`;
-                        }
+                        label: (context) => `R$ ${context.parsed.y.toFixed(2)}`
                     }
                 }
             },
@@ -332,145 +329,232 @@ function renderLineChart(canvasId, data) {
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        callback: function(value) {
-                            return formatCurrency(value);
-                        }
+                        callback: (value) => `R$ ${value}`
                     }
                 }
             }
         }
     });
-    
-    if (!window.chartsInstances) window.chartsInstances = {};
-    window.chartsInstances[canvasId] = chart;
 }
 
-/**
- * RENDERIZAR GRÁFICO DE BARRAS
- */
-function renderBarChart(canvasId, data) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
+function updateDailyConversionsChart(data) {
+    const ctx = document.getElementById('dailyConversionsChart');
+    if (!ctx) return;
     
-    if (window.chartsInstances && window.chartsInstances[canvasId]) {
-        window.chartsInstances[canvasId].destroy();
+    if (dashboardState.chartInstances.dailyConversions) {
+        dashboardState.chartInstances.dailyConversions.destroy();
     }
     
-    const ctx = canvas.getContext('2d');
-    const chart = new Chart(ctx, {
-        type: 'bar',
-        data: data,
+    // Dados diários (últimos 7 dias)
+    const dailyData = data.daily_leads || [];
+    const labels = dailyData.map(d => d.date);
+    const values = dailyData.map(d => d.leads);
+    
+    dashboardState.chartInstances.dailyConversions = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Leads',
+                data: values,
+                borderColor: '#4CAF50',
+                backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                borderWidth: 3,
+                tension: 0.4,
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'top' },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                }
+                legend: { display: false }
             },
             scales: {
                 y: {
                     beginAtZero: true,
-                    ticks: { stepSize: 1 }
+                    ticks: {
+                        stepSize: 1
+                    }
                 }
             }
         }
     });
-    
-    if (!window.chartsInstances) window.chartsInstances = {};
-    window.chartsInstances[canvasId] = chart;
 }
 
-/**
- * ATUALIZAR LEGENDA DE ORIGEM
- */
-function updateOriginLegend(data) {
-    const legendContainer = document.getElementById('origin-legend');
-    if (!legendContainer) return;
+// ============================================
+// ATUALIZAR TABELA DE KPIs
+// ============================================
+function updateKPIsTable(kpisData) {
+    const tbody = document.getElementById('kpisTableBody');
+    if (!tbody) return;
     
-    legendContainer.innerHTML = `
-        <div class="origin-item">
-            <span class="origin-color" style="background: #1877F2;"></span>
-            <span class="origin-label">Facebook Ads</span>
-            <span class="origin-value">${data.facebook ? formatNumber(data.facebook.count) : 0} (${data.facebook ? formatPercentage(data.facebook.percentage) : '0%'})</span>
-        </div>
-        <div class="origin-item">
-            <span class="origin-color" style="background: #4285F4;"></span>
-            <span class="origin-label">Google Ads</span>
-            <span class="origin-value">${data.google ? formatNumber(data.google.count) : 0} (${data.google ? formatPercentage(data.google.percentage) : '0%'})</span>
-        </div>
+    tbody.innerHTML = '';
+    
+    // KPIs do Google Ads
+    if (kpisData.google_ads) {
+        addKPIRow(tbody, 'Google Ads', kpisData.google_ads);
+    }
+    
+    // KPIs do Facebook Ads
+    if (kpisData.facebook_ads) {
+        addKPIRow(tbody, 'Facebook Ads', kpisData.facebook_ads);
+    }
+}
+
+function addKPIRow(tbody, platform, data) {
+    const row = tbody.insertRow();
+    row.innerHTML = `
+        <td>${platform}</td>
+        <td>R$ ${parseFloat(data.total_cost || 0).toFixed(2)}</td>
+        <td>${data.total_impressions || 0}</td>
+        <td>${data.total_clicks || 0}</td>
+        <td>${parseFloat(data.ctr || 0).toFixed(2)}%</td>
+        <td>R$ ${parseFloat(data.avg_cpc || 0).toFixed(2)}</td>
+        <td>${data.conversions || 0}</td>
     `;
 }
 
-/**
- * MOSTRAR ERRO
- */
-function showError(message) {
-    console.error('MIA Ads Integration Error:', message);
-    
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'alert alert-error';
-    errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #f44336; color: white; padding: 15px; border-radius: 5px; z-index: 9999;';
-    errorDiv.textContent = message;
-    document.body.appendChild(errorDiv);
-    
-    setTimeout(() => {
-        errorDiv.remove();
-    }, 5000);
-}
-
-/**
- * ATUALIZAR TODOS OS DADOS
- */
-async function refreshAllData() {
-    const refreshBtn = document.getElementById('refresh-btn');
-    if (refreshBtn) {
-        refreshBtn.disabled = true;
-        refreshBtn.textContent = 'Atualizando...';
+// ============================================
+// EXPORTAR PARA EXCEL
+// ============================================
+function exportToExcel() {
+    if (!dashboardState.rawData) {
+        alert('Nenhum dado para exportar. Carregue os dados primeiro.');
+        return;
     }
+    
+    console.log('📊 Exportando para Excel...');
     
     try {
-        await Promise.all([
-            loadLeadsSummary(),
-            loadLeadsByOrigin(),
-            loadMarketingInvestment(),
-            loadDailyConversions(),
-            loadKPIs()
-        ]);
-    } catch (error) {
-        console.error('Error refreshing data:', error);
-        showError('Failed to refresh data');
-    } finally {
-        if (refreshBtn) {
-            refreshBtn.disabled = false;
-            refreshBtn.textContent = '🔄 Refresh';
+        // Criar workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Dados de KPIs
+        const kpisWS = createKPIsWorksheet(dashboardState.rawData.kpisData);
+        XLSX.utils.book_append_sheet(wb, kpisWS, 'KPIs');
+        
+        // Dados de Leads
+        const leadsWS = createLeadsWorksheet(dashboardState.rawData.leadsData);
+        XLSX.utils.book_append_sheet(wb, leadsWS, 'Leads');
+        
+        // Salvar arquivo
+        const filename = `MIA_Leads_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, filename);
+        
+        console.log('✅ Excel exportado:', filename);
+        
+        // Feedback visual
+        const btn = document.getElementById('exportExcel');
+        if (btn) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '✅ Exportado!';
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+            }, 2000);
         }
+        
+    } catch (error) {
+        console.error('❌ Erro ao exportar:', error);
+        alert('Erro ao exportar para Excel. Verifique o console.');
     }
 }
 
-/**
- * INICIALIZAR
- */
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('MIA Ads Integration - Initializing...');
-    refreshAllData();
+function createKPIsWorksheet(data) {
+    const rows = [
+        ['Plataforma', 'Investimento', 'Impressões', 'Cliques', 'CTR', 'CPC Médio', 'Conversões']
+    ];
     
-    const refreshBtn = document.getElementById('refresh-btn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', refreshAllData);
+    if (data.google_ads) {
+        rows.push([
+            'Google Ads',
+            data.google_ads.total_cost,
+            data.google_ads.total_impressions,
+            data.google_ads.total_clicks,
+            data.google_ads.ctr,
+            data.google_ads.avg_cpc,
+            data.google_ads.conversions || 0
+        ]);
     }
     
-    setInterval(refreshAllData, 5 * 60 * 1000);
-    console.log('MIA Ads Integration - Ready!');
-});
+    if (data.facebook_ads) {
+        rows.push([
+            'Facebook Ads',
+            data.facebook_ads.total_cost,
+            data.facebook_ads.total_impressions,
+            data.facebook_ads.total_clicks,
+            data.facebook_ads.ctr,
+            data.facebook_ads.avg_cpc,
+            data.facebook_ads.conversions || 0
+        ]);
+    }
+    
+    return XLSX.utils.aoa_to_sheet(rows);
+}
 
-window.MIAAdsIntegration = {
-    refreshAllData,
-    loadLeadsSummary,
-    loadLeadsByOrigin,
-    loadMarketingInvestment,
-    loadDailyConversions,
-    loadKPIs
+function createLeadsWorksheet(data) {
+    const rows = [
+        ['Métrica', 'Valor']
+    ];
+    
+    rows.push(['Total de Leads', data.total_leads || 0]);
+    rows.push(['Custo Google Ads', data.google_ads_cost || 0]);
+    rows.push(['Custo Facebook Ads', data.facebook_ads_cost || 0]);
+    
+    // Leads por origem
+    if (data.by_origin) {
+        rows.push(['', '']);
+        rows.push(['Leads por Origem', '']);
+        Object.entries(data.by_origin).forEach(([origin, count]) => {
+            rows.push([origin, count]);
+        });
+    }
+    
+    return XLSX.utils.aoa_to_sheet(rows);
+}
+
+// ============================================
+// UTILITÁRIOS DE UI
+// ============================================
+function showLoadingState() {
+    document.body.classList.add('loading');
+}
+
+function hideLoadingState() {
+    document.body.classList.remove('loading');
+}
+
+function showErrorState(message) {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger';
+    alert.textContent = `Erro: ${message}`;
+    
+    const container = document.querySelector('.dashboard-container');
+    if (container) {
+        container.insertBefore(alert, container.firstChild);
+        
+        setTimeout(() => alert.remove(), 5000);
+    }
+}
+
+function updateLastRefreshTime() {
+    const element = document.getElementById('lastUpdate');
+    if (!element) return;
+    
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('pt-BR');
+    element.textContent = `Última atualização: ${timeStr}`;
+}
+
+// ============================================
+// EXPORT GLOBAL
+// ============================================
+window.MIADashboard = {
+    refresh: () => loadDashboardData(true),
+    export: exportToExcel,
+    getState: () => dashboardState
 };
+
+console.log('✅ MIA Leads Integration v2 carregado com sucesso!');
