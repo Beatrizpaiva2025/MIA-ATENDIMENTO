@@ -8,43 +8,49 @@ document.addEventListener('DOMContentLoaded', function() {
 function initEditButtons() {
     console.log('🎯 Inicializando botões Edit...');
     
-    const editButtons = document.querySelectorAll('button.btn-primary, button:contains("Edit"), [class*="edit"]');
+    // Buscar TODOS os botões e filtrar os que contêm "Edit"
+    const allButtons = document.querySelectorAll('button');
+    const editButtons = Array.from(allButtons).filter(btn => 
+        btn.textContent.trim().includes('Edit') || 
+        btn.classList.contains('btn-primary')
+    );
     
-    console.log(`📊 Encontrados ${editButtons.length} botões`);
+    console.log(`📊 Encontrados ${editButtons.length} botões Edit`);
     
     editButtons.forEach((btn) => {
         const btnText = btn.textContent.trim();
-        if (btnText.includes('Edit') || btn.classList.contains('btn-primary')) {
-            console.log(`🔘 Configurando botão: ${btnText}`);
+        console.log(`🔘 Configurando botão: ${btnText}`);
+        
+        // Clonar para remover event listeners antigos
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        
+        newBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             
-            const newBtn = btn.cloneNode(true);
-            btn.parentNode.replaceChild(newBtn, btn);
+            console.log('✏️ Botão Edit clicado!');
             
-            newBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                console.log('✏️ Botão Edit clicado!');
-                
-                const card = this.closest('[class*="card"], [class*="knowledge"], .border');
-                
-                if (!card) {
-                    console.error('❌ Card não encontrado');
-                    alert('Erro: Não foi possível localizar o item');
-                    return;
-                }
-                
-                const titleEl = card.querySelector('h3, h4, h5, strong, [class*="title"]');
-                const contentEl = card.querySelector('p, [class*="content"], [class*="text"]');
-                
-                const title = titleEl ? titleEl.textContent.trim() : '';
-                const content = contentEl ? contentEl.textContent.trim() : '';
-                
-                console.log('📝 Dados:', { title, content });
-                
-                openEditModal(title, content, card);
-            });
-        }
+            // Subir até encontrar o card/container pai
+            const card = this.closest('.border, [class*="card"], [class*="knowledge"], .bg-white, .rounded-lg');
+            
+            if (!card) {
+                console.error('❌ Card não encontrado');
+                alert('Erro: Não foi possível localizar o item');
+                return;
+            }
+            
+            // Buscar título e conteúdo com seletores mais específicos
+            const titleEl = card.querySelector('h3, h4, h5, strong, .font-semibold, .font-bold');
+            const contentEl = card.querySelector('p:not(:empty), .text-gray-600, .text-gray-500');
+            
+            const title = titleEl ? titleEl.textContent.trim() : '';
+            const content = contentEl ? contentEl.textContent.trim() : '';
+            
+            console.log('📝 Dados:', { title, content });
+            
+            openEditModal(title, content, card);
+        });
     });
     
     console.log('✅ Botões configurados!');
@@ -63,8 +69,12 @@ function openEditModal(title, content, cardElement) {
     document.getElementById('editTitle').value = title;
     document.getElementById('editContent').value = content;
     
-    modal.dataset.cardId = cardElement.id || '';
+    // Guardar referência ao card
+    modal._cardElement = cardElement;
     modal.style.display = 'flex';
+    
+    // Focar no primeiro input
+    setTimeout(() => document.getElementById('editTitle').focus(), 100);
     
     console.log('✅ Modal aberto');
 }
@@ -123,7 +133,7 @@ function createEditModal() {
             </div>
             
             <div style="display: flex; gap: 12px; justify-content: flex-end;">
-                <button onclick="closeEditModal()" style="
+                <button id="btnCancelEdit" style="
                     padding: 12px 24px;
                     background: #e2e8f0;
                     color: #334155;
@@ -133,7 +143,7 @@ function createEditModal() {
                     font-weight: 600;
                     cursor: pointer;
                 ">❌ Cancelar</button>
-                <button onclick="saveEdit()" style="
+                <button id="btnSaveEdit" style="
                     padding: 12px 24px;
                     background: #3b82f6;
                     color: white;
@@ -147,8 +157,20 @@ function createEditModal() {
         </div>
     `;
     
+    // Event listeners
     modal.addEventListener('click', function(e) {
         if (e.target === modal) closeEditModal();
+    });
+    
+    // Usar setTimeout para garantir que elementos existem
+    setTimeout(() => {
+        document.getElementById('btnCancelEdit').addEventListener('click', closeEditModal);
+        document.getElementById('btnSaveEdit').addEventListener('click', saveEdit);
+    }, 0);
+    
+    // Fechar com ESC
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeEditModal();
     });
     
     return modal;
@@ -156,7 +178,10 @@ function createEditModal() {
 
 function closeEditModal() {
     const modal = document.getElementById('editModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.style.display = 'none';
+        modal._cardElement = null;
+    }
 }
 
 function saveEdit() {
@@ -170,12 +195,20 @@ function saveEdit() {
     
     console.log('💾 Salvando:', { title, content });
     
+    // Desabilitar botão enquanto salva
+    const btnSave = document.getElementById('btnSaveEdit');
+    btnSave.disabled = true;
+    btnSave.textContent = '⏳ Salvando...';
+    
     fetch('/api/knowledge/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, content })
     })
-    .then(response => response.ok ? response.json() : Promise.reject(`HTTP ${response.status}`))
+    .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+    })
     .then(data => {
         console.log('✅ Salvo:', data);
         alert('✅ Salvo com sucesso!');
@@ -184,11 +217,17 @@ function saveEdit() {
     })
     .catch(error => {
         console.error('❌ Erro:', error);
-        alert('❌ Erro ao salvar: ' + error);
+        alert('❌ Erro ao salvar: ' + error.message);
+    })
+    .finally(() => {
+        btnSave.disabled = false;
+        btnSave.textContent = '✅ Salvar';
     });
 }
 
+// Expor funções globalmente (para compatibilidade)
 window.closeEditModal = closeEditModal;
 window.saveEdit = saveEdit;
+window.initEditButtons = initEditButtons;
 
 console.log('✅ Script carregado!');
