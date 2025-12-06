@@ -164,6 +164,64 @@
         line-height: 1.6;
         margin-top: 10px;
     }
+
+    .config-section {
+        margin-top: 20px;
+    }
+
+    .config-section h3 {
+        font-size: 1rem;
+        color: #1e3a5f;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .config-input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: border-color 0.3s;
+        margin-bottom: 8px;
+    }
+
+    .config-input:focus {
+        outline: none;
+        border-color: #5dade2;
+    }
+
+    .help-box {
+        background: #e3f2fd;
+        border-radius: 10px;
+        padding: 16px;
+        margin-top: 15px;
+        border-left: 4px solid #2196f3;
+    }
+
+    .help-box h4 {
+        color: #1565c0;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.95em;
+    }
+
+    .help-box p {
+        color: #1976d2;
+        font-size: 0.85em;
+        margin-bottom: 6px;
+    }
+
+    .help-box code {
+        background: rgba(0, 0, 0, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
 </style>
 {% endblock %}
 
@@ -240,6 +298,39 @@
     </div>
 </div>
 
+<!-- CONFIGURAÇÃO DO OPERADOR -->
+<div class="control-card" style="margin-top: 25px;">
+    <div class="control-header">
+        <span class="control-icon">📱</span>
+        <div class="control-title">Operator Configuration</div>
+    </div>
+
+    <div class="config-section">
+        <h3>🔔 Alerts Number (RECEIVES transfer summaries)</h3>
+        <input type="text" id="alerts-number" class="config-input" placeholder="18572081139" value="18572081139">
+        <p class="info-text">This number receives the conversation summary when a client requests human support</p>
+    </div>
+
+    <div class="config-section">
+        <h3>⌨️ Commands Number (SENDS * and + commands)</h3>
+        <input type="text" id="operator-number" class="config-input" placeholder="18573167770" value="18573167770">
+        <p class="info-text">This number can send commands to pause/resume AI for specific clients</p>
+    </div>
+
+    <button class="btn-action" onclick="saveOperator()" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); margin-top: 15px;">
+        💾 Save Both Numbers
+    </button>
+
+    <div class="help-box">
+        <h4>ℹ️ How It Works</h4>
+        <p><strong>1.</strong> Client asks to speak with a human</p>
+        <p><strong>2.</strong> Summary is sent to <code>Alerts Number</code></p>
+        <p><strong>3.</strong> From <code>Commands Number</code>, send:</p>
+        <p style="margin-left: 15px;"><code>*5511999999999</code> - Pause AI for this client</p>
+        <p style="margin-left: 15px;"><code>+5511999999999</code> - Resume AI for this client</p>
+    </div>
+</div>
+
 <!-- LOGS RECENTES -->
 <div class="control-card" style="margin-top: 25px;">
     <div class="control-header">
@@ -262,7 +353,8 @@
         carregarStatus();
         carregarStats();
         carregarLogs();
-        
+        carregarConfig();
+
         // Auto-refresh a cada 5 segundos
         setInterval(carregarStatus, 5000);
     };
@@ -364,6 +456,58 @@
 
     function exportarDados() {
         alert('💾 Export in development');
+    }
+
+    // Carregar configuração do operador
+    async function carregarConfig() {
+        try {
+            const response = await fetch('/admin/controle/api/config');
+            const data = await response.json();
+
+            if (data.config) {
+                // Número de comandos
+                if (data.config.operator_number) {
+                    document.getElementById('operator-number').value = data.config.operator_number;
+                }
+                // Número de alertas
+                if (data.config.alerts_number) {
+                    document.getElementById('alerts-number').value = data.config.alerts_number;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading config:', error);
+        }
+    }
+
+    // Salvar números do operador
+    async function saveOperator() {
+        const operatorNumber = document.getElementById('operator-number').value;
+        const alertsNumber = document.getElementById('alerts-number').value;
+
+        if (!operatorNumber && !alertsNumber) {
+            alert('Please enter at least one number');
+            return;
+        }
+
+        try {
+            const response = await fetch('/admin/controle/api/config/operator', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    operator_number: operatorNumber,
+                    alerts_number: alertsNumber
+                })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert('✅ Numbers saved successfully!');
+            } else {
+                alert('❌ Error saving: ' + (data.error || 'Unknown'));
+            }
+        } catch (error) {
+            alert('❌ Connection error');
+        }
     }
 </script>
 {% endblock %}
