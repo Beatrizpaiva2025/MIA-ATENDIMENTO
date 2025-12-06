@@ -157,19 +157,80 @@ async def api_get_logs():
     try:
         # Buscar últimas 20 conversas para simular logs
         conversas = await db.conversations.find().sort("created_at", -1).limit(20).to_list(20)
-        
+
         logs = []
         for conv in conversas:
             phone = conv.get("phone", "Unknown")
             created = conv.get("created_at", datetime.now())
             status = conv.get("human_mode", False)
-            
+
             if status:
                 logs.append(f"[{created.strftime('%H:%M:%S')}] 🔴 {phone} - Transferred to human")
             else:
                 logs.append(f"[{created.strftime('%H:%M:%S')}] 🟢 {phone} - AI responding")
-        
+
         return {"logs": logs}
     except Exception as e:
         logger.error(f"Erro ao buscar logs: {e}")
         return {"logs": ["Error loading logs"]}
+
+# ==================================================================
+# API ENDPOINTS - CONFIGURAÇÕES DO OPERADOR
+# ==================================================================
+
+@router.get("/api/config")
+async def api_get_config():
+    """Retorna configurações atuais do sistema (números do operador)"""
+    try:
+        config = {}
+
+        # Buscar configuração do operador
+        operator_config = await db.bot_config.find_one({"_id": "operator_config"})
+        if operator_config:
+            # Número que ENVIA comandos (* e +)
+            config["operator_number"] = operator_config.get("operator_number", "18573167770")
+            # Número que RECEBE alertas/resumos
+            config["alerts_number"] = operator_config.get("alerts_number", "18572081139")
+        else:
+            # Valores padrão
+            config["operator_number"] = "18573167770"  # +1(857)316-7770
+            config["alerts_number"] = "18572081139"    # +1(857)208-1139
+
+        return {"success": True, "config": config}
+    except Exception as e:
+        logger.error(f"Erro ao buscar configurações: {e}")
+        return {"success": False, "error": str(e)}
+
+@router.post("/api/config/operator")
+async def api_set_operator(request: Request):
+    """Define os números do operador (comandos) e alertas (resumos)"""
+    try:
+        data = await request.json()
+        # Número que ENVIA comandos (* e +)
+        operator_number = data.get("operator_number", "")
+        # Número que RECEBE alertas/resumos
+        alerts_number = data.get("alerts_number", "")
+
+        update_data = {"updated_at": datetime.now()}
+
+        if operator_number:
+            update_data["operator_number"] = operator_number
+        if alerts_number:
+            update_data["alerts_number"] = alerts_number
+
+        await db.bot_config.update_one(
+            {"_id": "operator_config"},
+            {"$set": update_data},
+            upsert=True
+        )
+
+        logger.info(f"Configuração atualizada - Comandos: {operator_number}, Alertas: {alerts_number}")
+        return {
+            "success": True,
+            "operator_number": operator_number,
+            "alerts_number": alerts_number
+        }
+
+    except Exception as e:
+        logger.error(f"Erro ao configurar operador: {e}")
+        return {"success": False, "error": str(e)}
