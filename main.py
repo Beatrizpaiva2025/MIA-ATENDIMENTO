@@ -113,31 +113,55 @@ async def set_bot_status(enabled: bool):
 # TRANSFERÊNCIA PARA ATENDENTE HUMANO
 # ============================================================
 
-# Número do atendente para notificações
-# Números do sistema
-ATENDENTE_PHONE = "5518573167770"  # Número oficial de atendimento (responde clientes)
-NOTIFICACAO_PHONE = "5518572081139"  # Número pessoal (recebe notificações)
+# Números PADRÃO do sistema (serão sobrescritos pelo banco de dados)
+DEFAULT_OPERATOR_NUMBER = "18573167770"  # +1(857)316-7770 - ENVIA comandos (* e +)
+DEFAULT_ALERTS_NUMBER = "18572081139"    # +1(857)208-1139 - RECEBE alertas/resumos
+
+async def get_operator_number():
+    """Retorna número que ENVIA comandos (* e +) para controlar atendimento"""
+    try:
+        config = await db.bot_config.find_one({"_id": "operator_config"})
+        if config and "operator_number" in config:
+            return config["operator_number"]
+    except Exception as e:
+        logger.error(f"Erro ao buscar número do operador: {e}")
+    # Número padrão para comandos
+    return DEFAULT_OPERATOR_NUMBER
+
+async def get_alerts_number():
+    """Retorna número que RECEBE alertas/resumos de transferência"""
+    try:
+        config = await db.bot_config.find_one({"_id": "operator_config"})
+        if config and "alerts_number" in config:
+            return config["alerts_number"]
+    except Exception as e:
+        logger.error(f"Erro ao buscar número de alertas: {e}")
+    # Número padrão para alertas
+    return DEFAULT_ALERTS_NUMBER
 
 async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
     """Envia notificação para atendente com resumo da conversa"""
     try:
+        # Buscar número de alertas do banco (ou usar padrão)
+        alerts_number = await get_alerts_number()
+
         # Buscar últimas 10 mensagens da conversa
         mensagens = await db.conversas.find(
             {"phone": phone}
         ).sort("timestamp", -1).limit(10).to_list(length=10)
-        
+
         # Inverter para ordem cronológica
         mensagens.reverse()
-        
+
         # Montar resumo
         resumo_linhas = []
         for msg in mensagens:
             role = "👤 Cliente" if msg.get("role") == "user" else "🤖 IA"
             texto = msg.get("message", "")[:100]
             resumo_linhas.append(f"{role}: {texto}")
-        
+
         resumo = "\n".join(resumo_linhas) if resumo_linhas else "Sem histórico"
-        
+
         # Montar mensagem de notificação
         mensagem_atendente = f"""🔔 *TRANSFERÊNCIA DE ATENDIMENTO*
 
@@ -148,14 +172,15 @@ async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
 {resumo}
 
 ---
-✅ Para assumir o atendimento, responda ao cliente diretamente.
-🤖 Cliente digitando *+* volta para IA automaticamente.
+📌 *Comandos (enviar do número de comandos):*
+• *{phone} - Pausar IA para este cliente
+• +{phone} - Retomar IA para este cliente
 """
-        
-        # Enviar notificação para número pessoal
-        await send_whatsapp_message(NOTIFICACAO_PHONE, mensagem_atendente)
-        logger.info(f"✅ Notificação enviada para atendente: {phone}")
-        
+
+        # Enviar notificação para número de ALERTAS
+        await send_whatsapp_message(alerts_number, mensagem_atendente)
+        logger.info(f"✅ Resumo enviado para alertas {alerts_number}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Erro ao notificar atendente: {e}")
@@ -918,28 +943,38 @@ async def webhook_whatsapp(request: Request):
         message_text = ""
         if "text" in data and "message" in data["text"]:
             message_text = data["text"]["message"].strip()
-        
-        # Comando: * (Transferir para humano)
-        if message_text == "*":
-            await transferir_para_humano(phone, "Cliente digitou *")
-            return {"status": "transferred_to_human"}
-        
-        # Comando: + (Voltar para IA) - APENAS ATENDENTE
-        if message_text == "+":
-            # Verificar se é o atendente
-            if phone == ATENDENTE_PHONE:
-                # Atendente pode devolver qualquer conversa para IA
-                # Mas precisa especificar o número: "+ 5516893094980"
-                await send_whatsapp_message(
-                    phone,
-                    "✅ Para devolver um cliente para IA, envie: + seguido do número do cliente\nExemplo: + 5516893094980"
-                )
-                return {"status": "command_help"}
-            else:
-                # Cliente comum não pode usar este comando
-                # Ignorar silenciosamente (não responder nada)
-                logger.info(f"⚠️ Cliente {phone} tentou usar comando + (negado)")
-                return {"status": "ignored"}
+
+        # Buscar número de comandos do banco
+        operator_number = await get_operator_number()
+
+        # Comando: *NUMERO (Pausar IA para cliente) - APENAS DO NÚMERO DE COMANDOS
+        if message_text.startswith("*") and len(message_text) > 1:
+            if phone == operator_number:
+                # Extrair número do cliente
+                cliente_phone = message_text[1:].strip()
+                if cliente_phone:
+                    await transferir_para_humano(cliente_phone, "Operador pausou IA")
+                    await send_whatsapp_message(phone, f"✅ IA pausada para {cliente_phone}")
+                    logger.info(f"🛑 Operador {phone} pausou IA para {cliente_phone}")
+                    return {"status": "ia_paused_for_client"}
+            # Se não for operador, ignorar
+            logger.info(f"⚠️ {phone} tentou comando * (não é operador)")
+
+        # Comando: +NUMERO (Retomar IA para cliente) - APENAS DO NÚMERO DE COMANDOS
+        if message_text.startswith("+") and len(message_text) > 1:
+            if phone == operator_number:
+                # Extrair número do cliente
+                cliente_phone = message_text[1:].strip()
+                if cliente_phone:
+                    await db.conversas.update_many(
+                        {"phone": cliente_phone},
+                        {"$set": {"mode": "ia", "enabled_at": datetime.now()}}
+                    )
+                    await send_whatsapp_message(phone, f"✅ IA retomada para {cliente_phone}")
+                    logger.info(f"✅ Operador {phone} retomou IA para {cliente_phone}")
+                    return {"status": "ia_resumed_for_client"}
+            # Se não for operador, ignorar
+            logger.info(f"⚠️ {phone} tentou comando + (não é operador)")
         
         # Comando: ## (Desligar IA para este usuário)
         if message_text == "##":
