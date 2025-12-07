@@ -222,6 +222,55 @@
         border-radius: 4px;
         font-weight: 600;
     }
+
+    .client-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        border-left: 4px solid #5dade2;
+    }
+
+    .client-card.human-mode {
+        border-left-color: #e74c3c;
+        background: #fff5f5;
+    }
+
+    .client-info {
+        flex: 1;
+    }
+
+    .client-phone {
+        font-weight: 600;
+        color: #1e3a5f;
+        font-size: 1.1em;
+    }
+
+    .client-details {
+        font-size: 0.85em;
+        color: #666;
+        margin-top: 4px;
+    }
+
+    .client-badge {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 600;
+    }
+
+    .badge-ia {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .badge-human {
+        background: #f8d7da;
+        color: #721c24;
+    }
 </style>
 {% endblock %}
 
@@ -280,6 +329,14 @@
                 <div class="stat-value" id="stat-conversas">0</div>
                 <div class="stat-label">Conversations</div>
             </div>
+            <div class="stat-box" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);">
+                <div class="stat-value" id="stat-transferencias">0</div>
+                <div class="stat-label">Transfers</div>
+            </div>
+            <div class="stat-box" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);">
+                <div class="stat-value" id="stat-conversoes">0</div>
+                <div class="stat-label">Conversions</div>
+            </div>
         </div>
 
         <button class="btn-action" onclick="atualizarStats()">🔄 Update</button>
@@ -325,10 +382,25 @@
         <h4>ℹ️ How It Works</h4>
         <p><strong>1.</strong> Client asks to speak with a human</p>
         <p><strong>2.</strong> Summary is sent to <code>Alerts Number</code></p>
-        <p><strong>3.</strong> From <code>Commands Number</code>, send:</p>
-        <p style="margin-left: 15px;"><code>*5511999999999</code> - Pause AI for this client</p>
-        <p style="margin-left: 15px;"><code>+5511999999999</code> - Resume AI for this client</p>
+        <p><strong>3.</strong> Open the client's conversation and send:</p>
+        <p style="margin-left: 15px;"><code>*</code> - Pause AI for this client (in their chat)</p>
+        <p style="margin-left: 15px;"><code>+</code> - Resume AI for this client (in their chat)</p>
+        <p style="margin-top: 10px; color: #1565c0;"><strong>Note:</strong> The client does NOT see these commands!</p>
     </div>
+</div>
+
+<!-- CLIENTES ATIVOS -->
+<div class="control-card" style="margin-top: 25px;">
+    <div class="control-header">
+        <span class="control-icon">👥</span>
+        <div class="control-title">Active Clients Today</div>
+    </div>
+
+    <div id="clientes-container" style="max-height: 300px; overflow-y: auto;">
+        <div style="color: #666;">Loading clients...</div>
+    </div>
+
+    <button class="btn-action" onclick="carregarClientes()">🔄 Update Clients</button>
 </div>
 
 <!-- LOGS RECENTES -->
@@ -354,9 +426,11 @@
         carregarStats();
         carregarLogs();
         carregarConfig();
+        carregarClientes();
 
         // Auto-refresh a cada 5 segundos
         setInterval(carregarStatus, 5000);
+        setInterval(carregarClientes, 10000);
     };
 
     async function carregarStatus() {
@@ -411,9 +485,11 @@
         try {
             const response = await fetch('/admin/controle/api/stats');
             const data = await response.json();
-            
+
             document.getElementById('stat-mensagens').textContent = data.mensagens || 0;
             document.getElementById('stat-conversas').textContent = data.conversas || 0;
+            document.getElementById('stat-transferencias').textContent = data.transferencias || 0;
+            document.getElementById('stat-conversoes').textContent = data.conversoes || 0;
         } catch (error) {
             console.error('Error loading stats:', error);
         }
@@ -421,6 +497,40 @@
 
     function atualizarStats() {
         carregarStats();
+    }
+
+    async function carregarClientes() {
+        try {
+            const response = await fetch('/admin/controle/api/clientes-ativos');
+            const data = await response.json();
+
+            const container = document.getElementById('clientes-container');
+            if (data.clientes && data.clientes.length > 0) {
+                container.innerHTML = data.clientes.map(cliente => {
+                    const isHuman = cliente.modo === 'human';
+                    const badgeClass = isHuman ? 'badge-human' : 'badge-ia';
+                    const badgeText = isHuman ? '🔴 HUMAN' : '🤖 IA';
+                    const cardClass = isHuman ? 'client-card human-mode' : 'client-card';
+
+                    return `
+                        <div class="${cardClass}">
+                            <div class="client-info">
+                                <div class="client-phone">📱 ${cliente.phone}</div>
+                                <div class="client-details">
+                                    Last: ${cliente.ultima_msg} | ${cliente.total_msgs} messages
+                                </div>
+                            </div>
+                            <span class="client-badge ${badgeClass}">${badgeText}</span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                container.innerHTML = '<div style="color: #999; text-align: center; padding: 20px;">No active clients today</div>';
+            }
+        } catch (error) {
+            document.getElementById('clientes-container').innerHTML =
+                '<div style="color: #e74c3c;">Error loading clients</div>';
+        }
     }
 
     async function carregarLogs() {
