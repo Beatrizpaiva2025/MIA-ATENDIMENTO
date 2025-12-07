@@ -131,48 +131,123 @@ async def api_toggle_manutencao(request: Request):
 
 @router.get("/api/stats")
 async def api_get_stats():
-    """Retorna estatísticas do dia"""
+    """Retorna estatísticas do dia com dados reais"""
     try:
         # Buscar conversas de hoje
         hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        
-        conversas_hoje = await db.conversations.count_documents({
-            "created_at": {"$gte": hoje}
+
+        # Contar mensagens de hoje
+        mensagens_hoje = await db.conversas.count_documents({
+            "timestamp": {"$gte": hoje}
         })
-        
-        # Contar mensagens de hoje (aproximado pelo número de conversas * 5)
-        mensagens_hoje = conversas_hoje * 5
-        
+
+        # Contar clientes únicos de hoje
+        clientes_hoje = await db.conversas.distinct("phone", {
+            "timestamp": {"$gte": hoje}
+        })
+
+        # Contar transferências para humano hoje
+        transferencias_hoje = await db.conversas.count_documents({
+            "timestamp": {"$gte": hoje},
+            "mode": "human"
+        })
+
+        # Contar conversões (pagamentos) hoje
+        conversoes_hoje = await db.conversoes.count_documents({
+            "timestamp": {"$gte": hoje}
+        })
+
         return {
             "mensagens": mensagens_hoje,
-            "conversas": conversas_hoje
+            "conversas": len(clientes_hoje),
+            "transferencias": transferencias_hoje,
+            "conversoes": conversoes_hoje
         }
     except Exception as e:
         logger.error(f"Erro ao buscar estatísticas: {e}")
-        return {"mensagens": 0, "conversas": 0}
+        return {"mensagens": 0, "conversas": 0, "transferencias": 0, "conversoes": 0}
 
 @router.get("/api/logs")
 async def api_get_logs():
-    """Retorna logs recentes do sistema"""
+    """Retorna logs recentes com números de telefone reais"""
     try:
-        # Buscar últimas 20 conversas para simular logs
-        conversas = await db.conversations.find().sort("created_at", -1).limit(20).to_list(20)
+        # Buscar últimas 30 mensagens
+        mensagens = await db.conversas.find().sort("timestamp", -1).limit(30).to_list(30)
 
         logs = []
-        for conv in conversas:
-            phone = conv.get("phone", "Unknown")
-            created = conv.get("created_at", datetime.now())
-            status = conv.get("human_mode", False)
+        for msg in mensagens:
+            phone = msg.get("phone", "Desconhecido")
+            timestamp = msg.get("timestamp", datetime.now())
+            role = msg.get("role", "user")
+            mode = msg.get("mode", "ia")
+            message = msg.get("message", "")[:50]  # Primeiros 50 caracteres
+            msg_type = msg.get("type", "text")
 
-            if status:
-                logs.append(f"[{created.strftime('%H:%M:%S')}] 🔴 {phone} - Transferred to human")
+            # Formatar timestamp
+            time_str = timestamp.strftime('%H:%M:%S') if hasattr(timestamp, 'strftime') else str(timestamp)[:8]
+
+            # Ícone baseado no tipo/status
+            if mode == "human":
+                icon = "🔴"
+                status = "HUMANO"
+            elif role == "assistant":
+                icon = "🤖"
+                status = "IA"
             else:
-                logs.append(f"[{created.strftime('%H:%M:%S')}] 🟢 {phone} - AI responding")
+                icon = "👤"
+                status = "Cliente"
+
+            # Tipo de mensagem
+            type_icon = ""
+            if msg_type == "image":
+                type_icon = "📷"
+            elif msg_type == "audio":
+                type_icon = "🎤"
+            elif msg_type == "document":
+                type_icon = "📄"
+
+            log_entry = f"[{time_str}] {icon} {phone} ({status}) {type_icon}: {message}..."
+            logs.append(log_entry)
 
         return {"logs": logs}
     except Exception as e:
         logger.error(f"Erro ao buscar logs: {e}")
-        return {"logs": ["Error loading logs"]}
+        return {"logs": [f"Erro ao carregar logs: {str(e)}"]}
+
+@router.get("/api/clientes-ativos")
+async def api_get_clientes_ativos():
+    """Retorna lista de clientes ativos hoje com status"""
+    try:
+        hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Buscar todos os clientes únicos de hoje
+        pipeline = [
+            {"$match": {"timestamp": {"$gte": hoje}}},
+            {"$group": {
+                "_id": "$phone",
+                "ultima_msg": {"$max": "$timestamp"},
+                "total_msgs": {"$sum": 1},
+                "modo": {"$last": "$mode"}
+            }},
+            {"$sort": {"ultima_msg": -1}},
+            {"$limit": 20}
+        ]
+
+        clientes = await db.conversas.aggregate(pipeline).to_list(20)
+
+        result = []
+        for c in clientes:
+            result.append({
+                "phone": c["_id"],
+                "ultima_msg": c["ultima_msg"].strftime('%H:%M') if hasattr(c["ultima_msg"], 'strftime') else str(c["ultima_msg"]),
+                "total_msgs": c["total_msgs"],
+                "modo": c.get("modo", "ia")
+            })
+
+        return {"clientes": result}
+    except Exception as e:
+        logger.error(f"Erro ao buscar clientes ativos: {e}")
+        return {"clientes": []}
 
 # ==================================================================
 # API ENDPOINTS - CONFIGURAÇÕES DO OPERADOR
@@ -200,6 +275,46 @@ async def api_get_config():
     except Exception as e:
         logger.error(f"Erro ao buscar configurações: {e}")
         return {"success": False, "error": str(e)}
+
+@router.post("/api/reset-mode/{phone}")
+async def api_reset_mode(phone: str):
+    """EMERGENCIA: Reseta modo de conversa para IA"""
+    try:
+        result = await db.conversas.update_many(
+            {"phone": phone},
+            {"$set": {"mode": "ia"}, "$unset": {"transferred_at": "", "transfer_reason": ""}}
+        )
+        logger.info(f"[EMERGENCIA] Modo resetado para IA - Cliente {phone} ({result.modified_count} docs)")
+        return {
+            "success": True,
+            "phone": phone,
+            "modified": result.modified_count,
+            "message": f"Modo resetado para IA para cliente {phone}"
+        }
+    except Exception as e:
+        logger.error(f"Erro ao resetar modo: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/api/reset-mode/{phone}")
+async def api_reset_mode_get(phone: str):
+    """EMERGENCIA: Reseta modo via GET (mais facil de testar no browser)"""
+    try:
+        result = await db.conversas.update_many(
+            {"phone": phone},
+            {"$set": {"mode": "ia"}, "$unset": {"transferred_at": "", "transfer_reason": ""}}
+        )
+        logger.info(f"[EMERGENCIA] Modo resetado para IA - Cliente {phone} ({result.modified_count} docs)")
+        return {
+            "success": True,
+            "phone": phone,
+            "modified": result.modified_count,
+            "message": f"Modo resetado para IA para cliente {phone}"
+        }
+    except Exception as e:
+        logger.error(f"Erro ao resetar modo: {e}")
+        return {"success": False, "error": str(e)}
+
 
 @router.post("/api/config/operator")
 async def api_set_operator(request: Request):
