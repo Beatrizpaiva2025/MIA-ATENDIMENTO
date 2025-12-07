@@ -113,9 +113,8 @@ async def set_bot_status(enabled: bool):
 # TRANSFERENCIA PARA ATENDENTE HUMANO
 # ============================================================
 # Numeros do sistema
-ATENDENTE_PHONE = "5518573167770"  # Numero oficial de atendimento (responde clientes)
-NOTIFICACAO_PHONE = "5518572081139"  # Numero pessoal (recebe notificacoes)
-
+ATENDENTE_PHONE = "18573167770"  # Numero oficial de atendimento EUA (responde clientes)
+NOTIFICACAO_PHONE = "18572081139"  # Numero pessoal EUA (recebe notificacoes)
 
 async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
     """Envia notificacao para atendente com resumo da conversa"""
