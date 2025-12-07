@@ -1,10 +1,8 @@
 {% extends "admin_base.html" %}
 
-{% block title %}Conversoes e Relatorios - MIA Admin{% endblock %}
+{% block title %}Conversions & Reports - MIA Admin{% endblock %}
 
 {% block extra_style %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
     .dashboard-header {
         display: flex;
         justify-content: space-between;
@@ -197,9 +195,9 @@
     .badge-ia { background: #e8daef; color: #6c3483; }
     .badge-humano { background: #fdebd0; color: #b9770e; }
 
-    .prioridade-alta { background: #f8d7da; color: #721c24; }
-    .prioridade-media { background: #fff3cd; color: #856404; }
-    .prioridade-baixa { background: #d4edda; color: #155724; }
+    .prioridade-high { background: #f8d7da; color: #721c24; }
+    .prioridade-medium { background: #fff3cd; color: #856404; }
+    .prioridade-low { background: #d4edda; color: #155724; }
 
     .btn-action {
         padding: 6px 12px;
@@ -326,99 +324,98 @@
             grid-template-columns: 1fr;
         }
     }
-</style>
 {% endblock %}
 
 {% block content %}
 <div class="dashboard-header">
     <div>
-        <h1>Conversoes e Relatorios</h1>
-        <p>Acompanhe vendas, leads e melhore sua conversao</p>
+        <h1>Conversions & Reports</h1>
+        <p>Track sales, leads and improve your conversion rate</p>
     </div>
     <div class="periodo-selector">
-        <span style="font-weight: 600; color: #7f8c8d;">Periodo:</span>
-        <button class="periodo-btn" data-periodo="7" onclick="setPeriodo(7)">7 dias</button>
-        <button class="periodo-btn active" data-periodo="15" onclick="setPeriodo(15)">15 dias</button>
-        <button class="periodo-btn" data-periodo="30" onclick="setPeriodo(30)">30 dias</button>
+        <span style="font-weight: 600; color: #7f8c8d;">Period:</span>
+        <button class="periodo-btn" data-periodo="7" onclick="setPeriodo(7)">7 days</button>
+        <button class="periodo-btn active" data-periodo="15" onclick="setPeriodo(15)">15 days</button>
+        <button class="periodo-btn" data-periodo="30" onclick="setPeriodo(30)">30 days</button>
     </div>
 </div>
 
 <div class="resumo-grid">
     <div class="resumo-card destaque">
-        <div class="resumo-label">Faturamento do Periodo</div>
+        <div class="resumo-label">Period Revenue</div>
         <div class="resumo-valor" id="valor-total">$0</div>
-        <div class="resumo-sub" id="conversoes-total">0 conversoes</div>
+        <div class="resumo-sub" id="conversoes-total">0 conversions</div>
     </div>
     <div class="resumo-card">
-        <div class="resumo-label">Taxa de Conversao</div>
+        <div class="resumo-label">Conversion Rate</div>
         <div class="resumo-valor" id="taxa-conversao">0%</div>
-        <div class="resumo-sub">clientes para vendas</div>
+        <div class="resumo-sub">clients to sales</div>
     </div>
     <div class="resumo-card">
-        <div class="resumo-label">Clientes Atendidos</div>
+        <div class="resumo-label">Clients Served</div>
         <div class="resumo-valor" id="clientes-unicos">0</div>
-        <div class="resumo-sub" id="total-msgs">0 mensagens</div>
+        <div class="resumo-sub" id="total-msgs">0 messages</div>
     </div>
     <div class="resumo-card">
-        <div class="resumo-label">Leads para Follow-up</div>
+        <div class="resumo-label">Leads for Follow-up</div>
         <div class="resumo-valor" id="leads-followup">0</div>
-        <div class="resumo-sub">nao converteram</div>
+        <div class="resumo-sub">did not convert</div>
     </div>
 </div>
 
 <div class="stats-grid">
     <div class="stat-card conversoes">
-        <div class="stat-label">Conversoes</div>
+        <div class="stat-label">Conversions</div>
         <div class="stat-value" id="stat-conversoes">0</div>
     </div>
     <div class="stat-card clientes">
-        <div class="stat-label">Clientes</div>
+        <div class="stat-label">Clients</div>
         <div class="stat-value" id="stat-clientes">0</div>
     </div>
     <div class="stat-card ia">
-        <div class="stat-label">Atend. IA</div>
+        <div class="stat-label">AI Support</div>
         <div class="stat-value" id="stat-ia">0</div>
     </div>
     <div class="stat-card humano">
-        <div class="stat-label">Atend. Humano</div>
+        <div class="stat-label">Human Support</div>
         <div class="stat-value" id="stat-humano">0</div>
     </div>
     <div class="stat-card taxa">
-        <div class="stat-label">Taxa Conv.</div>
+        <div class="stat-label">Conv. Rate</div>
         <div class="stat-value" id="stat-taxa">0%</div>
     </div>
 </div>
 
 <div class="charts-grid">
     <div class="chart-card">
-        <div class="chart-title">Conversoes por Dia</div>
+        <div class="chart-title">Conversions per Day</div>
         <canvas id="chartConversoes"></canvas>
     </div>
     <div class="chart-card">
-        <div class="chart-title">IA vs Humano (Atendimentos)</div>
+        <div class="chart-title">AI vs Human (Support)</div>
         <canvas id="chartAtendimentos"></canvas>
     </div>
 </div>
 
 <div class="section-card">
     <div class="section-header">
-        <div class="section-title">Conversoes Recentes</div>
-        <button class="btn-registrar" onclick="abrirModalConversao()">+ Registrar Conversao</button>
+        <div class="section-title">Recent Conversions</div>
+        <button class="btn-registrar" onclick="abrirModalConversao()">+ Add Conversion</button>
     </div>
     <div class="table-container">
-        <table class="data-table" id="tabela-conversoes">
+        <table class="data-table">
             <thead>
                 <tr>
-                    <th>Cliente</th>
-                    <th>Valor</th>
-                    <th>Data</th>
-                    <th>Tempo Atend.</th>
-                    <th>Tipo</th>
-                    <th>Deteccao</th>
+                    <th>Client</th>
+                    <th>Value</th>
+                    <th>Date</th>
+                    <th>Support Time</th>
+                    <th>Type</th>
+                    <th>Detection</th>
                 </tr>
             </thead>
             <tbody id="conversoes-body">
-                <tr><td colspan="6" class="empty-state">Carregando...</td></tr>
+                <tr><td colspan="6" class="empty-state">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -426,23 +423,23 @@
 
 <div class="section-card">
     <div class="section-header">
-        <div class="section-title">Leads para Follow-up (Nao Converteram)</div>
+        <div class="section-title">Leads for Follow-up</div>
     </div>
     <div class="table-container">
-        <table class="data-table" id="tabela-leads">
+        <table class="data-table">
             <thead>
                 <tr>
-                    <th>Cliente</th>
-                    <th>Ultima Msg</th>
-                    <th>Msgs</th>
-                    <th>Dias s/ Contato</th>
-                    <th>Pediu Orcamento</th>
-                    <th>Prioridade</th>
-                    <th>Acao</th>
+                    <th>Client</th>
+                    <th>Last Message</th>
+                    <th>Messages</th>
+                    <th>Days Inactive</th>
+                    <th>Asked Quote</th>
+                    <th>Priority</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody id="leads-body">
-                <tr><td colspan="7" class="empty-state">Carregando...</td></tr>
+                <tr><td colspan="7" class="empty-state">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -450,32 +447,33 @@
 
 <div class="modal-overlay" id="modal-conversao">
     <div class="modal-content">
-        <div class="modal-header">Registrar Nova Conversao</div>
+        <div class="modal-header">Add New Conversion</div>
         <div class="form-group">
-            <label class="form-label">Telefone do Cliente</label>
+            <label class="form-label">Client Phone</label>
             <input type="text" class="form-input" id="conv-phone" placeholder="18572081139">
         </div>
         <div class="form-group">
-            <label class="form-label">Valor ($)</label>
+            <label class="form-label">Value ($)</label>
             <input type="number" class="form-input" id="conv-valor" placeholder="150.00" step="0.01">
         </div>
         <div class="form-group">
-            <label class="form-label">Observacao</label>
-            <input type="text" class="form-input" id="conv-obs" placeholder="Traducao de certidao">
+            <label class="form-label">Notes</label>
+            <input type="text" class="form-input" id="conv-obs" placeholder="Certificate translation">
         </div>
         <div class="modal-buttons">
-            <button class="btn-cancel" onclick="fecharModal()">Cancelar</button>
-            <button class="btn-confirm" onclick="registrarConversao()">Registrar</button>
+            <button class="btn-cancel" onclick="fecharModal()">Cancel</button>
+            <button class="btn-confirm" onclick="registrarConversao()">Save</button>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    let periodo = 15;
-    let chartConversoes = null;
-    let chartAtendimentos = null;
+    var periodo = 15;
+    var chartConversoes = null;
+    var chartAtendimentos = null;
 
     window.onload = function() {
         carregarDados();
@@ -483,174 +481,142 @@
 
     function setPeriodo(dias) {
         periodo = dias;
-        document.querySelectorAll('.periodo-btn').forEach(btn => {
+        document.querySelectorAll('.periodo-btn').forEach(function(btn) {
             btn.classList.remove('active');
             if (btn.dataset.periodo == dias) btn.classList.add('active');
         });
         carregarDados();
     }
 
-    async function carregarDados() {
-        await Promise.all([
-            carregarStats(),
-            carregarCharts(),
-            carregarConversoes(),
-            carregarLeads()
-        ]);
+    function carregarDados() {
+        carregarStats();
+        carregarCharts();
+        carregarConversoes();
+        carregarLeads();
     }
 
-    async function carregarStats() {
-        try {
-            const response = await fetch('/admin/conversas/api/stats?periodo=' + periodo);
-            const data = await response.json();
-
-            document.getElementById('valor-total').textContent = '$' + (data.valor_total || 0).toLocaleString();
-            document.getElementById('conversoes-total').textContent = (data.conversoes || 0) + ' conversoes';
-            document.getElementById('taxa-conversao').textContent = (data.taxa_conversao || 0) + '%';
-            document.getElementById('clientes-unicos').textContent = data.clientes_unicos || 0;
-            document.getElementById('total-msgs').textContent = (data.total_conversas || 0) + ' mensagens';
-
-            document.getElementById('stat-conversoes').textContent = data.conversoes || 0;
-            document.getElementById('stat-clientes').textContent = data.clientes_unicos || 0;
-            document.getElementById('stat-ia').textContent = data.atendimentos_ia || 0;
-            document.getElementById('stat-humano').textContent = data.atendimentos_humano || 0;
-            document.getElementById('stat-taxa').textContent = (data.taxa_conversao || 0) + '%';
-        } catch (error) {
-            console.error('Erro ao carregar stats:', error);
-        }
-    }
-
-    async function carregarCharts() {
-        try {
-            const response = await fetch('/admin/conversas/api/chart-data?periodo=' + periodo);
-            const data = await response.json();
-
-            var labels = data.labels.map(function(d) {
-                var date = new Date(d);
-                return date.getDate() + '/' + (date.getMonth()+1);
+    function carregarStats() {
+        fetch('/admin/conversas/api/stats?periodo=' + periodo)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                document.getElementById('valor-total').textContent = '$' + (data.valor_total || 0);
+                document.getElementById('conversoes-total').textContent = (data.conversoes || 0) + ' conversions';
+                document.getElementById('taxa-conversao').textContent = (data.taxa_conversao || 0) + '%';
+                document.getElementById('clientes-unicos').textContent = data.clientes_unicos || 0;
+                document.getElementById('total-msgs').textContent = (data.total_conversas || 0) + ' messages';
+                document.getElementById('stat-conversoes').textContent = data.conversoes || 0;
+                document.getElementById('stat-clientes').textContent = data.clientes_unicos || 0;
+                document.getElementById('stat-ia').textContent = data.atendimentos_ia || 0;
+                document.getElementById('stat-humano').textContent = data.atendimentos_humano || 0;
+                document.getElementById('stat-taxa').textContent = (data.taxa_conversao || 0) + '%';
             });
+    }
 
-            var ctxConv = document.getElementById('chartConversoes').getContext('2d');
-            if (chartConversoes) chartConversoes.destroy();
-            chartConversoes = new Chart(ctxConv, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Conversoes',
-                        data: data.conversoes,
-                        backgroundColor: 'rgba(39, 174, 96, 0.8)',
-                        borderColor: 'rgba(39, 174, 96, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: false }
+    function carregarCharts() {
+        fetch('/admin/conversas/api/chart-data?periodo=' + periodo)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var labels = data.labels.map(function(d) {
+                    var date = new Date(d);
+                    return (date.getMonth()+1) + '/' + date.getDate();
+                });
+
+                var ctxConv = document.getElementById('chartConversoes').getContext('2d');
+                if (chartConversoes) chartConversoes.destroy();
+                chartConversoes = new Chart(ctxConv, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Conversions',
+                            data: data.conversoes,
+                            backgroundColor: 'rgba(39, 174, 96, 0.8)'
+                        }]
                     },
-                    scales: {
-                        y: { beginAtZero: true }
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true } }
                     }
-                }
-            });
+                });
 
-            var ctxAtend = document.getElementById('chartAtendimentos').getContext('2d');
-            if (chartAtendimentos) chartAtendimentos.destroy();
-            chartAtendimentos = new Chart(ctxAtend, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'IA',
-                        data: data.atendimentos_ia,
-                        borderColor: 'rgba(155, 89, 182, 1)',
-                        backgroundColor: 'rgba(155, 89, 182, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }, {
-                        label: 'Humano',
-                        data: data.atendimentos_humano,
-                        borderColor: 'rgba(243, 156, 18, 1)',
-                        backgroundColor: 'rgba(243, 156, 18, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: { beginAtZero: true }
+                var ctxAtend = document.getElementById('chartAtendimentos').getContext('2d');
+                if (chartAtendimentos) chartAtendimentos.destroy();
+                chartAtendimentos = new Chart(ctxAtend, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'AI',
+                            data: data.atendimentos_ia,
+                            borderColor: 'rgba(155, 89, 182, 1)',
+                            backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                            fill: true
+                        }, {
+                            label: 'Human',
+                            data: data.atendimentos_humano,
+                            borderColor: 'rgba(243, 156, 18, 1)',
+                            backgroundColor: 'rgba(243, 156, 18, 0.1)',
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: { y: { beginAtZero: true } }
                     }
-                }
+                });
             });
-        } catch (error) {
-            console.error('Erro ao carregar charts:', error);
-        }
     }
 
-    async function carregarConversoes() {
-        try {
-            const response = await fetch('/admin/conversas/api/conversoes?periodo=' + periodo);
-            const data = await response.json();
-
-            const tbody = document.getElementById('conversoes-body');
-
-            if (!data.conversoes || data.conversoes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma conversao no periodo</td></tr>';
-                return;
-            }
-
-            var html = '';
-            data.conversoes.forEach(function(c) {
-                var badgeClass = c.tipo_atendimento === 'IA' ? 'badge-ia' : 'badge-humano';
-                html += '<tr>';
-                html += '<td><strong>' + c.phone + '</strong></td>';
-                html += '<td><span style="color: #27ae60; font-weight: bold;">$' + c.valor.toLocaleString() + '</span></td>';
-                html += '<td>' + c.timestamp + '</td>';
-                html += '<td>' + c.tempo_atendimento + '</td>';
-                html += '<td><span class="badge ' + badgeClass + '">' + c.tipo_atendimento + '</span></td>';
-                html += '<td><span class="badge badge-info">' + c.metodo + '</span></td>';
-                html += '</tr>';
+    function carregarConversoes() {
+        fetch('/admin/conversas/api/conversoes?periodo=' + periodo)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var tbody = document.getElementById('conversoes-body');
+                if (!data.conversoes || data.conversoes.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No conversions in this period</td></tr>';
+                    return;
+                }
+                var html = '';
+                data.conversoes.forEach(function(c) {
+                    html += '<tr>';
+                    html += '<td><strong>' + c.phone + '</strong></td>';
+                    html += '<td style="color:#27ae60;font-weight:bold;">$' + c.valor + '</td>';
+                    html += '<td>' + c.timestamp + '</td>';
+                    html += '<td>' + c.tempo_atendimento + '</td>';
+                    html += '<td><span class="badge badge-ia">' + c.tipo_atendimento + '</span></td>';
+                    html += '<td><span class="badge badge-info">' + c.metodo + '</span></td>';
+                    html += '</tr>';
+                });
+                tbody.innerHTML = html;
             });
-            tbody.innerHTML = html;
-        } catch (error) {
-            console.error('Erro ao carregar conversoes:', error);
-        }
     }
 
-    async function carregarLeads() {
-        try {
-            const response = await fetch('/admin/conversas/api/leads-followup?periodo=' + periodo);
-            const data = await response.json();
-
-            document.getElementById('leads-followup').textContent = data.total || 0;
-
-            const tbody = document.getElementById('leads-body');
-
-            if (!data.leads || data.leads.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum lead pendente</td></tr>';
-                return;
-            }
-
-            var html = '';
-            data.leads.forEach(function(l) {
-                var orcBadge = l.pediu_orcamento === 'Sim' ? 'badge-success' : 'badge-warning';
-                var priClass = 'prioridade-' + l.prioridade.toLowerCase();
-                html += '<tr>';
-                html += '<td><strong>' + l.phone + '</strong><br><small style="color: #7f8c8d;">' + l.preview + '...</small></td>';
-                html += '<td>' + l.ultima_msg + '</td>';
-                html += '<td>' + l.total_msgs + '</td>';
-                html += '<td>' + l.dias_sem_contato + ' dias</td>';
-                html += '<td><span class="badge ' + orcBadge + '">' + l.pediu_orcamento + '</span></td>';
-                html += '<td><span class="badge ' + priClass + '">' + l.prioridade + '</span></td>';
-                html += '<td><button class="btn-action btn-whatsapp" onclick="abrirWhatsApp(\'' + l.phone + '\')">Contatar</button></td>';
-                html += '</tr>';
+    function carregarLeads() {
+        fetch('/admin/conversas/api/leads-followup?periodo=' + periodo)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                document.getElementById('leads-followup').textContent = data.total || 0;
+                var tbody = document.getElementById('leads-body');
+                if (!data.leads || data.leads.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No pending leads</td></tr>';
+                    return;
+                }
+                var html = '';
+                data.leads.forEach(function(l) {
+                    var priClass = 'prioridade-' + l.prioridade.toLowerCase();
+                    html += '<tr>';
+                    html += '<td><strong>' + l.phone + '</strong></td>';
+                    html += '<td>' + l.ultima_msg + '</td>';
+                    html += '<td>' + l.total_msgs + '</td>';
+                    html += '<td>' + l.dias_sem_contato + ' days</td>';
+                    html += '<td>' + l.pediu_orcamento + '</td>';
+                    html += '<td><span class="badge ' + priClass + '">' + l.prioridade + '</span></td>';
+                    html += '<td><button class="btn-action btn-whatsapp" onclick="abrirWhatsApp(\'' + l.phone + '\')">Contact</button></td>';
+                    html += '</tr>';
+                });
+                tbody.innerHTML = html;
             });
-            tbody.innerHTML = html;
-        } catch (error) {
-            console.error('Erro ao carregar leads:', error);
-        }
     }
 
     function abrirWhatsApp(phone) {
@@ -665,34 +631,29 @@
         document.getElementById('modal-conversao').style.display = 'none';
     }
 
-    async function registrarConversao() {
+    function registrarConversao() {
         var phone = document.getElementById('conv-phone').value;
         var valor = document.getElementById('conv-valor').value;
         var obs = document.getElementById('conv-obs').value;
-
         if (!phone || !valor) {
-            alert('Preencha telefone e valor');
+            alert('Please fill in phone and value');
             return;
         }
-
-        try {
-            const response = await fetch('/admin/conversas/api/registrar-conversao', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: phone, valor: valor, observacao: obs })
-            });
-            const data = await response.json();
-
+        fetch('/admin/conversas/api/registrar-conversao', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: phone, valor: valor, observacao: obs })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
             if (data.success) {
-                alert('Conversao registrada com sucesso!');
+                alert('Conversion saved!');
                 fecharModal();
                 carregarDados();
             } else {
-                alert('Erro: ' + data.error);
+                alert('Error: ' + data.error);
             }
-        } catch (error) {
-            alert('Erro ao registrar conversao');
-        }
+        });
     }
 </script>
 {% endblock %}
