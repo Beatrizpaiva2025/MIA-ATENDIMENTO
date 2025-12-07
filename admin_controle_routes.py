@@ -300,20 +300,52 @@ async def api_reset_mode(phone: str):
 async def api_reset_mode_get(phone: str):
     """EMERGENCIA: Reseta modo via GET (mais facil de testar no browser)"""
     try:
-        result = await db.conversas.update_many(
-            {"phone": phone},
-            {"$set": {"mode": "ia"}, "$unset": {"transferred_at": "", "transfer_reason": ""}}
-        )
-        logger.info(f"[EMERGENCIA] Modo resetado para IA - Cliente {phone} ({result.modified_count} docs)")
+        # Tentar com o numero exato E com variacoes
+        phones_to_try = [phone, f"55{phone}", phone.replace("55", ""), phone[-10:]]
+
+        total_modified = 0
+        for p in phones_to_try:
+            result = await db.conversas.update_many(
+                {"phone": p},
+                {"$set": {"mode": "ia"}, "$unset": {"transferred_at": "", "transfer_reason": ""}}
+            )
+            total_modified += result.modified_count
+
+        logger.info(f"[EMERGENCIA] Modo resetado para IA - Cliente {phone} ({total_modified} docs)")
         return {
             "success": True,
             "phone": phone,
-            "modified": result.modified_count,
+            "modified": total_modified,
+            "phones_tried": phones_to_try,
             "message": f"Modo resetado para IA para cliente {phone}"
         }
     except Exception as e:
         logger.error(f"Erro ao resetar modo: {e}")
         return {"success": False, "error": str(e)}
+
+
+@router.get("/api/debug/phones")
+async def api_debug_phones():
+    """DEBUG: Lista todos os telefones unicos no banco"""
+    try:
+        phones = await db.conversas.distinct("phone")
+
+        # Buscar modo de cada telefone
+        result = []
+        for phone in phones[-20:]:  # Ultimos 20
+            last_msg = await db.conversas.find_one(
+                {"phone": phone},
+                sort=[("timestamp", -1)]
+            )
+            result.append({
+                "phone": phone,
+                "mode": last_msg.get("mode", "ia") if last_msg else "unknown"
+            })
+
+        return {"phones": result, "total": len(phones)}
+    except Exception as e:
+        logger.error(f"Erro ao listar phones: {e}")
+        return {"error": str(e)}
 
 
 @router.post("/api/config/operator")
