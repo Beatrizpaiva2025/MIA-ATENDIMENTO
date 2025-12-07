@@ -149,7 +149,7 @@
     <!-- SIDEBAR -->
     <div class="sidebar">
         <div class="logo-container">
-            <img src="/images/logo_legacy.jpeg" alt="MIA Logo">
+           <img src="/static/images/logo_legacy.jpeg" alt="MIA Logo">
             <h2>MIA Admin</h2>
         </div>
 
@@ -163,12 +163,7 @@
                 <span class="menu-item-icon">🎓</span>
                 <span class="menu-item-text">Training</span>
             </a>
-
-            <a href="/admin/atendimento" class="menu-item {% if request.url.path == '/admin/atendimento' %}active{% endif %}">
-                <span class="menu-item-icon">👤</span>
-                <span class="menu-item-text">Support</span>
-            </a>
-
+           
             <a href="/admin/aprendizado" class="menu-item {% if request.url.path == '/admin/aprendizado' %}active{% endif %}">
                 <span class="menu-item-icon">🧠</span>
                 <span class="menu-item-text">Learning</span>
