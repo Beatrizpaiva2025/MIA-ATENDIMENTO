@@ -877,10 +877,46 @@ async def webhook_whatsapp(request: Request):
         logger.info(f"Webhook recebido: {json.dumps(data, indent=2)}")
 
         # ============================================
+        # EXTRAIR DADOS BASICOS
+        # ============================================
+        phone = data.get("phone", "")
+        from_me = data.get("fromMe", False)
+        message_text = ""
+        if "text" in data and "message" in data["text"]:
+            message_text = data["text"]["message"].strip()
+
+        # ============================================
+        # PROCESSAR COMANDOS DO OPERADOR (fromMe=true)
+        # Quando operador envia * ou + na conversa com cliente
+        # ============================================
+        if from_me and message_text in ["*", "+"]:
+            if message_text == "*":
+                await db.conversas.update_many(
+                    {"phone": phone},
+                    {"$set": {"mode": "human", "transferred_at": datetime.now()}}
+                )
+                logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone}")
+                return {"status": "ia_paused", "client": phone}
+
+            elif message_text == "+":
+                await db.conversas.update_many(
+                    {"phone": phone},
+                    {"$set": {"mode": "ia"}, "$unset": {"transferred_at": "", "transfer_reason": ""}}
+                )
+                logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone}")
+                return {"status": "ia_resumed", "client": phone}
+
+        # ============================================
+        # IGNORAR OUTRAS MENSAGENS ENVIADAS (fromMe=true)
+        # ============================================
+        if from_me:
+            logger.info(f"Mensagem enviada (fromMe=true) ignorada")
+            return {"status": "ignored", "reason": "from_me"}
+
+        # ============================================
         # VERIFICAR STATUS DO BOT
         # ============================================
         bot_status = await get_bot_status()
-        phone = data.get("phone", "")
 
         # Verificar se conversa esta em modo humano
         conversa = await db.conversas.find_one({"phone": phone}, sort=[("timestamp", -1)])
@@ -890,10 +926,9 @@ async def webhook_whatsapp(request: Request):
         if not bot_status["enabled"] or modo_humano:
             logger.info(f"Bot {'desligado' if not bot_status['enabled'] else 'em modo humano para ' + phone}")
 
-            # Salvar mensagem mas nao responder
             await db.conversas.insert_one({
                 "phone": phone,
-                "message": data.get("text", {}).get("message", "[MENSAGEM]"),
+                "message": message_text or "[MENSAGEM]",
                 "timestamp": datetime.now(),
                 "role": "user",
                 "type": "text",
@@ -904,33 +939,12 @@ async def webhook_whatsapp(request: Request):
             return {"status": "received", "processed": False, "reason": "bot_disabled_or_human_mode"}
 
         # ============================================
-        # PROCESSAR COMANDOS ESPECIAIS
+        # PROCESSAR COMANDOS ESPECIAIS DO CLIENTE
         # ============================================
-        message_text = ""
-        if "text" in data and "message" in data["text"]:
-            message_text = data["text"]["message"].strip()
-
         # Comando: * (Transferir para humano)
         if message_text == "*":
             await transferir_para_humano(phone, "Cliente digitou *")
             return {"status": "transferred_to_human"}
-
-        # Comando: + (Voltar para IA) - APENAS ATENDENTE
-        if message_text == "+":
-            # Verificar se e o atendente
-            if phone == ATENDENTE_PHONE:
-                # Atendente pode devolver qualquer conversa para IA
-                # Mas precisa especificar o numero: "+ 5516893094980"
-                await send_whatsapp_message(
-                    phone,
-                    "Para devolver um cliente para IA, envie: + seguido do numero do cliente\nExemplo: + 5516893094980"
-                )
-                return {"status": "command_help"}
-            else:
-                # Cliente comum nao pode usar este comando
-                # Ignorar silenciosamente (nao responder nada)
-                logger.info(f"Cliente {phone} tentou usar comando + (negado)")
-                return {"status": "ignored"}
 
         # Comando: ## (Desligar IA para este usuario)
         if message_text == "##":
@@ -955,6 +969,7 @@ async def webhook_whatsapp(request: Request):
                 "Atendimento automatico religado. Como posso ajudar?"
             )
             return {"status": "ia_enabled"}
+
 
         # ============================================
         # CONTROLE DE ATIVACAO DA IA
