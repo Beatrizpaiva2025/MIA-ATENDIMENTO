@@ -35,6 +35,43 @@ async def admin_conversas_page(request: Request):
             "request": request,
             "error": str(e)
         })
+# ==================================================================
+# API: DEBUG - Verificar dados no banco
+# ==================================================================
+@router.get("/admin/conversas/api/debug")
+async def api_debug_data():
+    """Debug: mostra quantidade de dados no banco"""
+    try:
+        # Total de conversas (sem filtro de data)
+        total_conversas = await db.conversas.count_documents({})
+
+        # Total de conversoes
+        total_conversoes = await db.conversoes.count_documents({})
+
+        # Ultima conversa
+        ultima_conversa = await db.conversas.find_one({}, sort=[("timestamp", -1)])
+
+        # Ultima conversao
+        ultima_conversao = await db.conversoes.find_one({}, sort=[("timestamp", -1)])
+
+        # Clientes unicos
+        clientes = await db.conversas.distinct("phone")
+
+        # Amostra de uma conversa
+        amostra = await db.conversas.find_one({})
+
+        return {
+            "total_conversas": total_conversas,
+            "total_conversoes": total_conversoes,
+            "clientes_unicos": len(clientes),
+            "ultima_conversa": str(ultima_conversa.get("timestamp")) if ultima_conversa else None,
+            "ultima_conversao": str(ultima_conversao.get("timestamp")) if ultima_conversao else None,
+            "campos_conversa": list(amostra.keys()) if amostra else [],
+            "amostra_phone": amostra.get("phone") if amostra else None
+        }
+    except Exception as e:
+        logger.error(f"Erro debug: {e}")
+        return {"error": str(e)}
 
 
 # ==================================================================
