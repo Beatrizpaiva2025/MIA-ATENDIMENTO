@@ -637,84 +637,50 @@ async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
         logger.error(f"Erro ao baixar midia: {str(e)}")
         return None
 
+# ============================================
+# PROCESSAR IMAGEM (COM AGRUPAMENTO - 4 SEGUNDOS)
+# ============================================
+elif message_type == "image":
+    image_url = data.get("image", {}).get("imageUrl", "")
+    caption = data.get("image", {}).get("caption", "")
 
-# ============================================================
-# FUNCAO: PROCESSAR IMAGEM COM GPT-4 VISION
-# ============================================================
-async def process_image_with_vision(image_bytes: bytes, phone: str) -> str:
-    """Analisa imagem com GPT-4 Vision"""
-    try:
-        logger.info(f"Processando imagem com Vision ({len(image_bytes)} bytes)")
+    if not image_url:
+        return JSONResponse({"status": "ignored", "reason": "no image url"})
 
-        # Converter para base64
-        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+    logger.info(f"Imagem de {phone}: {image_url[:50]}")
 
-        # Buscar treinamento dinamico
-        training_prompt = await get_bot_training()
+    # Baixar imagem
+    image_bytes = await download_media_from_zapi(image_url)
 
-        # Chamar GPT-4 Vision
-        response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"""{training_prompt}
+    if not image_bytes:
+        await send_whatsapp_message(phone, "Desculpe, nao consegui baixar a imagem. Pode tentar enviar novamente?")
+        return JSONResponse({"status": "error", "reason": "download failed"})
 
-TAREFA ESPECIAL - ANALISE DE IMAGEM:
-Voce recebeu uma imagem de documento. Analise e forneca:
-- Tipo de documento (certidao, diploma, contrato, etc)
-- Idioma detectado
-- Numero estimado de paginas (se visivel)
-- Orcamento baseado nas regras de preco do treinamento
-- Prazo de entrega
-Seja direto e objetivo na resposta."""
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Analise este documento e me de um orcamento de traducao."
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            max_tokens=800
-        )
-
-        analysis = response.choices[0].message.content
-
-        # Salvar no banco
-        await db.conversas.insert_one({
-            "phone": phone,
-            "message": "[IMAGEM ENVIADA]",
-            "role": "user",
-            "timestamp": datetime.now(),
-            "canal": "WhatsApp",
-            "type": "image"
-        })
-
-        await db.conversas.insert_one({
-            "phone": phone,
-            "message": analysis,
-            "role": "assistant",
-            "timestamp": datetime.now(),
-            "canal": "WhatsApp"
-        })
-
-        logger.info(f"Analise Vision concluida")
-        return analysis
-
-    except Exception as e:
-        logger.error(f"Erro no Vision: {str(e)}")
-        logger.error(traceback.format_exc())
-        return "Desculpe, nao consegui analisar a imagem. Pode me dizer quantas paginas tem o documento?"
+    # Sistema de agrupamento (4 segundos)
+    deve_perguntar = await adicionar_imagem_sessao(phone, image_bytes)
+    
+    if deve_perguntar:
+        # VERIFICAR SE JÁ PERGUNTOU (EVITAR DUPLICATA)
+        session = image_sessions[phone]
+        
+        # Se já está aguardando confirmação, não perguntar de novo
+        if session.get("already_asked"):
+            logger.info(f"Já perguntou para {phone}, aguardando resposta...")
+            return JSONResponse({"status": "waiting_response", "pages": session["count"]})
+        
+        # Marcar como "já perguntou"
+        session["already_asked"] = True
+        
+        total_atual = session["count"]
+        pergunta = f"Recebi {total_atual} página{'s' if total_atual > 1 else ''}. Tem mais alguma página para traduzir?"
+        
+        await send_whatsapp_message(phone, pergunta)
+        
+        logger.info(f"Pergunta enviada para {phone} ({total_atual} páginas)")
+        return JSONResponse({"status": "waiting_confirmation", "pages": total_atual})
+    
+    # Se não deve perguntar, apenas aguardar mais imagens
+    return JSONResponse({"status": "receiving", "pages": image_sessions[phone]["count"]})
 
 
 # ============================================================
