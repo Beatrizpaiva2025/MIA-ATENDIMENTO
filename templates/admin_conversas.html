@@ -41,7 +41,7 @@
 
     .resumo-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
         gap: 20px;
         margin-bottom: 30px;
     }
@@ -192,6 +192,7 @@
 
     .badge-success { background: #d4edda; color: #155724; }
     .badge-warning { background: #fff3cd; color: #856404; }
+    .badge-danger { background: #f8d7da; color: #721c24; }
     .badge-info { background: #d1ecf1; color: #0c5460; }
     .badge-ia { background: #e8daef; color: #6c3483; }
     .badge-humano { background: #fdebd0; color: #b9770e; }
@@ -207,6 +208,7 @@
         cursor: pointer;
         font-size: 0.85em;
         transition: all 0.3s;
+        margin-right: 5px;
     }
 
     .btn-whatsapp {
@@ -216,6 +218,24 @@
 
     .btn-whatsapp:hover {
         background: #1da851;
+    }
+
+    .btn-edit {
+        background: #5dade2;
+        color: white;
+    }
+
+    .btn-edit:hover {
+        background: #4a9dd1;
+    }
+
+    .btn-delete {
+        background: #e74c3c;
+        color: white;
+    }
+
+    .btn-delete:hover {
+        background: #c0392b;
     }
 
     .btn-registrar {
@@ -251,8 +271,10 @@
         border-radius: 12px;
         padding: 30px;
         width: 90%;
-        max-width: 450px;
+        max-width: 500px;
         box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        max-height: 90vh;
+        overflow-y: auto;
     }
 
     .modal-header {
@@ -273,7 +295,7 @@
         margin-bottom: 8px;
     }
 
-    .form-input {
+    .form-input, .form-textarea {
         width: 100%;
         padding: 12px;
         border: 2px solid #e0e0e0;
@@ -282,9 +304,54 @@
         box-sizing: border-box;
     }
 
-    .form-input:focus {
+    .form-input:focus, .form-textarea:focus {
         outline: none;
         border-color: #5dade2;
+    }
+
+    .form-textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+
+    .status-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+
+    .status-btn {
+        flex: 1;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        background: white;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .status-btn.active-converted {
+        background: #d4edda;
+        border-color: #27ae60;
+        color: #155724;
+    }
+
+    .status-btn.active-no {
+        background: #f8d7da;
+        border-color: #e74c3c;
+        color: #721c24;
+    }
+
+    .status-btn.active-pending {
+        background: #fff3cd;
+        border-color: #f39c12;
+        color: #856404;
+    }
+
+    .status-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
 
     .modal-buttons {
@@ -329,9 +396,25 @@
         border-left: 4px solid #e74c3c;
     }
 
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 15px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+
     @media (max-width: 768px) {
         .charts-grid {
             grid-template-columns: 1fr;
+        }
+        .status-buttons {
+            flex-direction: column;
         }
     }
 </style>
@@ -351,7 +434,6 @@
     </div>
 </div>
 
-<!-- Área de erro (oculta por padrão) -->
 <div id="error-container" style="display: none;"></div>
 
 <div class="resumo-grid">
@@ -364,11 +446,6 @@
         <div class="resumo-label">Conversion Rate</div>
         <div class="resumo-valor" id="taxa-conversao">0%</div>
         <div class="resumo-sub">clients to sales</div>
-    </div>
-    <div class="resumo-card">
-        <div class="resumo-label">Clients Served</div>
-        <div class="resumo-valor" id="clientes-unicos">0</div>
-        <div class="resumo-sub" id="total-msgs">0 messages</div>
     </div>
     <div class="resumo-card">
         <div class="resumo-label">Leads for Follow-up</div>
@@ -387,11 +464,11 @@
         <div class="stat-value" id="stat-clientes">0</div>
     </div>
     <div class="stat-card ia">
-        <div class="stat-label">AI Support</div>
+        <div class="stat-label">AI Support (min)</div>
         <div class="stat-value" id="stat-ia">0</div>
     </div>
     <div class="stat-card humano">
-        <div class="stat-label">Human Support</div>
+        <div class="stat-label">Human Support (min)</div>
         <div class="stat-value" id="stat-humano">0</div>
     </div>
     <div class="stat-card taxa">
@@ -438,22 +515,25 @@
 <div class="section-card">
     <div class="section-header">
         <div class="section-title">Leads for Follow-up</div>
+        <button class="btn-registrar" onclick="abrirModalLead()">+ Add Lead</button>
     </div>
     <div class="table-container">
         <table class="data-table">
             <thead>
                 <tr>
                     <th>Client</th>
-                    <th>Last Message</th>
+                    <th>Last Contact</th>
                     <th>Messages</th>
                     <th>Days Inactive</th>
                     <th>Asked Quote</th>
                     <th>Priority</th>
+                    <th>Result</th>
+                    <th>Reason</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody id="leads-body">
-                <tr><td colspan="7" class="empty-state">Loading...</td></tr>
+                <tr><td colspan="9" class="empty-state">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -475,8 +555,63 @@
             <input type="text" class="form-input" id="conv-obs" placeholder="Certificate translation">
         </div>
         <div class="modal-buttons">
-            <button class="btn-cancel" onclick="fecharModal()">Cancel</button>
+            <button class="btn-cancel" onclick="fecharModal('modal-conversao')">Cancel</button>
             <button class="btn-confirm" onclick="registrarConversao()">Save</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modal-lead">
+    <div class="modal-content">
+        <div class="modal-header">Add New Lead</div>
+        
+        <div class="form-group">
+            <label class="form-label">Client Phone</label>
+            <input type="text" class="form-input" id="lead-phone" placeholder="18572081139">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Last Contact Date</label>
+            <input type="date" class="form-input" id="lead-date">
+        </div>
+
+        <div class="checkbox-group">
+            <input type="checkbox" id="lead-asked-quote">
+            <label for="lead-asked-quote">Asked for Quote?</label>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Priority</label>
+            <select class="form-input" id="lead-priority">
+                <option value="High">High</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="Low">Low</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Result</label>
+            <div class="status-buttons">
+                <button class="status-btn" id="status-pending" onclick="setLeadStatus('pending')">
+                    Pending
+                </button>
+                <button class="status-btn" id="status-converted" onclick="setLeadStatus('converted')">
+                    Converted
+                </button>
+                <button class="status-btn" id="status-no" onclick="setLeadStatus('no')">
+                    No
+                </button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Reason / Notes</label>
+            <textarea class="form-textarea" id="lead-reason" placeholder="Why converted / not converted / follow-up notes..."></textarea>
+        </div>
+
+        <div class="modal-buttons">
+            <button class="btn-cancel" onclick="fecharModal('modal-lead')">Cancel</button>
+            <button class="btn-confirm" onclick="salvarLead()">Save Lead</button>
         </div>
     </div>
 </div>
@@ -488,12 +623,14 @@
     var periodo = 15;
     var chartConversoes = null;
     var chartAtendimentos = null;
+    var leadStatusSelected = 'pending';
 
     window.onload = function() {
         carregarDados();
+        document.getElementById('lead-date').valueAsDate = new Date();
+        setLeadStatus('pending');
     };
 
-    // TRATAMENTO DE ERROS
     function mostrarErro(mensagem) {
         var container = document.getElementById('error-container');
         container.innerHTML = '<div class="error-message">⚠️ ' + mensagem + '</div>';
@@ -531,15 +668,15 @@
                     return;
                 }
                 document.getElementById('valor-total').textContent = '$' + (data.valor_total || 0);
-                document.getElementById('conversoes-total').textContent = (data.conversoes || 0) + ' conversions';
+                document.getElementById('conversoes-total').textContent = (data.total_conversoes || 0) + ' conversions';
                 document.getElementById('taxa-conversao').textContent = (data.taxa_conversao || 0) + '%';
-                document.getElementById('clientes-unicos').textContent = data.clientes_unicos || 0;
-                document.getElementById('total-msgs').textContent = (data.total_conversas || 0) + ' messages';
+                document.getElementById('leads-followup').textContent = data.leads_followup || 0;
+                
                 document.getElementById('stat-conversoes').textContent = data.conversoes || 0;
                 document.getElementById('stat-clientes').textContent = data.clientes_unicos || 0;
-                document.getElementById('stat-ia').textContent = data.atendimentos_ia || 0;
-                document.getElementById('stat-humano').textContent = data.atendimentos_humano || 0;
-                document.getElementById('stat-taxa').textContent = (data.taxa_conversao || 0) + '%';
+                document.getElementById('stat-ia').textContent = data.tempo_ia_minutos || 0;
+                document.getElementById('stat-humano').textContent = data.tempo_humano_minutos || 0;
+                document.getElementById('stat-taxa').textContent = (data.taxa_conversao_stat || 0) + '%';
             })
             .catch(function(err) {
                 console.error('Error loading stats:', err);
@@ -651,40 +788,50 @@
     }
 
     function carregarLeads() {
-        fetch('/admin/conversas/api/leads-followup?periodo=' + periodo)
+        fetch('/admin/conversas/api/leads-followup')
             .then(function(r) { 
                 if (!r.ok) throw new Error('API Error: ' + r.status);
                 return r.json(); 
             })
             .then(function(data) {
-                document.getElementById('leads-followup').textContent = data.total || 0;
                 var tbody = document.getElementById('leads-body');
                 if (data.error) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state" style="color:#e74c3c;">Error: ' + data.error + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="empty-state" style="color:#e74c3c;">Error: ' + data.error + '</td></tr>';
                     return;
                 }
                 if (!data.leads || data.leads.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No pending leads</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No leads registered. Click "+ Add Lead" to start.</td></tr>';
                     return;
                 }
                 var html = '';
                 data.leads.forEach(function(l) {
-                    var priClass = 'prioridade-' + l.prioridade.toLowerCase();
+                    var priClass = 'prioridade-' + l.priority.toLowerCase();
+                    var statusBadge = '';
+                    if (l.status === 'converted') statusBadge = '<span class="badge badge-success">Converted</span>';
+                    else if (l.status === 'no') statusBadge = '<span class="badge badge-danger">No</span>';
+                    else statusBadge = '<span class="badge badge-warning">Pending</span>';
+                    
                     html += '<tr>';
                     html += '<td><strong>' + l.phone + '</strong></td>';
-                    html += '<td>' + l.ultima_msg + '</td>';
+                    html += '<td>' + l.last_contact + '</td>';
                     html += '<td>' + l.total_msgs + '</td>';
                     html += '<td>' + l.dias_sem_contato + ' days</td>';
-                    html += '<td>' + l.pediu_orcamento + '</td>';
-                    html += '<td><span class="badge ' + priClass + '">' + l.prioridade + '</span></td>';
-                    html += '<td><button class="btn-action btn-whatsapp" onclick="abrirWhatsApp(\'' + l.phone + '\')">Contact</button></td>';
+                    html += '<td>' + l.asked_quote + '</td>';
+                    html += '<td><span class="badge ' + priClass + '">' + l.priority + '</span></td>';
+                    html += '<td>' + statusBadge + '</td>';
+                    html += '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">' + (l.notes || 'N/A') + '</td>';
+                    html += '<td>';
+                    html += '<button class="btn-action btn-whatsapp" onclick="abrirWhatsApp(\'' + l.phone + '\')">📱</button>';
+                    html += '<button class="btn-action btn-edit" onclick="editarLead(\'' + l.id + '\')">✏️</button>';
+                    html += '<button class="btn-action btn-delete" onclick="deletarLead(\'' + l.id + '\')">🗑️</button>';
+                    html += '</td>';
                     html += '</tr>';
                 });
                 tbody.innerHTML = html;
             })
             .catch(function(err) {
                 console.error('Error loading leads:', err);
-                document.getElementById('leads-body').innerHTML = '<tr><td colspan="7" class="empty-state" style="color:#e74c3c;">Failed to load leads</td></tr>';
+                document.getElementById('leads-body').innerHTML = '<tr><td colspan="9" class="empty-state" style="color:#e74c3c;">Failed to load leads</td></tr>';
             });
     }
 
@@ -696,11 +843,76 @@
         document.getElementById('modal-conversao').style.display = 'flex';
     }
 
-    function fecharModal() {
-        document.getElementById('modal-conversao').style.display = 'none';
-        document.getElementById('conv-phone').value = '';
-        document.getElementById('conv-valor').value = '';
-        document.getElementById('conv-obs').value = '';
+    function abrirModalLead() {
+        document.getElementById('modal-lead').style.display = 'flex';
+        document.getElementById('lead-phone').value = '';
+        document.getElementById('lead-date').valueAsDate = new Date();
+        document.getElementById('lead-asked-quote').checked = false;
+        document.getElementById('lead-priority').value = 'Medium';
+        document.getElementById('lead-reason').value = '';
+        setLeadStatus('pending');
+    }
+
+    function fecharModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    }
+
+    function setLeadStatus(status) {
+        leadStatusSelected = status;
+        document.getElementById('status-pending').classList.remove('active-pending');
+        document.getElementById('status-converted').classList.remove('active-converted');
+        document.getElementById('status-no').classList.remove('active-no');
+        
+        if (status === 'pending') {
+            document.getElementById('status-pending').classList.add('active-pending');
+        } else if (status === 'converted') {
+            document.getElementById('status-converted').classList.add('active-converted');
+        } else if (status === 'no') {
+            document.getElementById('status-no').classList.add('active-no');
+        }
+    }
+
+    function salvarLead() {
+        var phone = document.getElementById('lead-phone').value;
+        var date = document.getElementById('lead-date').value;
+        var askedQuote = document.getElementById('lead-asked-quote').checked;
+        var priority = document.getElementById('lead-priority').value;
+        var reason = document.getElementById('lead-reason').value;
+        
+        if (!phone) {
+            alert('Please enter phone number');
+            return;
+        }
+        
+        fetch('/admin/conversas/api/add-lead', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                phone: phone,
+                last_contact_date: date,
+                asked_quote: askedQuote,
+                priority: priority,
+                status: leadStatusSelected,
+                notes: reason
+            })
+        })
+        .then(function(r) { 
+            if (!r.ok) throw new Error('API Error: ' + r.status);
+            return r.json(); 
+        })
+        .then(function(data) {
+            if (data.success) {
+                alert('✅ Lead saved successfully!');
+                fecharModal('modal-lead');
+                carregarDados();
+            } else {
+                alert('❌ Error: ' + data.error);
+            }
+        })
+        .catch(function(err) {
+            console.error('Error saving lead:', err);
+            alert('❌ Failed to save lead');
+        });
     }
 
     function registrarConversao() {
@@ -725,7 +937,10 @@
         .then(function(data) {
             if (data.success) {
                 alert('✅ Conversion saved successfully!');
-                fecharModal();
+                fecharModal('modal-conversao');
+                document.getElementById('conv-phone').value = '';
+                document.getElementById('conv-valor').value = '';
+                document.getElementById('conv-obs').value = '';
                 carregarDados();
             } else {
                 alert('❌ Error: ' + data.error);
@@ -735,6 +950,29 @@
             console.error('Error saving conversion:', err);
             alert('❌ Failed to save conversion');
         });
+    }
+
+    function editarLead(id) {
+        alert('Edit functionality coming soon! Lead ID: ' + id);
+    }
+
+    function deletarLead(id) {
+        if (!confirm('Delete this lead?')) return;
+        
+        fetch('/admin/conversas/api/delete-lead/' + id, { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    alert('✅ Lead deleted!');
+                    carregarDados();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            })
+            .catch(function(err) {
+                console.error('Error deleting lead:', err);
+                alert('❌ Failed to delete lead');
+            });
     }
 </script>
 {% endblock %}
