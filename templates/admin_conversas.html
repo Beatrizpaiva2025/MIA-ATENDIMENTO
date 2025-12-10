@@ -3,6 +3,7 @@
 {% block title %}Conversions & Reports - MIA Admin{% endblock %}
 
 {% block extra_style %}
+<style>
     .dashboard-header {
         display: flex;
         justify-content: space-between;
@@ -319,11 +320,21 @@
         color: #7f8c8d;
     }
 
+    .error-message {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid #e74c3c;
+    }
+
     @media (max-width: 768px) {
         .charts-grid {
             grid-template-columns: 1fr;
         }
     }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -339,6 +350,9 @@
         <button class="periodo-btn" data-periodo="30" onclick="setPeriodo(30)">30 days</button>
     </div>
 </div>
+
+<!-- Área de erro (oculta por padrão) -->
+<div id="error-container" style="display: none;"></div>
 
 <div class="resumo-grid">
     <div class="resumo-card destaque">
@@ -479,6 +493,16 @@
         carregarDados();
     };
 
+    // TRATAMENTO DE ERROS
+    function mostrarErro(mensagem) {
+        var container = document.getElementById('error-container');
+        container.innerHTML = '<div class="error-message">⚠️ ' + mensagem + '</div>';
+        container.style.display = 'block';
+        setTimeout(function() {
+            container.style.display = 'none';
+        }, 5000);
+    }
+
     function setPeriodo(dias) {
         periodo = dias;
         document.querySelectorAll('.periodo-btn').forEach(function(btn) {
@@ -497,8 +521,15 @@
 
     function carregarStats() {
         fetch('/admin/conversas/api/stats?periodo=' + periodo)
-            .then(function(r) { return r.json(); })
+            .then(function(r) { 
+                if (!r.ok) throw new Error('API Error: ' + r.status);
+                return r.json(); 
+            })
             .then(function(data) {
+                if (data.error) {
+                    mostrarErro('Error loading stats: ' + data.error);
+                    return;
+                }
                 document.getElementById('valor-total').textContent = '$' + (data.valor_total || 0);
                 document.getElementById('conversoes-total').textContent = (data.conversoes || 0) + ' conversions';
                 document.getElementById('taxa-conversao').textContent = (data.taxa_conversao || 0) + '%';
@@ -509,13 +540,25 @@
                 document.getElementById('stat-ia').textContent = data.atendimentos_ia || 0;
                 document.getElementById('stat-humano').textContent = data.atendimentos_humano || 0;
                 document.getElementById('stat-taxa').textContent = (data.taxa_conversao || 0) + '%';
+            })
+            .catch(function(err) {
+                console.error('Error loading stats:', err);
+                mostrarErro('Failed to load statistics');
             });
     }
 
     function carregarCharts() {
         fetch('/admin/conversas/api/chart-data?periodo=' + periodo)
-            .then(function(r) { return r.json(); })
+            .then(function(r) { 
+                if (!r.ok) throw new Error('API Error: ' + r.status);
+                return r.json(); 
+            })
             .then(function(data) {
+                if (data.error) {
+                    mostrarErro('Error loading charts: ' + data.error);
+                    return;
+                }
+                
                 var labels = data.labels.map(function(d) {
                     var date = new Date(d);
                     return (date.getMonth()+1) + '/' + date.getDate();
@@ -565,14 +608,25 @@
                         scales: { y: { beginAtZero: true } }
                     }
                 });
+            })
+            .catch(function(err) {
+                console.error('Error loading charts:', err);
+                mostrarErro('Failed to load charts');
             });
     }
 
     function carregarConversoes() {
         fetch('/admin/conversas/api/conversoes?periodo=' + periodo)
-            .then(function(r) { return r.json(); })
+            .then(function(r) { 
+                if (!r.ok) throw new Error('API Error: ' + r.status);
+                return r.json(); 
+            })
             .then(function(data) {
                 var tbody = document.getElementById('conversoes-body');
+                if (data.error) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="color:#e74c3c;">Error: ' + data.error + '</td></tr>';
+                    return;
+                }
                 if (!data.conversoes || data.conversoes.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No conversions in this period</td></tr>';
                     return;
@@ -589,15 +643,26 @@
                     html += '</tr>';
                 });
                 tbody.innerHTML = html;
+            })
+            .catch(function(err) {
+                console.error('Error loading conversions:', err);
+                document.getElementById('conversoes-body').innerHTML = '<tr><td colspan="6" class="empty-state" style="color:#e74c3c;">Failed to load conversions</td></tr>';
             });
     }
 
     function carregarLeads() {
         fetch('/admin/conversas/api/leads-followup?periodo=' + periodo)
-            .then(function(r) { return r.json(); })
+            .then(function(r) { 
+                if (!r.ok) throw new Error('API Error: ' + r.status);
+                return r.json(); 
+            })
             .then(function(data) {
                 document.getElementById('leads-followup').textContent = data.total || 0;
                 var tbody = document.getElementById('leads-body');
+                if (data.error) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state" style="color:#e74c3c;">Error: ' + data.error + '</td></tr>';
+                    return;
+                }
                 if (!data.leads || data.leads.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No pending leads</td></tr>';
                     return;
@@ -616,6 +681,10 @@
                     html += '</tr>';
                 });
                 tbody.innerHTML = html;
+            })
+            .catch(function(err) {
+                console.error('Error loading leads:', err);
+                document.getElementById('leads-body').innerHTML = '<tr><td colspan="7" class="empty-state" style="color:#e74c3c;">Failed to load leads</td></tr>';
             });
     }
 
@@ -629,30 +698,42 @@
 
     function fecharModal() {
         document.getElementById('modal-conversao').style.display = 'none';
+        document.getElementById('conv-phone').value = '';
+        document.getElementById('conv-valor').value = '';
+        document.getElementById('conv-obs').value = '';
     }
 
     function registrarConversao() {
         var phone = document.getElementById('conv-phone').value;
         var valor = document.getElementById('conv-valor').value;
         var obs = document.getElementById('conv-obs').value;
+        
         if (!phone || !valor) {
             alert('Please fill in phone and value');
             return;
         }
+        
         fetch('/admin/conversas/api/registrar-conversao', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phone: phone, valor: valor, observacao: obs })
         })
-        .then(function(r) { return r.json(); })
+        .then(function(r) { 
+            if (!r.ok) throw new Error('API Error: ' + r.status);
+            return r.json(); 
+        })
         .then(function(data) {
             if (data.success) {
-                alert('Conversion saved!');
+                alert('✅ Conversion saved successfully!');
                 fecharModal();
                 carregarDados();
             } else {
-                alert('Error: ' + data.error);
+                alert('❌ Error: ' + data.error);
             }
+        })
+        .catch(function(err) {
+            console.error('Error saving conversion:', err);
+            alert('❌ Failed to save conversion');
         });
     }
 </script>
