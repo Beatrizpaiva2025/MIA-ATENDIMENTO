@@ -182,6 +182,81 @@
         font-size: 0.95em;
         opacity: 0.9;
     }
+
+    /* MODAL STYLES */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+        animation: fadeIn 0.3s;
+    }
+
+    .modal.active {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal-content {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 600px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        animation: slideIn 0.3s;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .modal-title {
+        font-size: 1.5em;
+        color: #1e3a5f;
+        margin: 0;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 2em;
+        color: #999;
+        cursor: pointer;
+        padding: 0;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+        background: #f0f0f0;
+        color: #333;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes slideIn {
+        from { transform: translateY(-50px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
 </style>
 {% endblock %}
 
@@ -304,25 +379,133 @@
         <p style="text-align: center; color: #999; padding: 30px;">No FAQ registered yet.</p>
     {% endif %}
 </div>
+
+<!-- MODAL EDITAR CONHECIMENTO -->
+<div id="modalEditarConhecimento" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">✏️ Edit Knowledge</h3>
+            <button class="modal-close" onclick="fecharModal('modalEditarConhecimento')">&times;</button>
+        </div>
+        <form id="formEditarConhecimento" method="POST">
+            <div class="form-group">
+                <label class="form-label">Title</label>
+                <input type="text" id="editKnowledgeTitle" name="title" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Content</label>
+                <textarea id="editKnowledgeContent" name="content" class="form-textarea" required></textarea>
+            </div>
+            <button type="submit" class="btn-primary">💾 Save Changes</button>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL EDITAR FAQ -->
+<div id="modalEditarFAQ" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">✏️ Edit FAQ</h3>
+            <button class="modal-close" onclick="fecharModal('modalEditarFAQ')">&times;</button>
+        </div>
+        <form id="formEditarFAQ" method="POST">
+            <div class="form-group">
+                <label class="form-label">Question</label>
+                <input type="text" id="editFAQQuestion" name="question" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Answer</label>
+                <textarea id="editFAQAnswer" name="answer" class="form-textarea" required></textarea>
+            </div>
+            <button type="submit" class="btn-primary">💾 Save Changes</button>
+        </form>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-    function editarConhecimento(id) {
-        alert('Editing in development. ID: ' + id);
+    // ============================================================
+    // FUNÇÕES DE MODAL
+    // ============================================================
+    function abrirModal(modalId) {
+        document.getElementById(modalId).classList.add('active');
     }
+
+    function fecharModal(modalId) {
+        document.getElementById(modalId).classList.remove('active');
+    }
+
+    // Fechar modal ao clicar fora
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.classList.remove('active');
+        }
+    }
+
+    // ============================================================
+    // EDITAR CONHECIMENTO
+    // ============================================================
+    async function editarConhecimento(id) {
+        try {
+            // Buscar dados do conhecimento
+            const response = await fetch(`/admin/treinamento/conhecimento/${id}`);
+            const data = await response.json();
+
+            // Preencher formulário
+            document.getElementById('editKnowledgeTitle').value = data.title;
+            document.getElementById('editKnowledgeContent').value = data.content;
+
+            // Configurar ação do formulário
+            document.getElementById('formEditarConhecimento').action = `/admin/treinamento/conhecimento/editar/${id}`;
+
+            // Abrir modal
+            abrirModal('modalEditarConhecimento');
+        } catch (error) {
+            alert('Erro ao carregar conhecimento: ' + error);
+        }
+    }
+
+    // ============================================================
+    // DELETAR CONHECIMENTO
+    // ============================================================
     function deletarConhecimento(id) {
         if (confirm('Delete this knowledge?')) {
-            fetch('/admin/treinamento/conhecimento/deletar/' + id, { method: 'POST' })
+            fetch(`/admin/treinamento/conhecimento/deletar/${id}`, { method: 'POST' })
                 .then(() => location.reload());
         }
     }
-    function editarFAQ(id) {
-        alert('Editing in development. ID: ' + id);
+
+    // ============================================================
+    // EDITAR FAQ
+    // ============================================================
+    async function editarFAQ(id) {
+        try {
+            // Buscar dados do FAQ
+            const response = await fetch(`/admin/treinamento/faq/${id}`);
+            const data = await response.json();
+
+            // Preencher formulário
+            document.getElementById('editFAQQuestion').value = data.question;
+            document.getElementById('editFAQAnswer').value = data.answer;
+
+            // Configurar ação do formulário
+            document.getElementById('formEditarFAQ').action = `/admin/treinamento/faq/editar/${id}`;
+
+            // Abrir modal
+            abrirModal('modalEditarFAQ');
+        } catch (error) {
+            alert('Erro ao carregar FAQ: ' + error);
+        }
     }
+
+    // ============================================================
+    // DELETAR FAQ
+    // ============================================================
     function deletarFAQ(id) {
         if (confirm('Delete this FAQ?')) {
-            fetch('/admin/treinamento/faq/deletar/' + id, { method: 'POST' })
+            fetch(`/admin/treinamento/faq/deletar/${id}`, { method: 'POST' })
                 .then(() => location.reload());
         }
     }
