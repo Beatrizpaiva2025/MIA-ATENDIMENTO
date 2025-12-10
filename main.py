@@ -682,7 +682,6 @@ elif message_type == "image":
     # Se não deve perguntar, apenas aguardar mais imagens
     return JSONResponse({"status": "receiving", "pages": image_sessions[phone]["count"]})
 
-
 # ============================================================
 # FUNCAO: PROCESSAR PDF COM VISION
 # ============================================================
