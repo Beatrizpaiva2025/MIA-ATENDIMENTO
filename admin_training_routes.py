@@ -1,10 +1,10 @@
 """
-admin_training_routes.py - CORRIGIDO COM FORM DATA + DELAY
+admin_training_routes.py - CORRIGIDO COM EDICAO COMPLETA
 Rotas para gerenciamento de treinamento da IA
 """
 
 from fastapi import APIRouter, Request, HTTPException, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
@@ -163,21 +163,33 @@ async def adicionar_conhecimento(
         logger.error(f"❌ Erro ao adicionar conhecimento: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/conhecimento/deletar/{item_id}")
-async def deletar_conhecimento(item_id: str):
-    """Deletar item da base de conhecimento"""
+@router.get("/conhecimento/{item_id}")
+async def obter_conhecimento(item_id: str):
+    """Obter dados de um conhecimento específico (para edição)"""
     try:
-        result = await db.bots.update_one(
-            {"name": "Mia"},
-            {"$pull": {"knowledge_base": {"_id": item_id}}}
-        )
+        bot = await db.bots.find_one({"name": "Mia"})
         
-        logger.info(f"✅ Conhecimento deletado: {item_id}")
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot não encontrado")
         
-        return RedirectResponse(url="/admin/treinamento", status_code=303)
+        # Buscar item específico
+        item = None
+        for conhecimento in bot.get("knowledge_base", []):
+            if conhecimento.get("_id") == item_id:
+                item = conhecimento
+                break
+        
+        if not item:
+            raise HTTPException(status_code=404, detail="Conhecimento não encontrado")
+        
+        return JSONResponse({
+            "id": item.get("_id"),
+            "title": item.get("title", ""),
+            "content": item.get("content", "")
+        })
         
     except Exception as e:
-        logger.error(f"❌ Erro ao deletar conhecimento: {e}")
+        logger.error(f"❌ Erro ao obter conhecimento: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/conhecimento/editar/{item_id}")
@@ -206,6 +218,22 @@ async def editar_conhecimento(
         logger.error(f"❌ Erro ao editar conhecimento: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/conhecimento/deletar/{item_id}")
+async def deletar_conhecimento(item_id: str):
+    """Deletar item da base de conhecimento"""
+    try:
+        result = await db.bots.update_one(
+            {"name": "Mia"},
+            {"$pull": {"knowledge_base": {"_id": item_id}}}
+        )
+        
+        logger.info(f"✅ Conhecimento deletado: {item_id}")
+        
+        return RedirectResponse(url="/admin/treinamento", status_code=303)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao deletar conhecimento: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================
 # ROTAS DE EDIÇÃO - FAQs
@@ -230,12 +258,67 @@ async def adicionar_faq(
             {"$push": {"faqs": novo_faq}}
         )
         
-        logger.info(f"✅ FAQ adicionado: {pergunta}")
+        logger.info(f"✅ FAQ adicionado: {question}")  # CORRIGIDO: era 'pergunta'
         
         return RedirectResponse(url="/admin/treinamento", status_code=303)
         
     except Exception as e:
         logger.error(f"❌ Erro ao adicionar FAQ: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/faq/{item_id}")
+async def obter_faq(item_id: str):
+    """Obter dados de um FAQ específico (para edição)"""
+    try:
+        bot = await db.bots.find_one({"name": "Mia"})
+        
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot não encontrado")
+        
+        # Buscar item específico
+        item = None
+        for faq in bot.get("faqs", []):
+            if faq.get("_id") == item_id:
+                item = faq
+                break
+        
+        if not item:
+            raise HTTPException(status_code=404, detail="FAQ não encontrado")
+        
+        return JSONResponse({
+            "id": item.get("_id"),
+            "question": item.get("question", ""),
+            "answer": item.get("answer", "")
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao obter FAQ: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/faq/editar/{item_id}")
+async def editar_faq(
+    item_id: str,
+    question: str = Form(...),
+    answer: str = Form(...)
+):
+    """Editar FAQ"""
+    try:
+        result = await db.bots.update_one(
+            {"name": "Mia", "faqs._id": item_id},
+            {
+                "$set": {
+                    "faqs.$.question": question,
+                    "faqs.$.answer": answer
+                }
+            }
+        )
+        
+        logger.info(f"✅ FAQ editado: {question}")
+        
+        return RedirectResponse(url="/admin/treinamento", status_code=303)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao editar FAQ: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/faq/deletar/{item_id}")
