@@ -9,9 +9,7 @@ Bot WhatsApp com suporte a:
 - PDFs (GPT-4 Vision) - Analise de documentos multipagina
 - Painel Administrativo Completo
 - TREINAMENTO DINAMICO DO MONGODB
-- AGRUPAMENTO DE MULTIPLAS IMAGENS
-- FOLLOW-UP AUTOMATICO (1 HORA)
-- TECNICAS DE VENDAS (FECHAMENTO COM 20% DESCONTO)
+- AGRUPAMENTO DE MULTIPLAS IMAGENS (4 SEGUNDOS)
 ============================================================
 """
 
@@ -34,7 +32,6 @@ from io import BytesIO
 import time
 import re
 import asyncio
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Importar rotas do admin
 from admin_routes import router as admin_router
@@ -383,13 +380,13 @@ async def adicionar_imagem_sessao(phone: str, image_bytes: bytes):
     
     logger.info(f"Imagem {session['count']} adicionada à sessão de {phone}")
     
-    # Aguardar 3 segundos para ver se vem mais imagens
-    await asyncio.sleep(3)
+    # Aguardar 4 segundos para ver se vem mais imagens
+    await asyncio.sleep(4)
     
     # Verificar se ainda é a última imagem (nenhuma nova chegou)
     time_diff = (datetime.now() - session["last_received"]).total_seconds()
     
-    if time_diff >= 2.5:  # Se passaram 2.5s sem nova imagem
+    if time_diff >= 3.5:  # Se passaram 3.5s sem nova imagem
         session["waiting_confirmation"] = True
         return True  # Hora de perguntar
     
@@ -476,248 +473,6 @@ Seja direto e objetivo."""
     
     logger.info(f"Orçamento gerado para {total_pages} páginas")
     return orcamento
-
-
-# ============================================================
-# SISTEMA DE FOLLOW-UP E FECHAMENTO INTELIGENTE
-# ============================================================
-
-# Cache para rastrear status de follow-up
-followup_status = {}
-
-async def verificar_necessidade_followup(phone: str) -> bool:
-    """Verifica se cliente precisa de follow-up (1 hora sem resposta)"""
-    try:
-        # Buscar última mensagem do bot (orçamento)
-        last_bot_msg = await db.conversas.find_one(
-            {"phone": phone, "role": "assistant"},
-            sort=[("timestamp", -1)]
-        )
-        
-        if not last_bot_msg:
-            return False
-        
-        # Verificar se foi orçamento (contém $ ou "pagamento")
-        mensagem = last_bot_msg.get("message", "")
-        if "$" not in mensagem and "pagamento" not in mensagem.lower():
-            return False
-        
-        # Buscar última mensagem do cliente
-        last_user_msg = await db.conversas.find_one(
-            {"phone": phone, "role": "user"},
-            sort=[("timestamp", -1)]
-        )
-        
-        # Se cliente não respondeu após orçamento
-        if not last_user_msg or last_user_msg["timestamp"] < last_bot_msg["timestamp"]:
-            # Verificar se passou 1 hora
-            time_diff = (datetime.now() - last_bot_msg["timestamp"]).total_seconds()
-            
-            if time_diff >= 3600:  # 3600 segundos = 1 hora
-                # Verificar se já enviou follow-up
-                if phone in followup_status and followup_status[phone].get("sent"):
-                    return False
-                
-                return True
-        
-        return False
-        
-    except Exception as e:
-        logger.error(f"Erro ao verificar follow-up: {e}")
-        return False
-
-
-async def enviar_followup_tecnica_6(phone: str):
-    """TÉCNICA 6: Follow-up inteligente após 1 hora"""
-    try:
-        mensagem = """Oi! Vi que você pediu orçamento para tradução. Alguma dúvida que eu possa esclarecer? Estou aqui para ajudar! 😊"""
-        
-        await send_whatsapp_message(phone, mensagem)
-        
-        # Salvar no banco
-        await db.conversas.insert_one({
-            "phone": phone,
-            "message": mensagem,
-            "role": "assistant",
-            "timestamp": datetime.now(),
-            "canal": "WhatsApp",
-            "type": "followup_1h"
-        })
-        
-        # Marcar como enviado
-        followup_status[phone] = {
-            "sent": True,
-            "timestamp": datetime.now(),
-            "waiting_objection": True
-        }
-        
-        logger.info(f"✅ TÉCNICA 6 aplicada: Follow-up enviado para {phone}")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Erro ao enviar follow-up: {e}")
-        return False
-
-
-async def aplicar_tecnica_fechamento(phone: str, objecao: str) -> str:
-    """TÉCNICA 5: Perguntas de fechamento baseadas na objeção"""
-    try:
-        objecao_lower = objecao.lower()
-        
-        # Detectar tipo de objeção
-        
-        # OBJEÇÃO: Preço
-        if any(palavra in objecao_lower for palavra in ["caro", "preço", "valor", "custo", "expensive", "price"]):
-            # Buscar último orçamento para calcular 20% de desconto
-            last_quote = await db.conversas.find_one(
-                {
-                    "phone": phone,
-                    "role": "assistant",
-                    "message": {"$regex": "\\$", "$options": "i"}
-                },
-                sort=[("timestamp", -1)]
-            )
-            
-            # Tentar extrair valor do orçamento
-            valor_original = None
-            novo_valor = None
-            
-            if last_quote:
-                match = re.search(r'\$(\d+\.?\d*)', last_quote.get("message", ""))
-                if match:
-                    valor_original = float(match.group(1))
-                    novo_valor = valor_original * 0.80  # 20% de desconto
-            
-            # Montar mensagem com ou sem valor calculado
-            if novo_valor:
-                return f"""Entendo perfeitamente! 💰
-
-Deixa eu consultar com minha supervisora... 
-
-✅ Consegui aprovar um super desconto especial de 20% se você fechar hoje. O valor fica em ${novo_valor:.2f}. Podemos prosseguir?
-
-Aceito Venmo (@legacytranslations) ou Zelle ((857) 208-1139)."""
-            else:
-                return """Entendo perfeitamente! 💰
-
-Deixa eu consultar com minha supervisora... 
-
-✅ Consegui aprovar um super desconto especial de 20% se você fechar hoje. Podemos prosseguir?
-
-Aceito Venmo (@legacytranslations) ou Zelle ((857) 208-1139)."""
-        
-        # OBJEÇÃO: Prazo
-        elif any(palavra in objecao_lower for palavra in ["prazo", "rápido", "urgente", "quando", "tempo", "deadline"]):
-            return """Entendo que o prazo é importante! ⏰
-
-Vou priorizar seu documento. Consigo garantir entrega em 2 dias úteis.
-
-Se eu garantir esse prazo, fechamos agora? Você prefere pagamento via Venmo ou Zelle?"""
-        
-        # OBJEÇÃO: Qualidade/Confiança
-        elif any(palavra in objecao_lower for palavra in ["qualidade", "confiança", "certificado", "aceito", "válido"]):
-            return """Excelente pergunta! 📜
-
-Somos especializados em traduções juramentadas. Garantimos 100% de aceitação em universidades, consulados e USCIS.
-
-Já atendemos centenas de clientes com aprovação garantida.
-
-Com essa garantia, fechamos agora? Venmo ou Zelle?"""
-        
-        # OBJEÇÃO: Genérica (não identificada)
-        else:
-            return f"""Entendo sua preocupação! 
-
-Deixa eu ver como posso te ajudar com isso: "{objecao}"
-
-Se eu resolver essa questão para você, fechamos agora? 
-
-Você prefere pagamento via Venmo (@legacytranslations) ou Zelle ((857) 208-1139)?"""
-        
-    except Exception as e:
-        logger.error(f"Erro ao aplicar técnica de fechamento: {e}")
-        return "Qual sua principal dúvida? Quero te ajudar a resolver isso! 😊"
-
-
-async def detectar_e_aplicar_fechamento(phone: str, message: str) -> Optional[str]:
-    """Detecta se deve aplicar TÉCNICA 5 (pergunta de fechamento)"""
-    try:
-        # Verificar se está aguardando resposta de objeção
-        if phone not in followup_status or not followup_status[phone].get("waiting_objection"):
-            return None
-        
-        message_lower = message.lower()
-        
-        # SITUAÇÃO 1: Cliente já diz que vai fechar
-        if any(palavra in message_lower for palavra in ["ok", "sim", "vou fazer", "vamos", "quero", "pode ser", "fechado"]):
-            followup_status[phone]["waiting_objection"] = False
-            return """Perfeito! 🎉
-
-Para concluir, você pode efetuar o pagamento via:
-
-💳 VENMO: @legacytranslations
-📱 ZELLE: (857) 208-1139 (LEGACY TRANSLATIONS INC)
-
-Assim que confirmar o pagamento, começo a tradução imediatamente!"""
-        
-        # SITUAÇÃO 2: Cliente apresenta objeção/dúvida
-        elif len(message) > 10:  # Mensagem com conteúdo
-            # Perguntar a principal preocupação (PRIMEIRA VEZ)
-            if not followup_status[phone].get("asked_objection"):
-                followup_status[phone]["asked_objection"] = True
-                followup_status[phone]["last_objection"] = message
-                
-                return """Entendo! 😊
-
-Qual é a principal preocupação que está te impedindo de prosseguir? Quero ter certeza de resolver tudo antes de você decidir."""
-            
-            # Cliente já respondeu a pergunta - aplicar TÉCNICA 5
-            else:
-                followup_status[phone]["waiting_objection"] = False
-                return await aplicar_tecnica_fechamento(phone, message)
-        
-        return None
-        
-    except Exception as e:
-        logger.error(f"Erro ao detectar fechamento: {e}")
-        return None
-
-
-# ============================================================
-# TAREFA AGENDADA: VERIFICAR FOLLOW-UPS A CADA 10 MINUTOS
-# ============================================================
-
-scheduler = AsyncIOScheduler()
-
-async def tarefa_verificar_followups():
-    """Verifica a cada 10 minutos se há clientes precisando de follow-up"""
-    try:
-        logger.info("🔍 Verificando clientes para follow-up...")
-        
-        # Buscar todas as conversas únicas
-        phones = await db.conversas.distinct("phone")
-        
-        followups_enviados = 0
-        
-        for phone in phones:
-            if await verificar_necessidade_followup(phone):
-                await enviar_followup_tecnica_6(phone)
-                followups_enviados += 1
-                await asyncio.sleep(5)  # Delay entre mensagens
-        
-        if followups_enviados > 0:
-            logger.info(f"✅ {followups_enviados} follow-ups enviados")
-        else:
-            logger.info("✅ Nenhum follow-up necessário no momento")
-        
-    except Exception as e:
-        logger.error(f"❌ Erro ao verificar follow-ups: {e}")
-
-
-# Iniciar scheduler (executar a cada 10 minutos)
-scheduler.add_job(tarefa_verificar_followups, 'interval', minutes=10)
-scheduler.start()
-logger.info("✅ Sistema de follow-up automático iniciado (verifica a cada 10 minutos)")
 
 
 # ============================================================
@@ -1404,27 +1159,7 @@ Para urgencias: (contato)"""
 
             logger.info(f"Texto de {phone}: {text}")
 
-            # NOVO: Aplicar TÉCNICA 5 (Fechamento) se necessário
-            resposta_fechamento = await detectar_e_aplicar_fechamento(phone, text)
-            
-            if resposta_fechamento:
-                await send_whatsapp_message(phone, resposta_fechamento)
-                
-                # Salvar no banco
-                await db.conversas.insert_one({
-                    "phone": phone,
-                    "message": resposta_fechamento,
-                    "role": "assistant",
-                    "timestamp": datetime.now(),
-                    "canal": "WhatsApp",
-                    "type": "sales_closing"
-                })
-                
-                logger.info(f"✅ TÉCNICA 5 aplicada: Fechamento enviado para {phone}")
-                
-                return JSONResponse({"status": "processed", "type": "sales_closing"})
-
-            # NOVO: Verificar se está aguardando confirmação de páginas
+            # Verificar se está aguardando confirmação de páginas
             if phone in image_sessions and image_sessions[phone].get("waiting_confirmation"):
                 respostas_negativas = ["não", "nao", "só isso", "so isso", "não tenho", "nao tenho", "é só", "e so"]
                 
@@ -1461,7 +1196,7 @@ Para urgencias: (contato)"""
             return JSONResponse({"status": "processed", "type": "text", "conversion": conversao_detectada})
 
         # ============================================
-        # PROCESSAR IMAGEM (COM AGRUPAMENTO)
+        # PROCESSAR IMAGEM (COM AGRUPAMENTO - 4 SEGUNDOS)
         # ============================================
         elif message_type == "image":
             image_url = data.get("image", {}).get("imageUrl", "")
@@ -1479,7 +1214,7 @@ Para urgencias: (contato)"""
                 await send_whatsapp_message(phone, "Desculpe, nao consegui baixar a imagem. Pode tentar enviar novamente?")
                 return JSONResponse({"status": "error", "reason": "download failed"})
 
-            # NOVO: Sistema de agrupamento
+            # Sistema de agrupamento (4 segundos)
             deve_perguntar = await adicionar_imagem_sessao(phone, image_bytes)
             
             if deve_perguntar:
@@ -1623,7 +1358,7 @@ async def root():
 <body>
     <div class="container">
         <h1>🤖 MIA Bot</h1>
-        <p class="status">✅ Sistema Ativo + Follow-up Automático</p>
+        <p class="status">✅ Sistema Ativo</p>
         <p>Assistente virtual inteligente da Legacy Translations</p>
 
         <h3>📊 Painel Administrativo:</h3>
@@ -1635,17 +1370,9 @@ async def root():
         <h3>🚀 Recursos Implementados:</h3>
         <div class="feature">✅ Mensagens de texto (GPT-4)</div>
         <div class="feature">✅ Análise de imagens (GPT-4 Vision)</div>
-        <div class="feature">✅ Agrupamento de múltiplas imagens</div>
+        <div class="feature">✅ Agrupamento de múltiplas imagens (4 segundos)</div>
         <div class="feature">✅ Transcrição de áudio (Whisper)</div>
-        <div class="feature">✅ Follow-up automático (1 hora)</div>
-        <div class="feature">✅ Técnicas de fechamento (20% desconto)</div>
         <div class="feature">✅ Treinamento dinâmico (MongoDB)</div>
-        
-        <h3>⏰ Sistema Automático:</h3>
-        <p>🔍 Verifica clientes sem resposta a cada 10 minutos<br>
-        📤 Envia follow-up após 1 hora automaticamente<br>
-        💰 Aplica desconto de 20% em objeções de preço<br>
-        🎯 Perguntas de fechamento inteligentes</p>
     </div>
 </body>
 </html>
@@ -1662,18 +1389,8 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "service": "MIA Bot",
-        "version": "4.0 - Full Sales Automation"
+        "version": "3.5 - Image Grouping Only"
     }
-
-
-# ============================================================
-# ROTA: TESTE MANUAL DE FOLLOW-UP
-# ============================================================
-@app.get("/admin/test-followup/{phone}")
-async def test_followup(phone: str):
-    """Testar follow-up manualmente (para desenvolvimento)"""
-    await enviar_followup_tecnica_6(phone)
-    return {"status": "followup_sent", "phone": phone, "message": "Follow-up enviado manualmente"}
 
 
 # ============================================================
@@ -1690,10 +1407,6 @@ async def reset_mode(phone: str):
                 "$unset": {"transferred_at": "", "transfer_reason": ""}
             }
         )
-        
-        # Limpar follow-up status também
-        if phone in followup_status:
-            del followup_status[phone]
         
         return {
             "status": "success",
