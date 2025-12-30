@@ -1520,12 +1520,12 @@ async def get_config_numbers():
 
 @app.get("/admin/reset-all-human")
 async def reset_all_human_mode():
-    """Reseta clientes em modo humano das ultimas 48 horas para modo IA"""
+    """Reseta clientes em modo humano da ultima hora para modo IA"""
     from datetime import timedelta
 
     try:
-        # Apenas conversas das ultimas 48 horas (evita mexer em conversas antigas)
-        limite_tempo = datetime.now() - timedelta(hours=48)
+        # Apenas conversas da ultima hora (evita mexer em conversas antigas)
+        limite_tempo = datetime.now() - timedelta(hours=1)
 
         # Encontrar numeros em modo human COM atividade recente
         phones_human = await db.conversas.distinct("phone", {
@@ -1536,7 +1536,7 @@ async def reset_all_human_mode():
         if not phones_human:
             return {
                 "status": "success",
-                "message": "Nenhum cliente em modo humano nas ultimas 48 horas",
+                "message": "Nenhum cliente em modo humano na ultima hora",
                 "phones_resetados": []
             }
 
@@ -1557,7 +1557,7 @@ async def reset_all_human_mode():
             "message": f"{len(phones_human)} clientes recentes resetados para modo IA",
             "phones_resetados": phones_human,
             "documentos_atualizados": result.modified_count,
-            "nota": "Apenas conversas das ultimas 48 horas foram afetadas"
+            "nota": "Apenas conversas da ultima hora foram afetadas"
         }
     except Exception as e:
         logger.error(f"Erro ao resetar: {e}")
