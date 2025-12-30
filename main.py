@@ -17,6 +17,7 @@ from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import httpx
 from openai import OpenAI
@@ -40,6 +41,7 @@ from admin_controle_routes import router as controle_router
 from admin_learning_routes import router as learning_router
 from admin_atendimento_routes import router as atendimento_router
 from admin_conversas_routes import router as conversas_router
+from webchat_routes import router as webchat_router
 
 # ============================================================
 # CONFIGURACAO DE LOGGING
@@ -54,6 +56,21 @@ logger = logging.getLogger(__name__)
 # INICIALIZACAO
 # ============================================================
 app = FastAPI(title="WhatsApp AI Platform - Legacy Translations")
+
+# CORS - Permitir requisicoes do portal
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://portal.legacytranslations.com",
+        "http://localhost:3000",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Templates
@@ -485,6 +502,7 @@ app.include_router(controle_router)
 app.include_router(learning_router)
 app.include_router(atendimento_router)
 app.include_router(conversas_router)
+app.include_router(webchat_router)
 
 # ============================================================
 # CONFIGURACOES Z-API
