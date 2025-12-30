@@ -349,6 +349,7 @@
             <div class="control-title">Quick Actions</div>
         </div>
 
+        <button class="btn-action" onclick="resetarTravados()" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);">🔓 Unlock Stuck Clients</button>
         <button class="btn-action" onclick="limparCache()">🗑️ Clear Cache</button>
         <button class="btn-action" onclick="reiniciarBot()" style="background: linear-gradient(135deg, #5dade2 0%, #4a9dd1 100%);">🔄 Restart Bot</button>
         <button class="btn-action" onclick="exportarDados()" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);">💾 Export Data</button>
@@ -566,6 +567,30 @@
 
     function exportarDados() {
         alert('💾 Export in development');
+    }
+
+    async function resetarTravados() {
+        if (!confirm('Unlock all clients stuck in human mode (last hour)?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/admin/reset-all-human');
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                if (data.phones_resetados && data.phones_resetados.length > 0) {
+                    alert(`✅ ${data.phones_resetados.length} client(s) unlocked!\n\nNumbers: ${data.phones_resetados.join(', ')}`);
+                } else {
+                    alert('✅ No stuck clients found in the last hour.');
+                }
+                carregarClientes();
+            } else {
+                alert('❌ Error: ' + (data.message || 'Unknown'));
+            }
+        } catch (error) {
+            alert('❌ Connection error');
+        }
     }
 
     // Carregar configuração do operador
