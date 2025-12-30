@@ -131,13 +131,15 @@ async def set_bot_status(enabled: bool):
 # ============================================================
 # TRANSFERENCIA PARA ATENDENTE HUMANO
 # ============================================================
-# Numeros do sistema
-ATENDENTE_PHONE = "18573167770"  # Numero oficial de atendimento EUA (responde clientes)
-NOTIFICACAO_PHONE = "18572081139"  # Numero pessoal EUA (recebe notificacoes)
+# Numeros do sistema (configuravel por ambiente)
+ATENDENTE_PHONE = os.getenv("ATENDENTE_PHONE", "18573167770")  # Numero oficial de atendimento EUA
+NOTIFICACAO_PHONE = os.getenv("NOTIFICACAO_PHONE", "18572081139")  # Numero pessoal EUA (recebe notificacoes)
 
 async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
     """Envia notificacao para atendente com resumo da conversa"""
     try:
+        logger.info(f"[NOTIFICACAO] Iniciando notificacao para {NOTIFICACAO_PHONE} sobre cliente {phone}")
+
         # Buscar ultimas 10 mensagens da conversa
         mensagens = await db.conversas.find(
             {"phone": phone}
@@ -164,16 +166,23 @@ Motivo: {motivo}
 Resumo da Conversa:
 {resumo}
 
-Para assumir o atendimento, responda ao cliente diretamente.
-Cliente digitando + volta para IA automaticamente."""
+*COMANDOS (envie NA CONVERSA DO CLIENTE):*
+* = Pausar IA (ja esta pausada)
++ = Retomar IA"""
 
         # Enviar notificacao para numero pessoal
-        await send_whatsapp_message(NOTIFICACAO_PHONE, mensagem_atendente)
-        logger.info(f"Notificacao enviada para atendente: {phone}")
+        logger.info(f"[NOTIFICACAO] Enviando para {NOTIFICACAO_PHONE}...")
+        resultado = await send_whatsapp_message(NOTIFICACAO_PHONE, mensagem_atendente)
 
-        return True
+        if resultado:
+            logger.info(f"[NOTIFICACAO] SUCESSO - Notificacao enviada para {NOTIFICACAO_PHONE}")
+        else:
+            logger.error(f"[NOTIFICACAO] FALHA - Nao foi possivel enviar para {NOTIFICACAO_PHONE}")
+
+        return resultado
     except Exception as e:
-        logger.error(f"Erro ao notificar atendente: {e}")
+        logger.error(f"[NOTIFICACAO] ERRO: {e}")
+        logger.error(traceback.format_exc())
         return False
 
 
@@ -1025,16 +1034,28 @@ async def webhook_whatsapp(request: Request):
         # ============================================
         phone = data.get("phone", "")
         from_me = data.get("fromMe", False)
+
+        # Extrair texto de forma mais robusta
         message_text = ""
-        if "text" in data and "message" in data["text"]:
-            message_text = data["text"]["message"].strip()
+        if "text" in data:
+            if isinstance(data["text"], dict):
+                message_text = data["text"].get("message", "")
+            elif isinstance(data["text"], str):
+                message_text = data["text"]
+        message_text = message_text.strip() if message_text else ""
+
+        logger.info(f"[WEBHOOK] phone={phone}, fromMe={from_me}, text='{message_text}'")
 
         # ============================================
         # PROCESSAR COMANDOS DO OPERADOR (fromMe=true)
         # Quando operador envia * ou + na conversa com cliente
         # ============================================
-        if from_me and message_text in ["*", "+"]:
-            if message_text == "*":
+        if from_me:
+            # Verificar comandos de controle
+            comando = message_text.strip()
+            logger.info(f"[OPERADOR] Mensagem fromMe detectada: '{comando}' para cliente {phone}")
+
+            if comando == "*":
                 await db.conversas.update_many(
                     {"phone": phone},
                     {"$set": {"mode": "human", "transferred_at": datetime.now()}}
@@ -1042,7 +1063,7 @@ async def webhook_whatsapp(request: Request):
                 logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone}")
                 return {"status": "ia_paused", "client": phone}
 
-            elif message_text == "+":
+            elif comando == "+":
                 await db.conversas.update_many(
                     {"phone": phone},
                     {"$set": {"mode": "ia"}, "$unset": {"transferred_at": "", "transfer_reason": ""}}
@@ -1050,12 +1071,9 @@ async def webhook_whatsapp(request: Request):
                 logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone}")
                 return {"status": "ia_resumed", "client": phone}
 
-        # ============================================
-        # IGNORAR OUTRAS MENSAGENS ENVIADAS (fromMe=true)
-        # ============================================
-        if from_me:
-            logger.info(f"Mensagem enviada (fromMe=true) ignorada")
-            return {"status": "ignored", "reason": "from_me"}
+            # Ignorar outras mensagens enviadas pelo operador (nao interferir)
+            logger.info(f"[OPERADOR] Mensagem normal ignorada (operador respondendo cliente)")
+            return {"status": "ignored", "reason": "operator_message"}
 
         # ============================================
         # VERIFICAR STATUS DO BOT
@@ -1437,7 +1455,7 @@ async def reset_mode(phone: str):
                 "$unset": {"transferred_at": "", "transfer_reason": ""}
             }
         )
-        
+
         return {
             "status": "success",
             "phone": phone,
@@ -1445,6 +1463,104 @@ async def reset_mode(phone: str):
             "message": f"Numero {phone} desbloqueado! Bot vai responder agora."
         }
     except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ============================================================
+# ENDPOINT DE TESTE DE NOTIFICACAO
+# ============================================================
+@app.get("/admin/test-notification")
+async def test_notification():
+    """Testa envio de notificacao para numero do atendente"""
+    try:
+        mensagem_teste = f"""*TESTE DE NOTIFICACAO*
+
+Este e um teste para verificar se as notificacoes estao chegando.
+
+Hora do teste: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+
+Configuracao atual:
+- Numero de notificacao: {NOTIFICACAO_PHONE}
+- Numero do bot: {ATENDENTE_PHONE}
+
+Se voce recebeu esta mensagem, as notificacoes estao funcionando!"""
+
+        logger.info(f"[TESTE] Enviando notificacao de teste para {NOTIFICACAO_PHONE}")
+        resultado = await send_whatsapp_message(NOTIFICACAO_PHONE, mensagem_teste)
+
+        if resultado:
+            return {
+                "status": "success",
+                "message": f"Notificacao enviada para {NOTIFICACAO_PHONE}",
+                "notificacao_phone": NOTIFICACAO_PHONE,
+                "atendente_phone": ATENDENTE_PHONE
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"Falha ao enviar para {NOTIFICACAO_PHONE}. Verifique os logs.",
+                "notificacao_phone": NOTIFICACAO_PHONE,
+                "dica": "O numero precisa ter conversado com o bot antes (janela 24h do WhatsApp)"
+            }
+    except Exception as e:
+        logger.error(f"[TESTE] Erro: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/admin/config-numbers")
+async def get_config_numbers():
+    """Mostra numeros configurados no sistema"""
+    return {
+        "atendente_phone": ATENDENTE_PHONE,
+        "notificacao_phone": NOTIFICACAO_PHONE,
+        "zapi_instance": ZAPI_INSTANCE_ID,
+        "nota": "Para alterar, configure as variaveis ATENDENTE_PHONE e NOTIFICACAO_PHONE no Render"
+    }
+
+
+@app.get("/admin/reset-all-human")
+async def reset_all_human_mode():
+    """Reseta clientes em modo humano da ultima hora para modo IA"""
+    from datetime import timedelta
+
+    try:
+        # Apenas conversas da ultima hora (evita mexer em conversas antigas)
+        limite_tempo = datetime.now() - timedelta(hours=1)
+
+        # Encontrar numeros em modo human COM atividade recente
+        phones_human = await db.conversas.distinct("phone", {
+            "mode": "human",
+            "timestamp": {"$gte": limite_tempo}
+        })
+
+        if not phones_human:
+            return {
+                "status": "success",
+                "message": "Nenhum cliente em modo humano na ultima hora",
+                "phones_resetados": []
+            }
+
+        # Resetar apenas esses numeros
+        result = await db.conversas.update_many(
+            {
+                "phone": {"$in": phones_human},
+                "mode": "human"
+            },
+            {
+                "$set": {"mode": "ia"},
+                "$unset": {"transferred_at": "", "transfer_reason": ""}
+            }
+        )
+
+        return {
+            "status": "success",
+            "message": f"{len(phones_human)} clientes recentes resetados para modo IA",
+            "phones_resetados": phones_human,
+            "documentos_atualizados": result.modified_count,
+            "nota": "Apenas conversas da ultima hora foram afetadas"
+        }
+    except Exception as e:
+        logger.error(f"Erro ao resetar: {e}")
         return {"status": "error", "message": str(e)}
 
 
