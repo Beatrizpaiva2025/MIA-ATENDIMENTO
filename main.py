@@ -1520,14 +1520,32 @@ async def get_config_numbers():
 
 @app.get("/admin/reset-all-human")
 async def reset_all_human_mode():
-    """Reseta TODOS os clientes que estao em modo humano para modo IA"""
-    try:
-        # Encontrar todos os numeros em modo human
-        phones_human = await db.conversas.distinct("phone", {"mode": "human"})
+    """Reseta clientes em modo humano das ultimas 48 horas para modo IA"""
+    from datetime import timedelta
 
-        # Resetar todos
+    try:
+        # Apenas conversas das ultimas 48 horas (evita mexer em conversas antigas)
+        limite_tempo = datetime.now() - timedelta(hours=48)
+
+        # Encontrar numeros em modo human COM atividade recente
+        phones_human = await db.conversas.distinct("phone", {
+            "mode": "human",
+            "timestamp": {"$gte": limite_tempo}
+        })
+
+        if not phones_human:
+            return {
+                "status": "success",
+                "message": "Nenhum cliente em modo humano nas ultimas 48 horas",
+                "phones_resetados": []
+            }
+
+        # Resetar apenas esses numeros
         result = await db.conversas.update_many(
-            {"mode": "human"},
+            {
+                "phone": {"$in": phones_human},
+                "mode": "human"
+            },
             {
                 "$set": {"mode": "ia"},
                 "$unset": {"transferred_at": "", "transfer_reason": ""}
@@ -1536,12 +1554,13 @@ async def reset_all_human_mode():
 
         return {
             "status": "success",
-            "message": f"Todos os {len(phones_human)} clientes foram resetados para modo IA",
+            "message": f"{len(phones_human)} clientes recentes resetados para modo IA",
             "phones_resetados": phones_human,
-            "documentos_atualizados": result.modified_count
+            "documentos_atualizados": result.modified_count,
+            "nota": "Apenas conversas das ultimas 48 horas foram afetadas"
         }
     except Exception as e:
-        logger.error(f"Erro ao resetar todos: {e}")
+        logger.error(f"Erro ao resetar: {e}")
         return {"status": "error", "message": str(e)}
 
 
