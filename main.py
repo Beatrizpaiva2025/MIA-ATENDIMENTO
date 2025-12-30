@@ -1518,6 +1518,33 @@ async def get_config_numbers():
     }
 
 
+@app.get("/admin/reset-all-human")
+async def reset_all_human_mode():
+    """Reseta TODOS os clientes que estao em modo humano para modo IA"""
+    try:
+        # Encontrar todos os numeros em modo human
+        phones_human = await db.conversas.distinct("phone", {"mode": "human"})
+
+        # Resetar todos
+        result = await db.conversas.update_many(
+            {"mode": "human"},
+            {
+                "$set": {"mode": "ia"},
+                "$unset": {"transferred_at": "", "transfer_reason": ""}
+            }
+        )
+
+        return {
+            "status": "success",
+            "message": f"Todos os {len(phones_human)} clientes foram resetados para modo IA",
+            "phones_resetados": phones_human,
+            "documentos_atualizados": result.modified_count
+        }
+    except Exception as e:
+        logger.error(f"Erro ao resetar todos: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 # ============================================================
 # INICIAR SERVIDOR
 # ============================================================
