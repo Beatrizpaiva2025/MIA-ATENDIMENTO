@@ -135,6 +135,9 @@ async def set_bot_status(enabled: bool):
 ATENDENTE_PHONE = os.getenv("ATENDENTE_PHONE", "18573167770")  # Numero oficial de atendimento EUA
 NOTIFICACAO_PHONE = os.getenv("NOTIFICACAO_PHONE", "18572081139")  # Numero pessoal EUA (recebe notificacoes)
 
+# Timeout para modo humano (em minutos) - apos esse tempo, volta automaticamente para IA
+HUMAN_MODE_TIMEOUT_MINUTES = int(os.getenv("HUMAN_MODE_TIMEOUT_MINUTES", "30"))
+
 async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
     """Envia notificacao para atendente com resumo da conversa"""
     try:
@@ -189,8 +192,22 @@ Resumo da Conversa:
 async def detectar_solicitacao_humano(message: str) -> bool:
     """Detecta se cliente esta pedindo atendente humano"""
     palavras_chave = [
-        "atendente", "humano", "pessoa", "falar com alguem", "falar com alguem",
-        "operador", "atendimento humano", "quero falar", "preciso falar", "transferir"
+        # Palavras principais
+        "atendente", "humano", "pessoa", "operador",
+        # Frases comuns
+        "falar com alguem", "falar com alguém",
+        "falar com humano", "falar com atendente",
+        "falar com uma pessoa", "falar com pessoa",
+        "atendimento humano", "atendente humano",
+        "quero falar", "preciso falar",
+        "quero um atendente", "quero atendente",
+        "preciso de atendente", "preciso atendente",
+        "transferir", "transfere",
+        # Variações de frustração
+        "nao entende", "não entende",
+        "nao esta entendendo", "não está entendendo",
+        "quero pessoa real", "pessoa de verdade",
+        "falar com gente", "alguem real", "alguém real"
     ]
 
     message_lower = message.lower()
@@ -223,6 +240,60 @@ async def transferir_para_humano(phone: str, motivo: str):
 
     except Exception as e:
         logger.error(f"Erro ao transferir para humano: {e}")
+        return False
+
+
+async def verificar_timeout_modo_humano(phone: str) -> bool:
+    """
+    Verifica se o modo humano expirou (timeout).
+    Se expirou, retorna a conversa para modo IA automaticamente.
+    Retorna True se estava em timeout e foi resetado, False caso contrario.
+    """
+    from datetime import timedelta
+
+    try:
+        # Buscar ultima conversa com modo human
+        conversa = await db.conversas.find_one(
+            {"phone": phone, "mode": "human"},
+            sort=[("timestamp", -1)]
+        )
+
+        if not conversa:
+            return False
+
+        transferred_at = conversa.get("transferred_at")
+        if not transferred_at:
+            # Se nao tem timestamp de transferencia, usar timestamp da mensagem
+            transferred_at = conversa.get("timestamp", datetime.now())
+
+        # Verificar se passou o timeout
+        tempo_limite = transferred_at + timedelta(minutes=HUMAN_MODE_TIMEOUT_MINUTES)
+
+        if datetime.now() > tempo_limite:
+            # Timeout expirou - verificar se houve resposta do atendente
+            # Buscar mensagens do atendente (role=assistant) apos a transferencia
+            resposta_atendente = await db.conversas.find_one({
+                "phone": phone,
+                "role": "assistant",
+                "timestamp": {"$gt": transferred_at}
+            })
+
+            if not resposta_atendente:
+                # Nenhuma resposta do atendente - resetar para IA
+                await db.conversas.update_many(
+                    {"phone": phone},
+                    {
+                        "$set": {"mode": "ia"},
+                        "$unset": {"transferred_at": "", "transfer_reason": ""}
+                    }
+                )
+                logger.info(f"[TIMEOUT] Conversa {phone} retornou para IA apos {HUMAN_MODE_TIMEOUT_MINUTES} min sem resposta do atendente")
+                return True
+
+        return False
+
+    except Exception as e:
+        logger.error(f"Erro ao verificar timeout: {e}")
         return False
 
 
@@ -917,9 +988,12 @@ async def process_message_with_ai(phone: str, message: str) -> str:
         # Detectar se cliente quer falar com humano
         if await detectar_solicitacao_humano(message):
             await transferir_para_humano(phone, "Cliente solicitou atendente")
-            # Retornar mensagem normal (invisivel - cliente nao sabe que foi transferido)
-            # Mensagem natural sem mencionar "humano" ou "robo"
-            return "Perfeito! Vou transferir voce agora para um de nossos especialistas que podera te ajudar melhor com isso. Um momento, por favor."
+            # Retornar mensagem informativa sobre a transferencia
+            return (
+                "Perfeito! Estou encaminhando voce para um de nossos especialistas. "
+                "Por favor aguarde, em breve alguem ira te atender. "
+                "Se preferir, pode continuar enviando suas duvidas enquanto aguarda."
+            )
 
         # Buscar treinamento dinamico do MongoDB
         system_prompt = await get_bot_training()
@@ -1084,7 +1158,23 @@ async def webhook_whatsapp(request: Request):
         conversa = await db.conversas.find_one({"phone": phone}, sort=[("timestamp", -1)])
         modo_humano = conversa and conversa.get("mode") == "human"
 
-        # Se bot desligado OU conversa em modo humano, nao processar
+        # Se em modo humano, verificar se expirou o timeout
+        timeout_expirou = False
+        if modo_humano:
+            timeout_expirou = await verificar_timeout_modo_humano(phone)
+            if timeout_expirou:
+                # Timeout expirou - nao esta mais em modo humano
+                modo_humano = False
+                logger.info(f"[TIMEOUT] Cliente {phone} voltou para modo IA automaticamente")
+
+                # Enviar mensagem de fallback ao cliente
+                mensagem_fallback = (
+                    "Desculpe a demora! No momento nossos atendentes estao ocupados. "
+                    "Enquanto isso, posso continuar te ajudando. Como posso auxiliar?"
+                )
+                await send_whatsapp_message(phone, mensagem_fallback)
+
+        # Se bot desligado OU conversa em modo humano (e NAO expirou timeout), nao processar
         if not bot_status["enabled"] or modo_humano:
             logger.info(f"Bot {'desligado' if not bot_status['enabled'] else 'em modo humano para ' + phone}")
 
