@@ -135,6 +135,124 @@ async def set_bot_status(enabled: bool):
 ATENDENTE_PHONE = os.getenv("ATENDENTE_PHONE", "18573167770")  # Numero oficial de atendimento EUA
 NOTIFICACAO_PHONE = os.getenv("NOTIFICACAO_PHONE", "18572081139")  # Numero pessoal EUA (recebe notificacoes)
 
+# Timeout para modo humano (em minutos) - apos esse tempo, volta automaticamente para IA
+HUMAN_MODE_TIMEOUT_MINUTES = int(os.getenv("HUMAN_MODE_TIMEOUT_MINUTES", "30"))
+
+# ============================================================
+# SISTEMA DE ETAPAS DO ATENDIMENTO
+# ============================================================
+# Etapas possiveis:
+# - INICIAL: Conversa normal, sem documento analisado
+# - AGUARDANDO_NOME: Bot pediu o nome do cliente
+# - AGUARDANDO_ORIGEM: Bot pediu como conheceu a Legacy
+# - AGUARDANDO_CONFIRMACAO: Orcamento enviado, aguardando cliente confirmar
+# - AGUARDANDO_PAGAMENTO: Cliente confirmou, aguardando comprovante
+# - PAGAMENTO_RECEBIDO: Comprovante recebido e confirmado
+
+ETAPAS = {
+    "INICIAL": "inicial",
+    "AGUARDANDO_NOME": "aguardando_nome",
+    "AGUARDANDO_ORIGEM": "aguardando_origem",
+    "AGUARDANDO_CONFIRMACAO": "aguardando_confirmacao",
+    "AGUARDANDO_PAGAMENTO": "aguardando_pagamento",
+    "PAGAMENTO_RECEBIDO": "pagamento_recebido"
+}
+
+# Palavras para detectar confirmacao de prosseguimento
+PALAVRAS_CONFIRMACAO = [
+    "vou prosseguir", "pode prosseguir", "pode fazer", "pode iniciar",
+    "vamos continuar", "pode dar andamento", "confirmo", "ok, pode seguir",
+    "quero prosseguir", "pode começar", "pode comecar", "seguimos com a tradução",
+    "seguimos com a traducao", "vamos fazer", "pode seguir", "confirmar",
+    "quero fazer", "vou fazer", "sim, pode", "sim pode", "fechado", "fechar",
+    "vamos fechar", "aceito", "aceitar", "concordo", "let's do it", "let's proceed",
+    "yes", "yes please", "go ahead", "proceed", "confirm", "i confirm"
+]
+
+# Palavras para detectar comprovante de pagamento
+PALAVRAS_COMPROVANTE = [
+    "comprovante", "pagamento", "pago", "paid", "receipt", "transaction",
+    "transfer", "venmo", "zelle", "cashapp", "paypal", "bank", "transferência",
+    "transferencia", "pix", "deposito", "depósito", "amount", "total",
+    "confirmation", "ref", "transaction id"
+]
+
+
+async def get_cliente_estado(phone: str) -> dict:
+    """Busca o estado atual do cliente no atendimento"""
+    try:
+        estado = await db.cliente_estados.find_one({"phone": phone})
+        if not estado:
+            return {
+                "phone": phone,
+                "etapa": ETAPAS["INICIAL"],
+                "nome": None,
+                "origem": None,
+                "idioma": "pt",  # Padrao portugues
+                "ultimo_orcamento": None,
+                "valor_orcamento": None,
+                "documento_info": None,
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
+            }
+        return estado
+    except Exception as e:
+        logger.error(f"Erro ao buscar estado do cliente: {e}")
+        return {"phone": phone, "etapa": ETAPAS["INICIAL"], "idioma": "pt"}
+
+
+async def set_cliente_estado(phone: str, **kwargs):
+    """Atualiza o estado do cliente"""
+    try:
+        kwargs["updated_at"] = datetime.now()
+        await db.cliente_estados.update_one(
+            {"phone": phone},
+            {"$set": kwargs},
+            upsert=True
+        )
+        logger.info(f"Estado atualizado para {phone}: {kwargs}")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar estado: {e}")
+        return False
+
+
+def detectar_idioma(texto: str) -> str:
+    """Detecta idioma do texto (pt, en, es)"""
+    texto_lower = texto.lower()
+
+    # Palavras tipicas de cada idioma
+    palavras_pt = ["olá", "ola", "bom dia", "boa tarde", "boa noite", "obrigado", "obrigada",
+                   "por favor", "quero", "preciso", "pode", "gostaria", "como", "quanto"]
+    palavras_en = ["hello", "hi", "good morning", "good afternoon", "thank you", "thanks",
+                   "please", "want", "need", "can", "would", "how", "much", "price"]
+    palavras_es = ["hola", "buenos días", "buenas tardes", "gracias", "por favor",
+                   "quiero", "necesito", "puede", "cuánto", "precio", "traducción"]
+
+    # Contar matches
+    count_pt = sum(1 for p in palavras_pt if p in texto_lower)
+    count_en = sum(1 for p in palavras_en if p in texto_lower)
+    count_es = sum(1 for p in palavras_es if p in texto_lower)
+
+    if count_en > count_pt and count_en > count_es:
+        return "en"
+    elif count_es > count_pt and count_es > count_en:
+        return "es"
+    return "pt"
+
+
+def detectar_confirmacao_prosseguimento(texto: str) -> bool:
+    """Detecta se cliente confirmou que quer prosseguir com o servico"""
+    texto_lower = texto.lower()
+    return any(palavra in texto_lower for palavra in PALAVRAS_CONFIRMACAO)
+
+
+def detectar_possivel_comprovante(texto: str) -> bool:
+    """Detecta se texto indica possivel comprovante de pagamento"""
+    texto_lower = texto.lower()
+    return any(palavra in texto_lower for palavra in PALAVRAS_COMPROVANTE)
+
+
 async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
     """Envia notificacao para atendente com resumo da conversa"""
     try:
@@ -189,8 +307,22 @@ Resumo da Conversa:
 async def detectar_solicitacao_humano(message: str) -> bool:
     """Detecta se cliente esta pedindo atendente humano"""
     palavras_chave = [
-        "atendente", "humano", "pessoa", "falar com alguem", "falar com alguem",
-        "operador", "atendimento humano", "quero falar", "preciso falar", "transferir"
+        # Palavras principais
+        "atendente", "humano", "pessoa", "operador",
+        # Frases comuns
+        "falar com alguem", "falar com alguém",
+        "falar com humano", "falar com atendente",
+        "falar com uma pessoa", "falar com pessoa",
+        "atendimento humano", "atendente humano",
+        "quero falar", "preciso falar",
+        "quero um atendente", "quero atendente",
+        "preciso de atendente", "preciso atendente",
+        "transferir", "transfere",
+        # Variações de frustração
+        "nao entende", "não entende",
+        "nao esta entendendo", "não está entendendo",
+        "quero pessoa real", "pessoa de verdade",
+        "falar com gente", "alguem real", "alguém real"
     ]
 
     message_lower = message.lower()
@@ -223,6 +355,60 @@ async def transferir_para_humano(phone: str, motivo: str):
 
     except Exception as e:
         logger.error(f"Erro ao transferir para humano: {e}")
+        return False
+
+
+async def verificar_timeout_modo_humano(phone: str) -> bool:
+    """
+    Verifica se o modo humano expirou (timeout).
+    Se expirou, retorna a conversa para modo IA automaticamente.
+    Retorna True se estava em timeout e foi resetado, False caso contrario.
+    """
+    from datetime import timedelta
+
+    try:
+        # Buscar ultima conversa com modo human
+        conversa = await db.conversas.find_one(
+            {"phone": phone, "mode": "human"},
+            sort=[("timestamp", -1)]
+        )
+
+        if not conversa:
+            return False
+
+        transferred_at = conversa.get("transferred_at")
+        if not transferred_at:
+            # Se nao tem timestamp de transferencia, usar timestamp da mensagem
+            transferred_at = conversa.get("timestamp", datetime.now())
+
+        # Verificar se passou o timeout
+        tempo_limite = transferred_at + timedelta(minutes=HUMAN_MODE_TIMEOUT_MINUTES)
+
+        if datetime.now() > tempo_limite:
+            # Timeout expirou - verificar se houve resposta do atendente
+            # Buscar mensagens do atendente (role=assistant) apos a transferencia
+            resposta_atendente = await db.conversas.find_one({
+                "phone": phone,
+                "role": "assistant",
+                "timestamp": {"$gt": transferred_at}
+            })
+
+            if not resposta_atendente:
+                # Nenhuma resposta do atendente - resetar para IA
+                await db.conversas.update_many(
+                    {"phone": phone},
+                    {
+                        "$set": {"mode": "ia"},
+                        "$unset": {"transferred_at": "", "transfer_reason": ""}
+                    }
+                )
+                logger.info(f"[TIMEOUT] Conversa {phone} retornou para IA apos {HUMAN_MODE_TIMEOUT_MINUTES} min sem resposta do atendente")
+                return True
+
+        return False
+
+    except Exception as e:
+        logger.error(f"Erro ao verificar timeout: {e}")
         return False
 
 
@@ -420,24 +606,165 @@ async def adicionar_imagem_sessao(phone: str, image_bytes: bytes):
     return False  # Ainda aguardando mais imagens
 
 
+async def analisar_documento_inteligente(phone: str, image_bytes: bytes, total_pages: int) -> dict:
+    """Analisa documento com GPT-4 Vision e retorna informacoes estruturadas"""
+    try:
+        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """Voce e um analisador de documentos. Analise a imagem e retorne APENAS um JSON com:
+{
+    "tipo_documento": "historico escolar / diploma / certidao / contrato / etc",
+    "idioma_origem": "portugues / ingles / espanhol / etc",
+    "idioma_destino_sugerido": "ingles / portugues / etc",
+    "descricao_curta": "breve descricao do documento em 10 palavras"
+}
+Retorne APENAS o JSON, sem texto adicional."""
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Analise este documento:"},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                    ]
+                }
+            ],
+            max_tokens=200
+        )
+
+        resultado = response.choices[0].message.content
+        # Tentar extrair JSON
+        import json as json_lib
+        try:
+            # Limpar possíveis caracteres extras
+            resultado = resultado.strip()
+            if resultado.startswith("```"):
+                resultado = resultado.split("```")[1]
+                if resultado.startswith("json"):
+                    resultado = resultado[4:]
+            return json_lib.loads(resultado)
+        except:
+            return {
+                "tipo_documento": "documento",
+                "idioma_origem": "a identificar",
+                "idioma_destino_sugerido": "ingles",
+                "descricao_curta": "documento para traducao"
+            }
+    except Exception as e:
+        logger.error(f"Erro ao analisar documento: {e}")
+        return {
+            "tipo_documento": "documento",
+            "idioma_origem": "a identificar",
+            "idioma_destino_sugerido": "ingles",
+            "descricao_curta": "documento para traducao"
+        }
+
+
 async def processar_sessao_imagem(phone: str):
-    """Processa todas as imagens da sessão e gera orçamento"""
+    """Processa todas as imagens da sessão - FASE 1: Analise e pedir nome"""
     if phone not in image_sessions:
         return None
-    
+
     session = image_sessions[phone]
     total_pages = session["count"]
-    
-    # Pegar apenas a primeira imagem para análise (Vision)
     first_image = session["images"][0]
-    
-    # Buscar treinamento
+
+    # Buscar estado do cliente
+    estado = await get_cliente_estado(phone)
+    idioma = estado.get("idioma", "pt")
+
+    # Analisar documento inteligentemente
+    analise = await analisar_documento_inteligente(phone, first_image, total_pages)
+
+    # Guardar informacoes do documento no estado
+    await set_cliente_estado(
+        phone,
+        etapa=ETAPAS["AGUARDANDO_NOME"],
+        documento_info={
+            "total_pages": total_pages,
+            "tipo": analise.get("tipo_documento", "documento"),
+            "idioma_origem": analise.get("idioma_origem", "a identificar"),
+            "idioma_destino": analise.get("idioma_destino_sugerido", "ingles"),
+            "descricao": analise.get("descricao_curta", "documento")
+        }
+    )
+
+    # Montar mensagem de boas-vindas personalizada baseada no idioma detectado
+    tipo_doc = analise.get("tipo_documento", "documento")
+    idioma_origem = analise.get("idioma_origem", "")
+    idioma_destino = analise.get("idioma_destino_sugerido", "ingles")
+
+    # Mensagens em diferentes idiomas
+    if idioma == "en":
+        mensagem = (
+            f"Hello! I'm MIA, Legacy Translations' virtual assistant! 🌎\n\n"
+            f"I see you sent {total_pages} page{'s' if total_pages > 1 else ''} of a {tipo_doc} "
+            f"in {idioma_origem}.\n\n"
+            f"Can you confirm if you'd like to translate {'them' if total_pages > 1 else 'it'} to {idioma_destino}?\n\n"
+            f"Also, may I have your name please?"
+        )
+    elif idioma == "es":
+        mensagem = (
+            f"¡Hola! Soy MIA, asistente virtual de Legacy Translations! 🌎\n\n"
+            f"Veo que enviaste {total_pages} página{'s' if total_pages > 1 else ''} de un {tipo_doc} "
+            f"en {idioma_origem}.\n\n"
+            f"¿Puedes confirmar si deseas traducir{'las' if total_pages > 1 else 'lo'} al {idioma_destino}?\n\n"
+            f"Además, ¿me puedes decir tu nombre por favor?"
+        )
+    else:  # Portugues (padrao)
+        mensagem = (
+            f"Ola! Sou a MIA, assistente virtual da Legacy Translations! 🌎\n\n"
+            f"Vi que voce enviou {total_pages} pagina{'s' if total_pages > 1 else ''} de um {tipo_doc} "
+            f"em {idioma_origem}.\n\n"
+            f"Pode confirmar se deseja traduzi-lo{'s' if total_pages > 1 else ''} para o {idioma_destino}?\n\n"
+            f"E tambem, qual e o seu nome?"
+        )
+
+    # Salvar no banco
+    await db.conversas.insert_one({
+        "phone": phone,
+        "message": f"[{total_pages} IMAGENS ENVIADAS - {tipo_doc}]",
+        "role": "user",
+        "timestamp": datetime.now(),
+        "canal": "WhatsApp",
+        "type": "image_batch"
+    })
+
+    await db.conversas.insert_one({
+        "phone": phone,
+        "message": mensagem,
+        "role": "assistant",
+        "timestamp": datetime.now(),
+        "canal": "WhatsApp"
+    })
+
+    # Limpar sessão de imagens (ja salvamos no estado)
+    del image_sessions[phone]
+
+    logger.info(f"Analise de documento enviada para {phone} ({total_pages} paginas)")
+    return mensagem
+
+
+async def gerar_orcamento_final(phone: str) -> str:
+    """Gera o orcamento final apos coletar nome e origem"""
+    estado = await get_cliente_estado(phone)
+    doc_info = estado.get("documento_info", {})
+    idioma = estado.get("idioma", "pt")
+    nome = estado.get("nome", "")
+
+    total_pages = doc_info.get("total_pages", 1)
+    tipo_doc = doc_info.get("tipo", "documento")
+    idioma_origem = doc_info.get("idioma_origem", "")
+    idioma_destino = doc_info.get("idioma_destino", "ingles")
+
+    # Buscar treinamento para obter valores
     training_prompt = await get_bot_training()
-    
-    # Converter primeira imagem para base64
-    base64_image = base64.b64encode(first_image).decode('utf-8')
-    
-    # Chamar GPT-4 Vision com contexto de múltiplas páginas
+
+    # Chamar GPT para gerar orcamento
     response = openai_client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -445,61 +772,306 @@ async def processar_sessao_imagem(phone: str):
                 "role": "system",
                 "content": f"""{training_prompt}
 
-TAREFA ESPECIAL - ORÇAMENTO DE MÚLTIPLAS PÁGINAS:
-O cliente enviou {total_pages} página(s) para tradução.
-Analise a primeira página e forneça:
-- Idioma detectado
-- Cálculo: {total_pages} páginas × valor unitário
-- Prazo de entrega
-- Instruções de pagamento
+TAREFA: Gerar orcamento para traducao.
+Cliente: {nome}
+Documento: {tipo_doc}
+Total de paginas: {total_pages}
+Idioma origem: {idioma_origem}
+Idioma destino: {idioma_destino}
 
-NÃO mencione "histórico escolar" ou "estimando como uma única página".
-Seja direto e objetivo."""
+IMPORTANTE:
+- Responda no idioma: {'ingles' if idioma == 'en' else 'espanhol' if idioma == 'es' else 'portugues'}
+- Seja cordial e use o nome do cliente
+- Inclua: valor total, prazo, forma de pagamento
+- Pergunte se deseja prosseguir"""
             },
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": f"Preciso traduzir estas {total_pages} páginas. Quanto fica?"
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        }
-                    }
-                ]
+                "content": f"Gere o orcamento para {nome} traduzir {total_pages} paginas de {tipo_doc}"
             }
         ],
-        max_tokens=800
+        max_tokens=600
     )
-    
+
     orcamento = response.choices[0].message.content
-    
-    # Salvar no banco
-    await db.conversas.insert_one({
-        "phone": phone,
-        "message": f"[{total_pages} IMAGENS ENVIADAS]",
-        "role": "user",
-        "timestamp": datetime.now(),
-        "canal": "WhatsApp",
-        "type": "image_batch"
-    })
-    
-    await db.conversas.insert_one({
-        "phone": phone,
-        "message": orcamento,
-        "role": "assistant",
-        "timestamp": datetime.now(),
-        "canal": "WhatsApp"
-    })
-    
-    # Limpar sessão
-    del image_sessions[phone]
-    
-    logger.info(f"Orçamento gerado para {total_pages} páginas")
+
+    # Extrair valor do orcamento (buscar padrao $XX.XX ou R$XX,XX)
+    import re
+    valor_match = re.search(r'[\$R]\$?\s*(\d+[.,]?\d*)', orcamento)
+    valor = valor_match.group(0) if valor_match else None
+
+    # Atualizar estado
+    await set_cliente_estado(
+        phone,
+        etapa=ETAPAS["AGUARDANDO_CONFIRMACAO"],
+        ultimo_orcamento=orcamento,
+        valor_orcamento=valor
+    )
+
     return orcamento
+
+
+async def processar_etapa_nome(phone: str, mensagem: str) -> str:
+    """Processa resposta do cliente com o nome e pede a origem"""
+    # Detectar e atualizar idioma
+    idioma = detectar_idioma(mensagem)
+
+    # Extrair nome (geralmente e a primeira palavra ou frase curta)
+    nome = mensagem.strip().split('\n')[0].strip()
+    # Limpar pontuacao
+    nome = nome.rstrip('.,!?')
+    # Se for muito longo, pegar primeiras palavras
+    if len(nome.split()) > 4:
+        nome = ' '.join(nome.split()[:3])
+
+    # Salvar nome e idioma
+    await set_cliente_estado(
+        phone,
+        nome=nome,
+        idioma=idioma,
+        etapa=ETAPAS["AGUARDANDO_ORIGEM"]
+    )
+
+    # Perguntar origem baseado no idioma
+    if idioma == "en":
+        resposta = (
+            f"Nice to meet you, {nome}! 😊\n\n"
+            f"Before I give you the quote, could you tell me how you heard about Legacy Translations?\n\n"
+            f"1️⃣ Google Search\n"
+            f"2️⃣ Instagram\n"
+            f"3️⃣ Facebook\n"
+            f"4️⃣ Friend's referral\n\n"
+            f"Just reply with the number or the option!"
+        )
+    elif idioma == "es":
+        resposta = (
+            f"¡Mucho gusto, {nome}! 😊\n\n"
+            f"Antes de darte el presupuesto, ¿podrías decirme cómo conociste Legacy Translations?\n\n"
+            f"1️⃣ Búsqueda en Google\n"
+            f"2️⃣ Instagram\n"
+            f"3️⃣ Facebook\n"
+            f"4️⃣ Referencia de amigo\n\n"
+            f"¡Solo responde con el número o la opción!"
+        )
+    else:
+        resposta = (
+            f"Prazer em conhece-lo(a), {nome}! 😊\n\n"
+            f"Antes de passar o orcamento, poderia me dizer como conheceu a Legacy Translations?\n\n"
+            f"1️⃣ Pesquisa no Google\n"
+            f"2️⃣ Instagram\n"
+            f"3️⃣ Facebook\n"
+            f"4️⃣ Referencia de amigo\n\n"
+            f"Responda com o numero ou a opcao!"
+        )
+
+    return resposta
+
+
+async def processar_etapa_origem(phone: str, mensagem: str) -> str:
+    """Processa resposta da origem e gera orcamento"""
+    estado = await get_cliente_estado(phone)
+    idioma = estado.get("idioma", "pt")
+    nome = estado.get("nome", "")
+
+    # Detectar origem
+    msg_lower = mensagem.lower()
+    if "1" in mensagem or "google" in msg_lower:
+        origem = "Google"
+    elif "2" in mensagem or "instagram" in msg_lower or "insta" in msg_lower:
+        origem = "Instagram"
+    elif "3" in mensagem or "facebook" in msg_lower or "face" in msg_lower:
+        origem = "Facebook"
+    elif "4" in mensagem or "amigo" in msg_lower or "friend" in msg_lower or "referencia" in msg_lower:
+        origem = "Referencia de amigo"
+    else:
+        origem = mensagem.strip()[:50]
+
+    # Salvar origem
+    await set_cliente_estado(phone, origem=origem)
+
+    # Agradecer baseado no idioma
+    if idioma == "en":
+        agradecimento = f"Thank you, {nome}! Great to know you found us through {origem}. 🙏\n\n"
+    elif idioma == "es":
+        agradecimento = f"¡Gracias, {nome}! Que bueno saber que nos encontraste por {origem}. 🙏\n\n"
+    else:
+        agradecimento = f"Obrigada, {nome}! Que bom saber que nos conheceu pelo {origem}. 🙏\n\n"
+
+    # Gerar orcamento
+    orcamento = await gerar_orcamento_final(phone)
+
+    return agradecimento + orcamento
+
+
+async def processar_etapa_confirmacao(phone: str, mensagem: str) -> str:
+    """Processa confirmacao do cliente e muda para aguardando pagamento"""
+    estado = await get_cliente_estado(phone)
+    idioma = estado.get("idioma", "pt")
+    nome = estado.get("nome", "")
+    valor = estado.get("valor_orcamento", "")
+
+    if detectar_confirmacao_prosseguimento(mensagem):
+        # Cliente confirmou - mudar para aguardando pagamento
+        await set_cliente_estado(phone, etapa=ETAPAS["AGUARDANDO_PAGAMENTO"])
+
+        if idioma == "en":
+            resposta = (
+                f"Perfect, {nome}! 🎉\n\n"
+                f"To proceed, please send the payment of {valor} via:\n"
+                f"• Zelle\n• Venmo\n• PayPal\n• Bank Transfer\n\n"
+                f"After payment, just send the receipt/screenshot here and I'll confirm! ✅"
+            )
+        elif idioma == "es":
+            resposta = (
+                f"¡Perfecto, {nome}! 🎉\n\n"
+                f"Para continuar, envía el pago de {valor} por:\n"
+                f"• Zelle\n• Venmo\n• PayPal\n• Transferencia bancaria\n\n"
+                f"Después del pago, solo envía el comprobante aquí y confirmo! ✅"
+            )
+        else:
+            resposta = (
+                f"Perfeito, {nome}! 🎉\n\n"
+                f"Para prosseguir, envie o pagamento de {valor} via:\n"
+                f"• Zelle\n• Venmo\n• PayPal\n• Transferencia bancaria\n\n"
+                f"Apos o pagamento, e so enviar o comprovante aqui que eu confirmo! ✅"
+            )
+        return resposta
+    else:
+        # Nao confirmou ainda - processar normalmente com IA
+        return None
+
+
+async def processar_etapa_pagamento(phone: str, mensagem: str, is_image: bool = False, image_bytes: bytes = None) -> str:
+    """Processa na etapa de aguardando pagamento"""
+    estado = await get_cliente_estado(phone)
+    idioma = estado.get("idioma", "pt")
+    nome = estado.get("nome", "")
+    valor = estado.get("valor_orcamento", "")
+
+    # Se recebeu imagem ou PDF, tratar como comprovante
+    if is_image and image_bytes:
+        # Analisar se parece comprovante
+        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """Analise se esta imagem e um comprovante de pagamento.
+Procure por: valores, datas, nomes de bancos, apps de pagamento (Zelle, Venmo, PayPal, PIX),
+numeros de transacao, confirmacoes.
+Responda APENAS: SIM ou NAO"""
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Esta imagem e um comprovante de pagamento?"},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                    ]
+                }
+            ],
+            max_tokens=10
+        )
+
+        parece_comprovante = "sim" in response.choices[0].message.content.lower()
+
+        if parece_comprovante:
+            if idioma == "en":
+                return (
+                    f"I received the receipt! 📄\n\n"
+                    f"Just confirming: is this the payment of {valor} for the translation order above?\n\n"
+                    f"Reply YES to confirm or NO if it's something else."
+                )
+            elif idioma == "es":
+                return (
+                    f"¡Recibí el comprobante! 📄\n\n"
+                    f"Solo confirmando: ¿es el pago de {valor} del pedido de traducción?\n\n"
+                    f"Responde SI para confirmar o NO si es otra cosa."
+                )
+            else:
+                return (
+                    f"Recebi o comprovante! 📄\n\n"
+                    f"So confirmando: e o pagamento de {valor} referente ao pedido de traducao acima?\n\n"
+                    f"Responda SIM para confirmar ou NAO se for outra coisa."
+                )
+        else:
+            # Nao parece comprovante - perguntar
+            if idioma == "en":
+                return (
+                    f"I received an image! Is this a payment receipt or a new document for quote?\n\n"
+                    f"Reply:\n• RECEIPT - if it's the payment confirmation\n• NEW DOCUMENT - if you want a new quote"
+                )
+            elif idioma == "es":
+                return (
+                    f"¡Recibí una imagen! ¿Es un comprobante de pago o un nuevo documento para cotizar?\n\n"
+                    f"Responde:\n• COMPROBANTE - si es la confirmación de pago\n• NUEVO DOCUMENTO - si quieres nueva cotización"
+                )
+            else:
+                return (
+                    f"Recebi uma imagem! E um comprovante de pagamento ou um novo documento para orcamento?\n\n"
+                    f"Responda:\n• COMPROVANTE - se for a confirmacao de pagamento\n• NOVO DOCUMENTO - se quiser novo orcamento"
+                )
+
+    # Processar texto
+    msg_lower = mensagem.lower()
+
+    # Verificar se confirmou o comprovante
+    if any(x in msg_lower for x in ["sim", "yes", "si", "confirmo", "isso", "correto", "that's right"]):
+        # Pagamento confirmado!
+        await set_cliente_estado(phone, etapa=ETAPAS["PAGAMENTO_RECEBIDO"])
+        doc_info = estado.get("documento_info", {})
+
+        # Notificar atendente sobre pagamento
+        await notificar_atendente(phone, f"PAGAMENTO RECEBIDO - {nome} - {valor}")
+
+        if idioma == "en":
+            return (
+                f"Payment confirmed! 🎉✅\n\n"
+                f"Thank you, {nome}! We'll start working on your translation right away.\n\n"
+                f"📋 Order details:\n"
+                f"• {doc_info.get('total_pages', 1)} page(s) of {doc_info.get('tipo', 'document')}\n"
+                f"• From {doc_info.get('idioma_origem', '')} to {doc_info.get('idioma_destino', 'English')}\n\n"
+                f"⏰ Estimated delivery: 2-3 business days\n"
+                f"📧 We'll send the translation to your email.\n\n"
+                f"Any questions, just message here! 😊"
+            )
+        elif idioma == "es":
+            return (
+                f"¡Pago confirmado! 🎉✅\n\n"
+                f"¡Gracias, {nome}! Comenzaremos tu traducción de inmediato.\n\n"
+                f"📋 Detalles del pedido:\n"
+                f"• {doc_info.get('total_pages', 1)} página(s) de {doc_info.get('tipo', 'documento')}\n"
+                f"• De {doc_info.get('idioma_origem', '')} a {doc_info.get('idioma_destino', 'inglés')}\n\n"
+                f"⏰ Entrega estimada: 2-3 días hábiles\n"
+                f"📧 Enviaremos la traducción a tu email.\n\n"
+                f"¡Cualquier duda, escribe aquí! 😊"
+            )
+        else:
+            return (
+                f"Pagamento confirmado! 🎉✅\n\n"
+                f"Obrigada, {nome}! Ja vamos iniciar sua traducao.\n\n"
+                f"📋 Detalhes do pedido:\n"
+                f"• {doc_info.get('total_pages', 1)} pagina(s) de {doc_info.get('tipo', 'documento')}\n"
+                f"• De {doc_info.get('idioma_origem', '')} para {doc_info.get('idioma_destino', 'ingles')}\n\n"
+                f"⏰ Prazo de entrega: 2-3 dias uteis\n"
+                f"📧 Enviaremos a traducao para seu email.\n\n"
+                f"Qualquer duvida, e so chamar aqui! 😊"
+            )
+
+    # Se disse NAO ou novo documento
+    if any(x in msg_lower for x in ["nao", "no", "novo", "new", "another", "otro"]):
+        # Resetar para inicial
+        await set_cliente_estado(phone, etapa=ETAPAS["INICIAL"])
+        if idioma == "en":
+            return "No problem! Send the new document and I'll give you a quote. 📄"
+        elif idioma == "es":
+            return "¡Sin problema! Envía el nuevo documento y te doy el presupuesto. 📄"
+        else:
+            return "Sem problema! Envie o novo documento que eu faco o orcamento. 📄"
+
+    # Outra mensagem - manter conversa
+    return None
 
 
 # ============================================================
@@ -917,9 +1489,12 @@ async def process_message_with_ai(phone: str, message: str) -> str:
         # Detectar se cliente quer falar com humano
         if await detectar_solicitacao_humano(message):
             await transferir_para_humano(phone, "Cliente solicitou atendente")
-            # Retornar mensagem normal (invisivel - cliente nao sabe que foi transferido)
-            # Mensagem natural sem mencionar "humano" ou "robo"
-            return "Perfeito! Vou transferir voce agora para um de nossos especialistas que podera te ajudar melhor com isso. Um momento, por favor."
+            # Retornar mensagem informativa sobre a transferencia
+            return (
+                "Perfeito! Estou encaminhando voce para um de nossos especialistas. "
+                "Por favor aguarde, em breve alguem ira te atender. "
+                "Se preferir, pode continuar enviando suas duvidas enquanto aguarda."
+            )
 
         # Buscar treinamento dinamico do MongoDB
         system_prompt = await get_bot_training()
@@ -1084,7 +1659,23 @@ async def webhook_whatsapp(request: Request):
         conversa = await db.conversas.find_one({"phone": phone}, sort=[("timestamp", -1)])
         modo_humano = conversa and conversa.get("mode") == "human"
 
-        # Se bot desligado OU conversa em modo humano, nao processar
+        # Se em modo humano, verificar se expirou o timeout
+        timeout_expirou = False
+        if modo_humano:
+            timeout_expirou = await verificar_timeout_modo_humano(phone)
+            if timeout_expirou:
+                # Timeout expirou - nao esta mais em modo humano
+                modo_humano = False
+                logger.info(f"[TIMEOUT] Cliente {phone} voltou para modo IA automaticamente")
+
+                # Enviar mensagem de fallback ao cliente
+                mensagem_fallback = (
+                    "Desculpe a demora! No momento nossos atendentes estao ocupados. "
+                    "Enquanto isso, posso continuar te ajudando. Como posso auxiliar?"
+                )
+                await send_whatsapp_message(phone, mensagem_fallback)
+
+        # Se bot desligado OU conversa em modo humano (e NAO expirou timeout), nao processar
         if not bot_status["enabled"] or modo_humano:
             logger.info(f"Bot {'desligado' if not bot_status['enabled'] else 'em modo humano para ' + phone}")
 
@@ -1196,42 +1787,104 @@ Para urgencias: (contato)"""
 
             logger.info(f"Texto de {phone}: {text}")
 
-            # Verificar se está aguardando confirmação de páginas
+            # Verificar se está aguardando confirmação de páginas (imagens)
             if phone in image_sessions and image_sessions[phone].get("waiting_confirmation"):
                 respostas_negativas = ["não", "nao", "só isso", "so isso", "não tenho", "nao tenho", "é só", "e so"]
-                
+
                 if any(neg in text.lower() for neg in respostas_negativas):
                     # Cliente confirmou que não tem mais páginas
                     logger.info(f"Cliente confirmou - processando {image_sessions[phone]['count']} páginas")
-                    
-                    orcamento = await processar_sessao_imagem(phone)
-                    
-                    if orcamento:
-                        await send_whatsapp_message(phone, orcamento)
+
+                    resposta = await processar_sessao_imagem(phone)
+
+                    if resposta:
+                        await send_whatsapp_message(phone, resposta)
                         return JSONResponse({"status": "processed", "type": "image_batch"})
                 else:
                     # Cliente disse que tem mais páginas
                     image_sessions[phone]["waiting_confirmation"] = False
                     image_sessions[phone]["already_asked"] = False
-                    await send_whatsapp_message(phone, "Ok! Pode enviar as demais páginas.")
+                    estado = await get_cliente_estado(phone)
+                    idioma = estado.get("idioma", "pt")
+                    if idioma == "en":
+                        msg = "Ok! You can send the remaining pages."
+                    elif idioma == "es":
+                        msg = "¡Ok! Puedes enviar las demás páginas."
+                    else:
+                        msg = "Ok! Pode enviar as demais páginas."
+                    await send_whatsapp_message(phone, msg)
                     return JSONResponse({"status": "waiting_more_images"})
 
-            # Detectar conversao (pagamento)
-            conversao_detectada = await detectar_conversao(phone, text)
+            # ============================================
+            # VERIFICAR ETAPA DO ATENDIMENTO
+            # ============================================
+            estado = await get_cliente_estado(phone)
+            etapa_atual = estado.get("etapa", ETAPAS["INICIAL"])
 
-            if conversao_detectada:
-                logger.info(f"CONVERSAO REGISTRADA: {phone}")
+            # Atualizar idioma baseado na resposta do cliente
+            idioma_detectado = detectar_idioma(text)
+            if idioma_detectado != estado.get("idioma", "pt"):
+                await set_cliente_estado(phone, idioma=idioma_detectado)
 
-            # Processar com IA
-            reply = await process_message_with_ai(phone, text)
+            # Salvar mensagem do usuario
+            await db.conversas.insert_one({
+                "phone": phone,
+                "message": text,
+                "role": "user",
+                "timestamp": datetime.now(),
+                "canal": "WhatsApp",
+                "type": "text"
+            })
 
-            # Analisar e sugerir conhecimento (Hybrid Learning)
-            await analisar_e_sugerir_conhecimento(phone, text, reply)
+            reply = None
+
+            # Processar baseado na etapa atual
+            if etapa_atual == ETAPAS["AGUARDANDO_NOME"]:
+                reply = await processar_etapa_nome(phone, text)
+                logger.info(f"[ETAPA] {phone}: AGUARDANDO_NOME -> AGUARDANDO_ORIGEM")
+
+            elif etapa_atual == ETAPAS["AGUARDANDO_ORIGEM"]:
+                reply = await processar_etapa_origem(phone, text)
+                logger.info(f"[ETAPA] {phone}: AGUARDANDO_ORIGEM -> AGUARDANDO_CONFIRMACAO")
+
+            elif etapa_atual == ETAPAS["AGUARDANDO_CONFIRMACAO"]:
+                reply = await processar_etapa_confirmacao(phone, text)
+                if reply:
+                    logger.info(f"[ETAPA] {phone}: AGUARDANDO_CONFIRMACAO -> AGUARDANDO_PAGAMENTO")
+                # Se reply for None, continua para processamento normal com IA
+
+            elif etapa_atual == ETAPAS["AGUARDANDO_PAGAMENTO"]:
+                reply = await processar_etapa_pagamento(phone, text)
+                if reply:
+                    logger.info(f"[ETAPA] {phone}: Processando resposta na etapa AGUARDANDO_PAGAMENTO")
+                # Se reply for None, continua para processamento normal com IA
+
+            # Se nenhuma etapa especifica tratou, processar normalmente com IA
+            if reply is None:
+                # Detectar conversao (pagamento) - sistema antigo
+                conversao_detectada = await detectar_conversao(phone, text)
+                if conversao_detectada:
+                    logger.info(f"CONVERSAO REGISTRADA: {phone}")
+
+                # Processar com IA
+                reply = await process_message_with_ai(phone, text)
+
+                # Analisar e sugerir conhecimento (Hybrid Learning)
+                await analisar_e_sugerir_conhecimento(phone, text, reply)
+
+            # Salvar resposta do bot
+            await db.conversas.insert_one({
+                "phone": phone,
+                "message": reply,
+                "role": "assistant",
+                "timestamp": datetime.now(),
+                "canal": "WhatsApp"
+            })
 
             # Enviar resposta
             await send_whatsapp_message(phone, reply)
 
-            return JSONResponse({"status": "processed", "type": "text", "conversion": conversao_detectada})
+            return JSONResponse({"status": "processed", "type": "text", "etapa": etapa_atual})
 
         # ============================================
         # PROCESSAR IMAGEM (COM AGRUPAMENTO - 4 SEGUNDOS)
@@ -1249,32 +1902,83 @@ Para urgencias: (contato)"""
             image_bytes = await download_media_from_zapi(image_url)
 
             if not image_bytes:
-                await send_whatsapp_message(phone, "Desculpe, nao consegui baixar a imagem. Pode tentar enviar novamente?")
+                estado = await get_cliente_estado(phone)
+                idioma = estado.get("idioma", "pt")
+                if idioma == "en":
+                    msg = "Sorry, I couldn't download the image. Can you try sending it again?"
+                elif idioma == "es":
+                    msg = "Lo siento, no pude descargar la imagen. ¿Puedes intentar enviarla de nuevo?"
+                else:
+                    msg = "Desculpe, nao consegui baixar a imagem. Pode tentar enviar novamente?"
+                await send_whatsapp_message(phone, msg)
                 return JSONResponse({"status": "error", "reason": "download failed"})
 
-            # Sistema de agrupamento (4 segundos)
+            # ============================================
+            # VERIFICAR SE ESTA NA ETAPA DE PAGAMENTO
+            # ============================================
+            estado = await get_cliente_estado(phone)
+            etapa_atual = estado.get("etapa", ETAPAS["INICIAL"])
+
+            if etapa_atual == ETAPAS["AGUARDANDO_PAGAMENTO"]:
+                # Tratar imagem como possivel comprovante
+                logger.info(f"[ETAPA] {phone}: Recebeu imagem na etapa AGUARDANDO_PAGAMENTO - tratando como comprovante")
+
+                reply = await processar_etapa_pagamento(phone, "", is_image=True, image_bytes=image_bytes)
+
+                if reply:
+                    # Salvar no banco
+                    await db.conversas.insert_one({
+                        "phone": phone,
+                        "message": "[IMAGEM RECEBIDA - POSSIVEL COMPROVANTE]",
+                        "role": "user",
+                        "timestamp": datetime.now(),
+                        "canal": "WhatsApp",
+                        "type": "image"
+                    })
+
+                    await db.conversas.insert_one({
+                        "phone": phone,
+                        "message": reply,
+                        "role": "assistant",
+                        "timestamp": datetime.now(),
+                        "canal": "WhatsApp"
+                    })
+
+                    await send_whatsapp_message(phone, reply)
+                    return JSONResponse({"status": "processed", "type": "receipt_check"})
+
+            # ============================================
+            # FLUXO NORMAL: Sistema de agrupamento (4 segundos)
+            # ============================================
             deve_perguntar = await adicionar_imagem_sessao(phone, image_bytes)
-            
+
             if deve_perguntar:
                 # VERIFICAR SE JÁ PERGUNTOU (EVITAR DUPLICATA)
                 session = image_sessions[phone]
-                
+
                 # Se já está aguardando confirmação, não perguntar de novo
                 if session.get("already_asked"):
                     logger.info(f"Já perguntou para {phone}, aguardando resposta...")
                     return JSONResponse({"status": "waiting_response", "pages": session["count"]})
-                
+
                 # Marcar como "já perguntou"
                 session["already_asked"] = True
-                
+
                 total_atual = session["count"]
-                pergunta = f"Recebi {total_atual} página{'s' if total_atual > 1 else ''}. Tem mais alguma página para traduzir?"
-                
+                idioma = estado.get("idioma", "pt")
+
+                if idioma == "en":
+                    pergunta = f"I received {total_atual} page{'s' if total_atual > 1 else ''}. Do you have any more pages to translate?"
+                elif idioma == "es":
+                    pergunta = f"Recibí {total_atual} página{'s' if total_atual > 1 else ''}. ¿Tienes más páginas para traducir?"
+                else:
+                    pergunta = f"Recebi {total_atual} pagina{'s' if total_atual > 1 else ''}. Tem mais alguma pagina para traduzir?"
+
                 await send_whatsapp_message(phone, pergunta)
-                
+
                 logger.info(f"Pergunta enviada para {phone} ({total_atual} páginas)")
                 return JSONResponse({"status": "waiting_confirmation", "pages": total_atual})
-            
+
             # Se não deve perguntar, apenas aguardar mais imagens
             return JSONResponse({"status": "receiving", "pages": image_sessions[phone]["count"]})
 
