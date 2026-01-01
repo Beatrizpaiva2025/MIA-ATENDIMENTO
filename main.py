@@ -41,6 +41,7 @@ from admin_controle_routes import router as controle_router
 from admin_learning_routes import router as learning_router
 from admin_atendimento_routes import router as atendimento_router
 from admin_conversas_routes import router as conversas_router
+from admin_orcamentos_routes import router as orcamentos_router
 from webchat_routes import router as webchat_router
 
 # ============================================================
@@ -798,15 +799,44 @@ IMPORTANTE:
     # Extrair valor do orcamento (buscar padrao $XX.XX ou R$XX,XX)
     import re
     valor_match = re.search(r'[\$R]\$?\s*(\d+[.,]?\d*)', orcamento)
-    valor = valor_match.group(0) if valor_match else None
+    valor_str = valor_match.group(0) if valor_match else "0"
+
+    # Converter valor para float
+    try:
+        valor_num = float(valor_str.replace('$', '').replace('R$', '').replace(',', '.').strip())
+    except:
+        valor_num = 0.0
 
     # Atualizar estado
     await set_cliente_estado(
         phone,
         etapa=ETAPAS["AGUARDANDO_CONFIRMACAO"],
         ultimo_orcamento=orcamento,
-        valor_orcamento=valor
+        valor_orcamento=valor_str
     )
+
+    # ============================================
+    # SALVAR ORCAMENTO NA COLLECTION ORCAMENTOS
+    # ============================================
+    try:
+        await db.orcamentos.insert_one({
+            "phone": phone,
+            "nome": nome,
+            "documento_tipo": tipo_doc,
+            "documento_paginas": total_pages,
+            "idioma_origem": idioma_origem,
+            "idioma_destino": idioma_destino,
+            "valor": valor_num,
+            "valor_texto": valor_str,
+            "orcamento_texto": orcamento,
+            "origem_cliente": estado.get("origem", ""),
+            "status": "pendente",
+            "created_at": datetime.now(),
+            "updated_at": datetime.now()
+        })
+        logger.info(f"[ORCAMENTO] Salvo para {phone}: {valor_str}")
+    except Exception as e:
+        logger.error(f"Erro ao salvar orcamento: {e}")
 
     return orcamento
 
@@ -913,6 +943,16 @@ async def processar_etapa_confirmacao(phone: str, mensagem: str) -> str:
     if detectar_confirmacao_prosseguimento(mensagem):
         # Cliente confirmou - mudar para aguardando pagamento
         await set_cliente_estado(phone, etapa=ETAPAS["AGUARDANDO_PAGAMENTO"])
+
+        # Atualizar status do orcamento para CONFIRMADO
+        try:
+            await db.orcamentos.update_one(
+                {"phone": phone, "status": "pendente"},
+                {"$set": {"status": "confirmado", "updated_at": datetime.now()}},
+            )
+            logger.info(f"[ORCAMENTO] Status atualizado para CONFIRMADO: {phone}")
+        except Exception as e:
+            logger.error(f"Erro ao atualizar status do orcamento: {e}")
 
         if idioma == "en":
             resposta = (
@@ -1022,6 +1062,16 @@ Responda APENAS: SIM ou NAO"""
         await set_cliente_estado(phone, etapa=ETAPAS["PAGAMENTO_RECEBIDO"])
         doc_info = estado.get("documento_info", {})
 
+        # Atualizar status do orcamento para PAGO
+        try:
+            await db.orcamentos.update_one(
+                {"phone": phone, "status": {"$in": ["pendente", "confirmado"]}},
+                {"$set": {"status": "pago", "updated_at": datetime.now()}},
+            )
+            logger.info(f"[ORCAMENTO] Status atualizado para PAGO: {phone}")
+        except Exception as e:
+            logger.error(f"Erro ao atualizar status do orcamento: {e}")
+
         # Notificar atendente sobre pagamento
         await notificar_atendente(phone, f"PAGAMENTO RECEBIDO - {nome} - {valor}")
 
@@ -1083,6 +1133,7 @@ app.include_router(controle_router)
 app.include_router(learning_router)
 app.include_router(atendimento_router)
 app.include_router(conversas_router)
+app.include_router(orcamentos_router)
 app.include_router(webchat_router)
 
 # ============================================================

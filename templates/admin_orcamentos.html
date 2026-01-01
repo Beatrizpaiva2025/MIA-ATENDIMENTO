@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIA - Orçamentos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --primary: #667eea; --secondary: #764ba2; --success: #4CAF50; --warning: #FF9800; --danger: #FF6B6B; --dark: #2c3e50; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container-fluid { max-width: 1400px; margin: 0 auto; }
+        .header-card { background: white; border-radius: 16px; padding: 24px 32px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+        .header-title { display: flex; align-items: center; gap: 12px; }
+        .header-title h1 { font-size: 28px; font-weight: 700; color: var(--dark); margin: 0; }
+        .header-title .badge { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .header-actions { display: flex; gap: 12px; align-items: center; }
+        .btn-refresh { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+        .btn-refresh:hover { background: #5a6fd6; }
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px; }
+        .stat-card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; }
+        .stat-card .icon { width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 16px; }
+        .stat-card.total .icon { background: rgba(102, 126, 234, 0.1); color: var(--primary); }
+        .stat-card.pending .icon { background: rgba(255, 152, 0, 0.1); color: var(--warning); }
+        .stat-card.confirmed .icon { background: rgba(76, 175, 80, 0.1); color: var(--success); }
+        .stat-card.paid .icon { background: rgba(118, 75, 162, 0.1); color: var(--secondary); }
+        .stat-card .label { font-size: 13px; color: #666; text-transform: uppercase; margin-bottom: 8px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; color: var(--dark); }
+        .main-card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .filters-row { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+        .filter-group { display: flex; flex-direction: column; gap: 4px; }
+        .filter-group label { font-size: 12px; color: #666; font-weight: 600; }
+        .filter-group select, .filter-group input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+        .table-responsive { margin-top: 20px; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table thead th { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; padding: 14px 16px; text-align: left; font-weight: 600; font-size: 13px; text-transform: uppercase; }
+        .table thead th:first-child { border-radius: 10px 0 0 0; }
+        .table thead th:last-child { border-radius: 0 10px 0 0; }
+        .table tbody td { padding: 14px 16px; border-bottom: 1px solid #f0f0f0; font-size: 14px; vertical-align: middle; }
+        .table tbody tr:hover { background: #f8f9fa; }
+        .status-badge { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .status-pendente { background: rgba(255, 152, 0, 0.1); color: var(--warning); }
+        .status-confirmado { background: rgba(76, 175, 80, 0.1); color: var(--success); }
+        .status-pago { background: rgba(118, 75, 162, 0.1); color: var(--secondary); }
+        .status-cancelado { background: rgba(255, 107, 107, 0.1); color: var(--danger); }
+        .btn-action { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; margin: 2px; }
+        .btn-view { background: var(--primary); color: white; }
+        .btn-confirm { background: var(--success); color: white; }
+        .btn-paid { background: var(--secondary); color: white; }
+        .phone-link { color: var(--primary); text-decoration: none; }
+        .phone-link:hover { text-decoration: underline; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #666; }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; color: #ddd; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background: white; margin: 10% auto; padding: 24px; border-radius: 16px; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #666; }
+        .orcamento-texto { background: #f8f9fa; padding: 16px; border-radius: 8px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; }
+        @media (max-width: 768px) {
+            .filters-row { flex-direction: column; }
+            .table { font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="header-card">
+            <div class="header-title">
+                <h1><i class="fas fa-file-invoice-dollar"></i> Orçamentos</h1>
+                <span class="badge">MIA Bot</span>
+            </div>
+            <div class="header-actions">
+                <span id="lastUpdate">Carregando...</span>
+                <button class="btn-refresh" onclick="loadOrcamentos()">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-row">
+            <div class="stat-card total">
+                <div class="icon"><i class="fas fa-file-alt"></i></div>
+                <div class="label">Total de Orçamentos</div>
+                <div class="value" id="statTotal">0</div>
+            </div>
+            <div class="stat-card pending">
+                <div class="icon"><i class="fas fa-clock"></i></div>
+                <div class="label">Pendentes</div>
+                <div class="value" id="statPendentes">0</div>
+            </div>
+            <div class="stat-card confirmed">
+                <div class="icon"><i class="fas fa-check"></i></div>
+                <div class="label">Confirmados</div>
+                <div class="value" id="statConfirmados">0</div>
+            </div>
+            <div class="stat-card paid">
+                <div class="icon"><i class="fas fa-dollar-sign"></i></div>
+                <div class="label">Valor Total</div>
+                <div class="value" id="statValor">$0.00</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-card">
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label>Período</label>
+                    <select id="filterDias" onchange="loadOrcamentos()">
+                        <option value="7">Últimos 7 dias</option>
+                        <option value="15">Últimos 15 dias</option>
+                        <option value="30" selected>Últimos 30 dias</option>
+                        <option value="90">Últimos 90 dias</option>
+                        <option value="365">Último ano</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Status</label>
+                    <select id="filterStatus" onchange="loadOrcamentos()">
+                        <option value="todos">Todos</option>
+                        <option value="pendente">Pendentes</option>
+                        <option value="confirmado">Confirmados</option>
+                        <option value="pago">Pagos</option>
+                        <option value="cancelado">Cancelados</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Buscar</label>
+                    <input type="text" id="filterBusca" placeholder="Nome ou telefone..." onkeyup="filterTable()">
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table" id="orcamentosTable">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Cliente</th>
+                            <th>Telefone</th>
+                            <th>Documento</th>
+                            <th>Páginas</th>
+                            <th>Valor</th>
+                            <th>Origem</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orcamentosBody">
+                        <tr>
+                            <td colspan="9" class="empty-state">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Carregando orçamentos...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Ver Orçamento -->
+    <div id="modalOrcamento" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-invoice"></i> Detalhes do Orçamento</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody">
+                <!-- Conteúdo dinâmico -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allOrcamentos = [];
+
+        async function loadOrcamentos() {
+            const dias = document.getElementById('filterDias').value;
+            const status = document.getElementById('filterStatus').value;
+
+            try {
+                const response = await fetch(`/admin/orcamentos/api/list?dias=${dias}&status=${status}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    allOrcamentos = data.orcamentos;
+                    renderTable(allOrcamentos);
+                    updateStats(data.stats);
+                    document.getElementById('lastUpdate').textContent =
+                        'Atualizado: ' + new Date().toLocaleTimeString('pt-BR');
+                } else {
+                    showEmpty('Erro ao carregar orçamentos');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                showEmpty('Erro de conexão');
+            }
+        }
+
+        function renderTable(orcamentos) {
+            const tbody = document.getElementById('orcamentosBody');
+
+            if (orcamentos.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <p>Nenhum orçamento encontrado</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = orcamentos.map(orc => {
+                const data = new Date(orc.created_at).toLocaleDateString('pt-BR');
+                const hora = new Date(orc.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+
+                return `
+                    <tr>
+                        <td>${data}<br><small>${hora}</small></td>
+                        <td><strong>${orc.nome || 'Não informado'}</strong></td>
+                        <td><a href="/admin/atendimento/${orc.phone}" class="phone-link">${formatPhone(orc.phone)}</a></td>
+                        <td>${orc.documento_tipo || '-'}<br><small>${orc.idioma_origem} → ${orc.idioma_destino}</small></td>
+                        <td>${orc.documento_paginas || 1}</td>
+                        <td><strong>${orc.valor_formatado}</strong></td>
+                        <td>${orc.origem_cliente || '-'}</td>
+                        <td><span class="status-badge status-${orc.status}">${orc.status}</span></td>
+                        <td>
+                            <button class="btn-action btn-view" onclick="viewOrcamento('${orc.id}')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${orc.status === 'pendente' ? `
+                                <button class="btn-action btn-confirm" onclick="updateStatus('${orc.id}', 'confirmado')">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            ` : ''}
+                            ${orc.status === 'confirmado' ? `
+                                <button class="btn-action btn-paid" onclick="updateStatus('${orc.id}', 'pago')">
+                                    <i class="fas fa-dollar-sign"></i>
+                                </button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateStats(stats) {
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statPendentes').textContent = stats.pendentes;
+            document.getElementById('statConfirmados').textContent = stats.confirmados;
+            document.getElementById('statValor').textContent = stats.total_valor_formatado;
+        }
+
+        function formatPhone(phone) {
+            if (!phone) return '-';
+            // Formatar telefone para exibição
+            const cleaned = phone.replace(/\D/g, '');
+            if (cleaned.length === 11) {
+                return `(${cleaned.slice(0,2)}) ${cleaned.slice(2,7)}-${cleaned.slice(7)}`;
+            }
+            return phone;
+        }
+
+        function filterTable() {
+            const busca = document.getElementById('filterBusca').value.toLowerCase();
+            const filtered = allOrcamentos.filter(orc =>
+                (orc.nome && orc.nome.toLowerCase().includes(busca)) ||
+                (orc.phone && orc.phone.includes(busca))
+            );
+            renderTable(filtered);
+        }
+
+        function viewOrcamento(id) {
+            const orc = allOrcamentos.find(o => o.id === id);
+            if (!orc) return;
+
+            const modal = document.getElementById('modalOrcamento');
+            const body = document.getElementById('modalBody');
+
+            body.innerHTML = `
+                <p><strong>Cliente:</strong> ${orc.nome || 'Não informado'}</p>
+                <p><strong>Telefone:</strong> ${orc.phone}</p>
+                <p><strong>Documento:</strong> ${orc.documento_tipo} (${orc.documento_paginas} página(s))</p>
+                <p><strong>Idiomas:</strong> ${orc.idioma_origem} → ${orc.idioma_destino}</p>
+                <p><strong>Valor:</strong> ${orc.valor_formatado}</p>
+                <p><strong>Origem:</strong> ${orc.origem_cliente || 'Não informado'}</p>
+                <p><strong>Status:</strong> <span class="status-badge status-${orc.status}">${orc.status}</span></p>
+                <hr>
+                <p><strong>Texto do Orçamento:</strong></p>
+                <div class="orcamento-texto">${orc.orcamento_texto || 'Não disponível'}</div>
+            `;
+
+            modal.style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('modalOrcamento').style.display = 'none';
+        }
+
+        async function updateStatus(id, status) {
+            if (!confirm(`Confirma alterar status para "${status}"?`)) return;
+
+            try {
+                const response = await fetch('/admin/orcamentos/api/update-status', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id, status})
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    loadOrcamentos();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro de conexão');
+            }
+        }
+
+        function showEmpty(message) {
+            document.getElementById('orcamentosBody').innerHTML = `
+                <tr>
+                    <td colspan="9" class="empty-state">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p>${message}</p>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Fechar modal ao clicar fora
+        window.onclick = function(event) {
+            const modal = document.getElementById('modalOrcamento');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Carregar ao iniciar
+        loadOrcamentos();
+
+        // Atualizar a cada 30 segundos
+        setInterval(loadOrcamentos, 30000);
+    </script>
+</body>
+</html>
