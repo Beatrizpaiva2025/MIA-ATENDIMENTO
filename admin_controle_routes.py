@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from datetime import datetime
 import logging
+from timezone_utils import format_time_est, now_est
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -133,8 +134,8 @@ async def api_toggle_manutencao(request: Request):
 async def api_get_stats():
     """Retorna estatísticas do dia com dados reais"""
     try:
-        # Buscar conversas de hoje
-        hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        # Buscar conversas de hoje (usando horário EST)
+        hoje = now_est().replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Contar mensagens de hoje
         mensagens_hoje = await db.conversas.count_documents({
@@ -183,8 +184,8 @@ async def api_get_logs():
             message = msg.get("message", "")[:50]  # Primeiros 50 caracteres
             msg_type = msg.get("type", "text")
 
-            # Formatar timestamp
-            time_str = timestamp.strftime('%H:%M:%S') if hasattr(timestamp, 'strftime') else str(timestamp)[:8]
+            # Formatar timestamp (convertendo para EST)
+            time_str = format_time_est(timestamp, '%H:%M:%S')
 
             # Ícone baseado no tipo/status
             if mode == "human":
@@ -218,7 +219,7 @@ async def api_get_logs():
 async def api_get_clientes_ativos():
     """Retorna lista de clientes ativos hoje com status"""
     try:
-        hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        hoje = now_est().replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Buscar todos os clientes únicos de hoje
         pipeline = [
@@ -239,7 +240,7 @@ async def api_get_clientes_ativos():
         for c in clientes:
             result.append({
                 "phone": c["_id"],
-                "ultima_msg": c["ultima_msg"].strftime('%H:%M') if hasattr(c["ultima_msg"], 'strftime') else str(c["ultima_msg"]),
+                "ultima_msg": format_time_est(c["ultima_msg"], '%H:%M'),
                 "total_msgs": c["total_msgs"],
                 "modo": c.get("modo", "ia")
             })

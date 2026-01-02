@@ -12,6 +12,7 @@ from bson import ObjectId
 import os
 import logging
 import traceback
+from timezone_utils import format_datetime_est, format_time_est, format_date_est, utc_to_est
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +137,7 @@ async def api_get_chart_data(periodo: str = "15"):
         conversoes_por_dia = {}
         for doc in conversoes_docs:
             if doc.get("timestamp"):
-                data = doc["timestamp"].strftime("%Y-%m-%d")
+                data = format_date_est(doc["timestamp"], "%Y-%m-%d")
                 if data not in conversoes_por_dia:
                     conversoes_por_dia[data] = {"total": 0, "valor": 0}
                 conversoes_por_dia[data]["total"] += 1
@@ -169,7 +170,7 @@ async def api_get_chart_data(periodo: str = "15"):
         humano_data = []
 
         for i in range(dias):
-            data = (datetime.now() - timedelta(days=dias-1-i)).strftime("%Y-%m-%d")
+            data = format_date_est(datetime.utcnow() - timedelta(days=dias-1-i), "%Y-%m-%d")
             labels.append(data)
 
             conv = conversoes_por_dia.get(data, {"total": 0, "valor": 0})
@@ -241,7 +242,7 @@ async def api_get_conversoes(periodo: str = "30"):
                 result.append({
                     "phone": phone,
                     "valor": extrair_valor(c),
-                    "timestamp": c.get("timestamp").strftime("%m/%d/%Y %H:%M") if c.get("timestamp") else "N/A",
+                    "timestamp": format_datetime_est(c.get("timestamp"), "%m/%d/%Y %H:%M"),
                     "tempo_atendimento": tempo_atendimento,
                     "tipo_atendimento": "Human + AI" if teve_humano else "AI Only",
                     "metodo": c.get("detection_method", "manual"),
@@ -270,8 +271,8 @@ async def api_get_leads_followup():
                 
                 last_contact = lead.get("last_contact_date")
                 if last_contact and isinstance(last_contact, datetime):
-                    dias_sem_contato = (datetime.now() - last_contact).days
-                    last_contact_str = last_contact.strftime("%m/%d/%Y")
+                    dias_sem_contato = (datetime.utcnow() - last_contact).days
+                    last_contact_str = format_date_est(last_contact, "%m/%d/%Y")
                 else:
                     dias_sem_contato = 0
                     last_contact_str = "N/A"

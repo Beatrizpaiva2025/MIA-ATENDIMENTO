@@ -12,6 +12,7 @@ from bson import ObjectId
 import os
 import logging
 import re
+from timezone_utils import format_datetime_est, utc_to_est
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ async def api_list_orcamentos(dias: int = 30, status: str = "todos"):
                 "valor_formatado": f"${orc.get('valor', 0):.2f}",
                 "status": orc.get("status", "pendente"),
                 "origem_cliente": orc.get("origem_cliente", ""),
-                "created_at": orc.get("created_at", datetime.now()).isoformat(),
+                "created_at": format_datetime_est(orc.get("created_at"), "%m/%d/%Y %H:%M"),
                 "orcamento_texto": orc.get("orcamento_texto", "")[:200] + "..."
             })
 

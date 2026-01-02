@@ -12,6 +12,7 @@ import os
 from pymongo import MongoClient
 from bson import ObjectId
 import logging
+from timezone_utils import format_datetime_est, format_time_est, format_date_est
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -195,7 +196,7 @@ async def admin_dashboard(request: Request):
         
         # Formatar datas
         for conv in ultimas_conversas:
-            conv["timestamp_formatted"] = conv["timestamp"].strftime("%d/%m/%Y %H:%M")
+            conv["timestamp_formatted"] = format_datetime_est(conv["timestamp"], "%m/%d/%Y %H:%M")
         
         stats = {
             "total_conversas": total_conversas,
@@ -256,7 +257,7 @@ async def admin_pipeline(request: Request):
         leads_recentes = list(db.leads.find().sort("timestamp", -1).limit(20))
         
         for lead in leads_recentes:
-            lead["timestamp_formatted"] = lead["timestamp"].strftime("%d/%m/%Y %H:%M")
+            lead["timestamp_formatted"] = format_datetime_est(lead["timestamp"], "%m/%d/%Y %H:%M")
         
         return templates.TemplateResponse("admin_pipeline.html", {
             "request": request,
@@ -298,7 +299,7 @@ async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Op
         
         # Formatar dados
         for lead in leads:
-            lead["timestamp_formatted"] = lead["timestamp"].strftime("%d/%m/%Y %H:%M")
+            lead["timestamp_formatted"] = format_datetime_est(lead["timestamp"], "%m/%d/%Y %H:%M")
             lead["_id"] = str(lead["_id"])
         
         # Estatísticas
@@ -345,7 +346,7 @@ async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
         
         # Formatar dados
         for trans in transferencias:
-            trans["timestamp_formatted"] = trans["timestamp"].strftime("%d/%m/%Y %H:%M")
+            trans["timestamp_formatted"] = format_datetime_est(trans["timestamp"], "%m/%d/%Y %H:%M")
             trans["_id"] = str(trans["_id"])
         
         # Estatísticas
@@ -389,7 +390,7 @@ async def admin_documents(request: Request, status: Optional[str] = None):
         
         # Formatar dados
         for doc in documentos:
-            doc["timestamp_formatted"] = doc["timestamp"].strftime("%d/%m/%Y %H:%M")
+            doc["timestamp_formatted"] = format_datetime_est(doc["timestamp"], "%m/%d/%Y %H:%M")
             doc["_id"] = str(doc["_id"])
         
         # Estatísticas
