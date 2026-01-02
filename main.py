@@ -1678,10 +1678,11 @@ async def webhook_whatsapp(request: Request):
         # ============================================
         if from_me:
             # Verificar comandos de controle
-            comando = message_text.strip()
+            comando = message_text.strip().lower()
             logger.info(f"[OPERADOR] Mensagem fromMe detectada: '{comando}' para cliente {phone}")
 
-            if comando == "*":
+            # Comando para pausar IA: * ou pause ou pausar
+            if comando in ["*", "pause", "pausar", "pausa"]:
                 await db.conversas.update_many(
                     {"phone": phone},
                     {"$set": {"mode": "human", "transferred_at": datetime.now()}}
@@ -1689,11 +1690,15 @@ async def webhook_whatsapp(request: Request):
                 logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone}")
                 return {"status": "ia_paused", "client": phone}
 
-            elif comando == "+":
+            # Comando para retomar IA: + ou resume ou retomar
+            elif comando in ["+", "resume", "retomar", "retoma", "volta", "voltar"]:
+                # Resetar modo na collection conversas
                 await db.conversas.update_many(
                     {"phone": phone},
                     {"$set": {"mode": "ia"}, "$unset": {"transferred_at": "", "transfer_reason": ""}}
                 )
+                # Resetar etapa do cliente para INICIAL
+                await set_cliente_estado(phone, etapa=ETAPAS["INICIAL"])
                 logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone}")
                 return {"status": "ia_resumed", "client": phone}
 
