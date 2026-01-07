@@ -1144,6 +1144,40 @@ ZAPI_TOKEN = os.getenv("ZAPI_TOKEN")
 ZAPI_CLIENT_TOKEN = os.getenv("ZAPI_CLIENT_TOKEN")
 ZAPI_URL = os.getenv("ZAPI_URL", "https://api.z-api.io")
 
+# ============================================================
+# VALIDACAO DE CONFIGURACAO Z-API (log de aviso)
+# ============================================================
+def validar_config_zapi():
+    """Valida e loga status das configuracoes Z-API"""
+    problemas = []
+
+    if not ZAPI_INSTANCE_ID:
+        problemas.append("ZAPI_INSTANCE_ID nao configurado!")
+    if not ZAPI_TOKEN:
+        problemas.append("ZAPI_TOKEN nao configurado!")
+    if not ZAPI_CLIENT_TOKEN:
+        problemas.append("ZAPI_CLIENT_TOKEN nao configurado (pode causar erros)!")
+
+    if problemas:
+        logger.error("=" * 60)
+        logger.error("PROBLEMAS DE CONFIGURACAO Z-API DETECTADOS:")
+        for p in problemas:
+            logger.error(f"  - {p}")
+        logger.error("O bot NAO conseguira enviar mensagens sem essas configuracoes!")
+        logger.error("=" * 60)
+        return False
+    else:
+        logger.info("=" * 60)
+        logger.info("CONFIGURACAO Z-API OK:")
+        logger.info(f"  - Instance ID: {ZAPI_INSTANCE_ID[:8]}... (configurado)")
+        logger.info(f"  - Token: {ZAPI_TOKEN[:8]}... (configurado)")
+        logger.info(f"  - Client Token: {'Configurado' if ZAPI_CLIENT_TOKEN else 'Nao configurado'}")
+        logger.info("=" * 60)
+        return True
+
+# Validar na inicializacao
+ZAPI_CONFIG_VALIDA = validar_config_zapi()
+
 
 # ============================================================
 # MODELOS PYDANTIC
@@ -1227,6 +1261,17 @@ Responda de forma profissional e educada."""
 async def send_whatsapp_message(phone: str, message: str):
     """Envia mensagem via Z-API com Client-Token"""
     try:
+        # VALIDACAO: Verificar se configuracao Z-API esta ok
+        if not ZAPI_CONFIG_VALIDA:
+            logger.error("=" * 60)
+            logger.error("FALHA NO ENVIO: Configuracao Z-API invalida!")
+            logger.error(f"  ZAPI_INSTANCE_ID: {'OK' if ZAPI_INSTANCE_ID else 'FALTANDO!'}")
+            logger.error(f"  ZAPI_TOKEN: {'OK' if ZAPI_TOKEN else 'FALTANDO!'}")
+            logger.error(f"  ZAPI_CLIENT_TOKEN: {'OK' if ZAPI_CLIENT_TOKEN else 'FALTANDO!'}")
+            logger.error("Mensagem NAO foi enviada para: " + phone)
+            logger.error("=" * 60)
+            return False
+
         # Construir URL completa
         url = f"https://api.z-api.io/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text"
 
@@ -1242,26 +1287,40 @@ async def send_whatsapp_message(phone: str, message: str):
             "message": message
         }
 
-        # Logs de debug
-        logger.info(f"Enviando mensagem para {phone}")
-        logger.info(f"Client-Token: {'Configurado' if headers['Client-Token'] else 'VAZIO'}")
+        # Logs de debug detalhados
+        logger.info("=" * 40)
+        logger.info(f"[ENVIO Z-API] Destinatario: {phone}")
+        logger.info(f"[ENVIO Z-API] Mensagem ({len(message)} chars): {message[:100]}...")
+        logger.info(f"[ENVIO Z-API] URL: {url[:60]}...")
+        logger.info(f"[ENVIO Z-API] Client-Token: {'Sim' if headers['Client-Token'] else 'NAO - PODE CAUSAR ERRO!'}")
 
         # Enviar requisicao COM headers
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers, json=payload)
 
-            logger.info(f"Status Z-API: {response.status_code}")
-            logger.info(f"Resposta: {response.text}")
+            logger.info(f"[ENVIO Z-API] Status HTTP: {response.status_code}")
+            logger.info(f"[ENVIO Z-API] Resposta: {response.text[:200]}")
 
             if response.status_code == 200:
-                logger.info(f"Mensagem enviada com sucesso")
+                logger.info(f"[ENVIO Z-API] SUCESSO - Mensagem enviada para {phone}")
+                logger.info("=" * 40)
                 return True
             else:
-                logger.error(f"Erro ao enviar: {response.status_code} - {response.text}")
+                logger.error("=" * 60)
+                logger.error(f"[ENVIO Z-API] FALHA! Status: {response.status_code}")
+                logger.error(f"[ENVIO Z-API] Resposta erro: {response.text}")
+                logger.error(f"[ENVIO Z-API] Telefone: {phone}")
+                logger.error("=" * 60)
                 return False
 
+    except httpx.TimeoutException:
+        logger.error(f"[ENVIO Z-API] TIMEOUT ao enviar para {phone} (30s)")
+        return False
+    except httpx.ConnectError as e:
+        logger.error(f"[ENVIO Z-API] ERRO DE CONEXAO com Z-API: {str(e)}")
+        return False
     except Exception as e:
-        logger.error(f"Excecao ao enviar mensagem: {str(e)}")
+        logger.error(f"[ENVIO Z-API] EXCECAO: {str(e)}")
         logger.error(traceback.format_exc())
         return False
 
@@ -1627,6 +1686,62 @@ async def api_bot_status():
     }
 
 
+@app.get("/admin/api/debug/config")
+async def api_debug_config():
+    """
+    Endpoint de DEBUG - Verifica configuracoes do bot
+    Acesse: /admin/api/debug/config
+    """
+    # Verificar OpenAI
+    openai_ok = bool(os.getenv("OPENAI_API_KEY"))
+
+    # Verificar MongoDB
+    try:
+        await db.command("ping")
+        mongodb_ok = True
+        mongodb_error = None
+    except Exception as e:
+        mongodb_ok = False
+        mongodb_error = str(e)
+
+    # Status do bot
+    bot_status = await get_bot_status()
+
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "configuracao": {
+            "zapi": {
+                "instance_id": "OK" if ZAPI_INSTANCE_ID else "FALTANDO!",
+                "token": "OK" if ZAPI_TOKEN else "FALTANDO!",
+                "client_token": "OK" if ZAPI_CLIENT_TOKEN else "FALTANDO!",
+                "config_valida": ZAPI_CONFIG_VALIDA
+            },
+            "openai": {
+                "api_key": "OK" if openai_ok else "FALTANDO!"
+            },
+            "mongodb": {
+                "conectado": mongodb_ok,
+                "erro": mongodb_error
+            }
+        },
+        "bot_status": {
+            "enabled": bot_status["enabled"],
+            "last_update": bot_status["last_update"].isoformat()
+        },
+        "diagnostico": {
+            "pode_receber_mensagens": mongodb_ok,
+            "pode_processar_ia": openai_ok and mongodb_ok,
+            "pode_enviar_respostas": ZAPI_CONFIG_VALIDA,
+            "bot_funcionando": all([mongodb_ok, openai_ok, ZAPI_CONFIG_VALIDA, bot_status["enabled"]])
+        },
+        "instrucoes": {
+            "se_zapi_faltando": "Configure ZAPI_INSTANCE_ID, ZAPI_TOKEN e ZAPI_CLIENT_TOKEN nas variaveis de ambiente",
+            "se_openai_faltando": "Configure OPENAI_API_KEY nas variaveis de ambiente",
+            "se_mongodb_erro": "Verifique MONGODB_URI nas variaveis de ambiente"
+        }
+    }
+
+
 @app.post("/admin/api/bot/toggle")
 async def api_bot_toggle(enabled: bool):
     """Liga ou desliga o bot globalmente"""
@@ -1923,18 +2038,30 @@ Para urgencias: (contato)"""
                 # Analisar e sugerir conhecimento (Hybrid Learning)
                 await analisar_e_sugerir_conhecimento(phone, text, reply)
 
-            # Salvar resposta do bot
+            # Enviar resposta PRIMEIRO, depois salvar no banco
+            envio_sucesso = await send_whatsapp_message(phone, reply)
+
+            if not envio_sucesso:
+                logger.error(f"[WEBHOOK] FALHA ao enviar resposta para {phone}!")
+                logger.error(f"[WEBHOOK] Resposta que DEVERIA ter sido enviada: {reply[:200]}...")
+                return JSONResponse({
+                    "status": "error",
+                    "reason": "send_failed",
+                    "phone": phone,
+                    "message": "Falha ao enviar resposta via Z-API"
+                }, status_code=500)
+
+            # Salvar resposta do bot (somente se envio foi bem sucedido)
             await db.conversas.insert_one({
                 "phone": phone,
                 "message": reply,
                 "role": "assistant",
                 "timestamp": datetime.now(),
-                "canal": "WhatsApp"
+                "canal": "WhatsApp",
+                "envio_confirmado": True
             })
 
-            # Enviar resposta
-            await send_whatsapp_message(phone, reply)
-
+            logger.info(f"[WEBHOOK] Resposta enviada e salva com sucesso para {phone}")
             return JSONResponse({"status": "processed", "type": "text", "etapa": etapa_atual})
 
         # ============================================
