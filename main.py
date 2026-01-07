@@ -133,8 +133,25 @@ async def set_bot_status(enabled: bool):
 # TRANSFERENCIA PARA ATENDENTE HUMANO
 # ============================================================
 # Numeros do sistema (configuravel por ambiente)
-ATENDENTE_PHONE = os.getenv("ATENDENTE_PHONE", "18573167770")  # Numero oficial de atendimento EUA
-NOTIFICACAO_PHONE = os.getenv("NOTIFICACAO_PHONE", "18572081139")  # Numero pessoal EUA (recebe notificacoes)
+# IMPORTANTE: Numeros devem incluir codigo do pais (1 para EUA, 55 para Brasil)
+_atendente_raw = os.getenv("ATENDENTE_PHONE", "18573167770")
+_notificacao_raw = os.getenv("NOTIFICACAO_PHONE", "18572081139")
+
+# Garantir que numeros tenham o codigo do pais (1 para EUA)
+def normalizar_telefone_eua(numero: str) -> str:
+    """Garante que numero EUA tenha o codigo de pais 1"""
+    numero = numero.strip().replace("+", "").replace("-", "").replace(" ", "")
+    # Se comeca com 857 (area de Boston) sem o 1, adiciona
+    if numero.startswith("857") and len(numero) == 10:
+        return "1" + numero
+    return numero
+
+ATENDENTE_PHONE = normalizar_telefone_eua(_atendente_raw)
+NOTIFICACAO_PHONE = normalizar_telefone_eua(_notificacao_raw)
+
+# Log para debug
+logger.info(f"[CONFIG] ATENDENTE_PHONE: {ATENDENTE_PHONE}")
+logger.info(f"[CONFIG] NOTIFICACAO_PHONE: {NOTIFICACAO_PHONE}")
 
 # Timeout para modo humano (em minutos) - apos esse tempo, volta automaticamente para IA
 HUMAN_MODE_TIMEOUT_MINUTES = int(os.getenv("HUMAN_MODE_TIMEOUT_MINUTES", "30"))
