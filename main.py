@@ -255,14 +255,27 @@ def detectar_possivel_comprovante(texto: str) -> bool:
 
 
 async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
-    """Envia notificacao para atendente com resumo da conversa"""
+    """Envia notificacao para atendente com resumo da conversa e dados do cliente"""
     try:
         logger.info(f"[NOTIFICACAO] Iniciando notificacao para {NOTIFICACAO_PHONE} sobre cliente {phone}")
 
-        # Buscar ultimas 10 mensagens da conversa
+        # Buscar estado completo do cliente (nome, paginas, idioma, orcamento)
+        estado = await get_cliente_estado(phone)
+        nome_cliente = estado.get("nome", "Nao informado")
+        num_paginas = estado.get("num_paginas", "Nao informado")
+        idioma = estado.get("idioma", "pt")
+        idioma_destino = estado.get("idioma_destino", "Nao informado")
+        valor_orcamento = estado.get("valor_orcamento", None)
+        documento_info = estado.get("documento_info", None)
+
+        # Traduzir codigo de idioma
+        idiomas_map = {"pt": "Portugues", "en": "Ingles", "es": "Espanhol"}
+        idioma_texto = idiomas_map.get(idioma, idioma)
+
+        # Buscar ultimas 5 mensagens da conversa
         mensagens = await db.conversas.find(
             {"phone": phone}
-        ).sort("timestamp", -1).limit(10).to_list(length=10)
+        ).sort("timestamp", -1).limit(5).to_list(length=5)
 
         # Inverter para ordem cronologica
         mensagens.reverse()
@@ -270,24 +283,44 @@ async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
         # Montar resumo
         resumo_linhas = []
         for msg in mensagens:
-            role = "Cliente" if msg.get("role") == "user" else "IA"
-            texto = msg.get("message", "")[:100]
+            role = "Cliente" if msg.get("role") == "user" else "Mia"
+            texto = msg.get("message", "")[:80]
             resumo_linhas.append(f"{role}: {texto}")
 
         resumo = "\n".join(resumo_linhas) if resumo_linhas else "Sem historico"
 
-        # Montar mensagem de notificacao
-        mensagem_atendente = f"""*TRANSFERENCIA DE ATENDIMENTO*
+        # Montar mensagem de notificacao com dados completos
+        mensagem_atendente = f"""*NOVO ATENDIMENTO HUMANO*
 
-Cliente: {phone}
+*DADOS DO CLIENTE:*
+Telefone: {phone}
+Nome: {nome_cliente}
+Paginas: {num_paginas}
+Idioma cliente: {idioma_texto}
+Traducao para: {idioma_destino}"""
+
+        # Adicionar valor do orcamento se existir
+        if valor_orcamento:
+            mensagem_atendente += f"\n*ORCAMENTO: ${valor_orcamento}*"
+
+        # Adicionar info do documento se existir
+        if documento_info:
+            mensagem_atendente += f"\nDocumento: {documento_info[:100]}"
+
+        mensagem_atendente += f"""
+
 Motivo: {motivo}
 
-Resumo da Conversa:
+*ULTIMAS MENSAGENS:*
 {resumo}
 
-*COMANDOS (envie NA CONVERSA DO CLIENTE):*
-* = Pausar IA (ja esta pausada)
-+ = Retomar IA"""
+*COMO ATENDER:*
+1. Abra a conversa com {phone} no WhatsApp
+2. Responda diretamente ao cliente
+3. Para PAUSAR a IA: digite *
+4. Para RETOMAR a IA: digite +
+
+A IA ja esta PAUSADA para este cliente."""
 
         # Enviar notificacao para numero pessoal
         logger.info(f"[NOTIFICACAO] Enviando para {NOTIFICACAO_PHONE}...")
@@ -333,30 +366,98 @@ async def detectar_solicitacao_humano(message: str) -> bool:
 async def transferir_para_humano(phone: str, motivo: str):
     """Transfere conversa para atendente humano"""
     try:
-        # Atualizar status no banco
-        await db.conversas.update_many(
+        # Atualizar estado do cliente para modo humano (fonte unica de verdade)
+        await db.cliente_estados.update_one(
             {"phone": phone},
             {
                 "$set": {
                     "mode": "human",
                     "transferred_at": datetime.now(),
-                    "transfer_reason": motivo
+                    "transfer_reason": motivo,
+                    "updated_at": datetime.now()
                 }
-            }
+            },
+            upsert=True
         )
 
-        # Notificar atendente (INVISIVEL - cliente nao sabe)
+        # Tambem atualizar na ultima conversa para compatibilidade
+        await db.conversas.update_one(
+            {"phone": phone},
+            {"$set": {"mode": "human", "transferred_at": datetime.now()}},
+            upsert=False
+        )
+
+        # Notificar atendente com dados completos do cliente
         await notificar_atendente(phone, motivo)
 
-        # NAO enviar mensagem ao cliente (transferencia invisivel)
-        # Cliente continua conversando normalmente, mas atendente humano assume
-
-        logger.info(f"Conversa transferida para humano: {phone} (Motivo: {motivo})")
+        logger.info(f"[TRANSFERENCIA] Conversa de {phone} transferida para humano (Motivo: {motivo})")
         return True
 
     except Exception as e:
-        logger.error(f"Erro ao transferir para humano: {e}")
+        logger.error(f"[TRANSFERENCIA] Erro ao transferir para humano: {e}")
+        logger.error(traceback.format_exc())
         return False
+
+
+async def pausar_ia_para_cliente(phone: str):
+    """Pausa a IA para um cliente especifico (comando *)"""
+    try:
+        await db.cliente_estados.update_one(
+            {"phone": phone},
+            {
+                "$set": {
+                    "mode": "human",
+                    "paused_at": datetime.now(),
+                    "paused_by": "operador",
+                    "updated_at": datetime.now()
+                }
+            },
+            upsert=True
+        )
+        logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone}")
+        return True
+    except Exception as e:
+        logger.error(f"[OPERADOR] Erro ao pausar IA: {e}")
+        return False
+
+
+async def retomar_ia_para_cliente(phone: str):
+    """Retoma a IA para um cliente especifico (comando +)"""
+    try:
+        await db.cliente_estados.update_one(
+            {"phone": phone},
+            {
+                "$set": {
+                    "mode": "ia",
+                    "resumed_at": datetime.now(),
+                    "updated_at": datetime.now()
+                },
+                "$unset": {
+                    "transferred_at": "",
+                    "transfer_reason": "",
+                    "paused_at": "",
+                    "paused_by": ""
+                }
+            },
+            upsert=True
+        )
+        logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone}")
+        return True
+    except Exception as e:
+        logger.error(f"[OPERADOR] Erro ao retomar IA: {e}")
+        return False
+
+
+async def verificar_modo_cliente(phone: str) -> str:
+    """Verifica o modo atual do cliente (ia ou human)"""
+    try:
+        estado = await db.cliente_estados.find_one({"phone": phone})
+        if estado:
+            return estado.get("mode", "ia")
+        return "ia"  # Padrao: IA ativa
+    except Exception as e:
+        logger.error(f"Erro ao verificar modo do cliente: {e}")
+        return "ia"
 
 
 async def verificar_timeout_modo_humano(phone: str) -> bool:
@@ -368,43 +469,26 @@ async def verificar_timeout_modo_humano(phone: str) -> bool:
     from datetime import timedelta
 
     try:
-        # Buscar ultima conversa com modo human
-        conversa = await db.conversas.find_one(
-            {"phone": phone, "mode": "human"},
-            sort=[("timestamp", -1)]
-        )
+        # Buscar estado do cliente
+        estado = await db.cliente_estados.find_one({"phone": phone})
 
-        if not conversa:
+        if not estado or estado.get("mode") != "human":
             return False
 
-        transferred_at = conversa.get("transferred_at")
+        # Verificar quando foi transferido/pausado
+        transferred_at = estado.get("transferred_at") or estado.get("paused_at")
         if not transferred_at:
-            # Se nao tem timestamp de transferencia, usar timestamp da mensagem
-            transferred_at = conversa.get("timestamp", datetime.now())
+            # Se nao tem timestamp, usar updated_at
+            transferred_at = estado.get("updated_at", datetime.now())
 
         # Verificar se passou o timeout
         tempo_limite = transferred_at + timedelta(minutes=HUMAN_MODE_TIMEOUT_MINUTES)
 
         if datetime.now() > tempo_limite:
-            # Timeout expirou - verificar se houve resposta do atendente
-            # Buscar mensagens do atendente (role=assistant) apos a transferencia
-            resposta_atendente = await db.conversas.find_one({
-                "phone": phone,
-                "role": "assistant",
-                "timestamp": {"$gt": transferred_at}
-            })
-
-            if not resposta_atendente:
-                # Nenhuma resposta do atendente - resetar para IA
-                await db.conversas.update_many(
-                    {"phone": phone},
-                    {
-                        "$set": {"mode": "ia"},
-                        "$unset": {"transferred_at": "", "transfer_reason": ""}
-                    }
-                )
-                logger.info(f"[TIMEOUT] Conversa {phone} retornou para IA apos {HUMAN_MODE_TIMEOUT_MINUTES} min sem resposta do atendente")
-                return True
+            # Timeout expirou - resetar para IA
+            await retomar_ia_para_cliente(phone)
+            logger.info(f"[TIMEOUT] Cliente {phone} retornou para IA apos {HUMAN_MODE_TIMEOUT_MINUTES} min sem interacao")
+            return True
 
         return False
 
@@ -1144,6 +1228,40 @@ ZAPI_TOKEN = os.getenv("ZAPI_TOKEN")
 ZAPI_CLIENT_TOKEN = os.getenv("ZAPI_CLIENT_TOKEN")
 ZAPI_URL = os.getenv("ZAPI_URL", "https://api.z-api.io")
 
+# ============================================================
+# VALIDACAO DE CONFIGURACAO Z-API (log de aviso)
+# ============================================================
+def validar_config_zapi():
+    """Valida e loga status das configuracoes Z-API"""
+    problemas = []
+
+    if not ZAPI_INSTANCE_ID:
+        problemas.append("ZAPI_INSTANCE_ID nao configurado!")
+    if not ZAPI_TOKEN:
+        problemas.append("ZAPI_TOKEN nao configurado!")
+    if not ZAPI_CLIENT_TOKEN:
+        problemas.append("ZAPI_CLIENT_TOKEN nao configurado (pode causar erros)!")
+
+    if problemas:
+        logger.error("=" * 60)
+        logger.error("PROBLEMAS DE CONFIGURACAO Z-API DETECTADOS:")
+        for p in problemas:
+            logger.error(f"  - {p}")
+        logger.error("O bot NAO conseguira enviar mensagens sem essas configuracoes!")
+        logger.error("=" * 60)
+        return False
+    else:
+        logger.info("=" * 60)
+        logger.info("CONFIGURACAO Z-API OK:")
+        logger.info(f"  - Instance ID: {ZAPI_INSTANCE_ID[:8]}... (configurado)")
+        logger.info(f"  - Token: {ZAPI_TOKEN[:8]}... (configurado)")
+        logger.info(f"  - Client Token: {'Configurado' if ZAPI_CLIENT_TOKEN else 'Nao configurado'}")
+        logger.info("=" * 60)
+        return True
+
+# Validar na inicializacao
+ZAPI_CONFIG_VALIDA = validar_config_zapi()
+
 
 # ============================================================
 # MODELOS PYDANTIC
@@ -1227,6 +1345,17 @@ Responda de forma profissional e educada."""
 async def send_whatsapp_message(phone: str, message: str):
     """Envia mensagem via Z-API com Client-Token"""
     try:
+        # VALIDACAO: Verificar se configuracao Z-API esta ok
+        if not ZAPI_CONFIG_VALIDA:
+            logger.error("=" * 60)
+            logger.error("FALHA NO ENVIO: Configuracao Z-API invalida!")
+            logger.error(f"  ZAPI_INSTANCE_ID: {'OK' if ZAPI_INSTANCE_ID else 'FALTANDO!'}")
+            logger.error(f"  ZAPI_TOKEN: {'OK' if ZAPI_TOKEN else 'FALTANDO!'}")
+            logger.error(f"  ZAPI_CLIENT_TOKEN: {'OK' if ZAPI_CLIENT_TOKEN else 'FALTANDO!'}")
+            logger.error("Mensagem NAO foi enviada para: " + phone)
+            logger.error("=" * 60)
+            return False
+
         # Construir URL completa
         url = f"https://api.z-api.io/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text"
 
@@ -1242,26 +1371,40 @@ async def send_whatsapp_message(phone: str, message: str):
             "message": message
         }
 
-        # Logs de debug
-        logger.info(f"Enviando mensagem para {phone}")
-        logger.info(f"Client-Token: {'Configurado' if headers['Client-Token'] else 'VAZIO'}")
+        # Logs de debug detalhados
+        logger.info("=" * 40)
+        logger.info(f"[ENVIO Z-API] Destinatario: {phone}")
+        logger.info(f"[ENVIO Z-API] Mensagem ({len(message)} chars): {message[:100]}...")
+        logger.info(f"[ENVIO Z-API] URL: {url[:60]}...")
+        logger.info(f"[ENVIO Z-API] Client-Token: {'Sim' if headers['Client-Token'] else 'NAO - PODE CAUSAR ERRO!'}")
 
         # Enviar requisicao COM headers
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers, json=payload)
 
-            logger.info(f"Status Z-API: {response.status_code}")
-            logger.info(f"Resposta: {response.text}")
+            logger.info(f"[ENVIO Z-API] Status HTTP: {response.status_code}")
+            logger.info(f"[ENVIO Z-API] Resposta: {response.text[:200]}")
 
             if response.status_code == 200:
-                logger.info(f"Mensagem enviada com sucesso")
+                logger.info(f"[ENVIO Z-API] SUCESSO - Mensagem enviada para {phone}")
+                logger.info("=" * 40)
                 return True
             else:
-                logger.error(f"Erro ao enviar: {response.status_code} - {response.text}")
+                logger.error("=" * 60)
+                logger.error(f"[ENVIO Z-API] FALHA! Status: {response.status_code}")
+                logger.error(f"[ENVIO Z-API] Resposta erro: {response.text}")
+                logger.error(f"[ENVIO Z-API] Telefone: {phone}")
+                logger.error("=" * 60)
                 return False
 
+    except httpx.TimeoutException:
+        logger.error(f"[ENVIO Z-API] TIMEOUT ao enviar para {phone} (30s)")
+        return False
+    except httpx.ConnectError as e:
+        logger.error(f"[ENVIO Z-API] ERRO DE CONEXAO com Z-API: {str(e)}")
+        return False
     except Exception as e:
-        logger.error(f"Excecao ao enviar mensagem: {str(e)}")
+        logger.error(f"[ENVIO Z-API] EXCECAO: {str(e)}")
         logger.error(traceback.format_exc())
         return False
 
@@ -1627,6 +1770,62 @@ async def api_bot_status():
     }
 
 
+@app.get("/admin/api/debug/config")
+async def api_debug_config():
+    """
+    Endpoint de DEBUG - Verifica configuracoes do bot
+    Acesse: /admin/api/debug/config
+    """
+    # Verificar OpenAI
+    openai_ok = bool(os.getenv("OPENAI_API_KEY"))
+
+    # Verificar MongoDB
+    try:
+        await db.command("ping")
+        mongodb_ok = True
+        mongodb_error = None
+    except Exception as e:
+        mongodb_ok = False
+        mongodb_error = str(e)
+
+    # Status do bot
+    bot_status = await get_bot_status()
+
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "configuracao": {
+            "zapi": {
+                "instance_id": "OK" if ZAPI_INSTANCE_ID else "FALTANDO!",
+                "token": "OK" if ZAPI_TOKEN else "FALTANDO!",
+                "client_token": "OK" if ZAPI_CLIENT_TOKEN else "FALTANDO!",
+                "config_valida": ZAPI_CONFIG_VALIDA
+            },
+            "openai": {
+                "api_key": "OK" if openai_ok else "FALTANDO!"
+            },
+            "mongodb": {
+                "conectado": mongodb_ok,
+                "erro": mongodb_error
+            }
+        },
+        "bot_status": {
+            "enabled": bot_status["enabled"],
+            "last_update": bot_status["last_update"].isoformat()
+        },
+        "diagnostico": {
+            "pode_receber_mensagens": mongodb_ok,
+            "pode_processar_ia": openai_ok and mongodb_ok,
+            "pode_enviar_respostas": ZAPI_CONFIG_VALIDA,
+            "bot_funcionando": all([mongodb_ok, openai_ok, ZAPI_CONFIG_VALIDA, bot_status["enabled"]])
+        },
+        "instrucoes": {
+            "se_zapi_faltando": "Configure ZAPI_INSTANCE_ID, ZAPI_TOKEN e ZAPI_CLIENT_TOKEN nas variaveis de ambiente",
+            "se_openai_faltando": "Configure OPENAI_API_KEY nas variaveis de ambiente",
+            "se_mongodb_erro": "Verifique MONGODB_URI nas variaveis de ambiente"
+        }
+    }
+
+
 @app.post("/admin/api/bot/toggle")
 async def api_bot_toggle(enabled: bool):
     """Liga ou desliga o bot globalmente"""
@@ -1640,6 +1839,86 @@ async def api_bot_toggle(enabled: bool):
         }
     else:
         raise HTTPException(status_code=500, detail="Erro ao atualizar status do bot")
+
+
+# ============================================================
+# API: VERIFICAR E CONTROLAR MODO DO CLIENTE
+# ============================================================
+@app.get("/admin/api/cliente/{phone}/modo")
+async def api_get_modo_cliente(phone: str):
+    """Verifica o modo atual de um cliente (ia ou human)"""
+    estado = await db.cliente_estados.find_one({"phone": phone})
+
+    if not estado:
+        return {
+            "phone": phone,
+            "modo": "ia",
+            "existe_estado": False,
+            "mensagem": "Cliente sem estado salvo - modo padrao IA"
+        }
+
+    return {
+        "phone": phone,
+        "modo": estado.get("mode", "ia"),
+        "existe_estado": True,
+        "transferred_at": estado.get("transferred_at"),
+        "paused_at": estado.get("paused_at"),
+        "paused_by": estado.get("paused_by"),
+        "updated_at": estado.get("updated_at"),
+        "nome": estado.get("nome"),
+        "etapa": estado.get("etapa")
+    }
+
+
+@app.post("/admin/api/cliente/{phone}/pausar")
+async def api_pausar_cliente(phone: str):
+    """Pausa a IA para um cliente especifico"""
+    sucesso = await pausar_ia_para_cliente(phone)
+
+    if sucesso:
+        return {
+            "success": True,
+            "phone": phone,
+            "modo": "human",
+            "mensagem": f"IA pausada para cliente {phone}"
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Erro ao pausar IA")
+
+
+@app.post("/admin/api/cliente/{phone}/retomar")
+async def api_retomar_cliente(phone: str):
+    """Retoma a IA para um cliente especifico"""
+    sucesso = await retomar_ia_para_cliente(phone)
+
+    if sucesso:
+        return {
+            "success": True,
+            "phone": phone,
+            "modo": "ia",
+            "mensagem": f"IA retomada para cliente {phone}"
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Erro ao retomar IA")
+
+
+@app.get("/admin/api/clientes/modo-humano")
+async def api_listar_clientes_modo_humano():
+    """Lista todos os clientes em modo humano (atendimento pausado)"""
+    clientes = await db.cliente_estados.find({"mode": "human"}).to_list(length=100)
+
+    return {
+        "total": len(clientes),
+        "clientes": [
+            {
+                "phone": c.get("phone"),
+                "nome": c.get("nome", "Nao informado"),
+                "paused_at": c.get("paused_at") or c.get("transferred_at"),
+                "motivo": c.get("transfer_reason", "Nao especificado")
+            }
+            for c in clientes
+        ]
+    }
 
 
 # ============================================================
@@ -1675,40 +1954,42 @@ async def webhook_whatsapp(request: Request):
         # ============================================
         # PROCESSAR COMANDOS DO OPERADOR (fromMe=true)
         # Quando operador envia * ou + na conversa com cliente
+        # O phone aqui e o numero do CLIENTE para quem o operador enviou
         # ============================================
         if from_me:
-            # Verificar comandos de controle
             comando = message_text.strip()
             logger.info(f"[OPERADOR] Mensagem fromMe detectada: '{comando}' para cliente {phone}")
 
             if comando == "*":
-                await db.conversas.update_many(
-                    {"phone": phone},
-                    {"$set": {"mode": "human", "transferred_at": datetime.now()}}
-                )
-                logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone}")
-                return {"status": "ia_paused", "client": phone}
+                # Pausar IA para este cliente
+                await pausar_ia_para_cliente(phone)
+                logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone} - Operador assumiu o atendimento")
+                return {"status": "ia_paused", "client": phone, "message": "IA pausada com sucesso"}
 
             elif comando == "+":
-                await db.conversas.update_many(
-                    {"phone": phone},
-                    {"$set": {"mode": "ia"}, "$unset": {"transferred_at": "", "transfer_reason": ""}}
-                )
-                logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone}")
-                return {"status": "ia_resumed", "client": phone}
+                # Retomar IA para este cliente
+                await retomar_ia_para_cliente(phone)
+                logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone} - Bot voltou a atender")
+
+                # Opcional: enviar mensagem ao cliente informando que a IA voltou
+                # await send_whatsapp_message(phone, "A assistente virtual voltou a te atender. Como posso ajudar?")
+
+                return {"status": "ia_resumed", "client": phone, "message": "IA retomada com sucesso"}
 
             # Ignorar outras mensagens enviadas pelo operador (nao interferir)
-            logger.info(f"[OPERADOR] Mensagem normal ignorada (operador respondendo cliente)")
+            logger.info(f"[OPERADOR] Mensagem normal do operador para cliente {phone}")
             return {"status": "ignored", "reason": "operator_message"}
 
         # ============================================
-        # VERIFICAR STATUS DO BOT
+        # VERIFICAR STATUS DO BOT E MODO DO CLIENTE
         # ============================================
         bot_status = await get_bot_status()
 
-        # Verificar se conversa esta em modo humano
-        conversa = await db.conversas.find_one({"phone": phone}, sort=[("timestamp", -1)])
-        modo_humano = conversa and conversa.get("mode") == "human"
+        # Verificar modo do cliente usando cliente_estados (fonte unica de verdade)
+        modo_cliente = await verificar_modo_cliente(phone)
+        modo_humano = (modo_cliente == "human")
+
+        logger.info(f"[WEBHOOK] Cliente {phone} - Modo atual: {modo_cliente}")
 
         # Se em modo humano, verificar se expirou o timeout
         timeout_expirou = False
@@ -1728,7 +2009,7 @@ async def webhook_whatsapp(request: Request):
 
         # Se bot desligado OU conversa em modo humano (e NAO expirou timeout), nao processar
         if not bot_status["enabled"] or modo_humano:
-            logger.info(f"Bot {'desligado' if not bot_status['enabled'] else 'em modo humano para ' + phone}")
+            logger.info(f"[WEBHOOK] Bot {'DESLIGADO' if not bot_status['enabled'] else 'em MODO HUMANO para ' + phone} - Mensagem nao sera processada pela IA")
 
             await db.conversas.insert_one({
                 "phone": phone,
@@ -1923,18 +2204,30 @@ Para urgencias: (contato)"""
                 # Analisar e sugerir conhecimento (Hybrid Learning)
                 await analisar_e_sugerir_conhecimento(phone, text, reply)
 
-            # Salvar resposta do bot
+            # Enviar resposta PRIMEIRO, depois salvar no banco
+            envio_sucesso = await send_whatsapp_message(phone, reply)
+
+            if not envio_sucesso:
+                logger.error(f"[WEBHOOK] FALHA ao enviar resposta para {phone}!")
+                logger.error(f"[WEBHOOK] Resposta que DEVERIA ter sido enviada: {reply[:200]}...")
+                return JSONResponse({
+                    "status": "error",
+                    "reason": "send_failed",
+                    "phone": phone,
+                    "message": "Falha ao enviar resposta via Z-API"
+                }, status_code=500)
+
+            # Salvar resposta do bot (somente se envio foi bem sucedido)
             await db.conversas.insert_one({
                 "phone": phone,
                 "message": reply,
                 "role": "assistant",
                 "timestamp": datetime.now(),
-                "canal": "WhatsApp"
+                "canal": "WhatsApp",
+                "envio_confirmado": True
             })
 
-            # Enviar resposta
-            await send_whatsapp_message(phone, reply)
-
+            logger.info(f"[WEBHOOK] Resposta enviada e salva com sucesso para {phone}")
             return JSONResponse({"status": "processed", "type": "text", "etapa": etapa_atual})
 
         # ============================================
