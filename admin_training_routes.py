@@ -333,7 +333,68 @@ async def deletar_faq(item_id: str):
         logger.info(f"✅ FAQ deletado: {item_id}")
         
         return RedirectResponse(url="/admin/treinamento", status_code=303)
-        
+
     except Exception as e:
         logger.error(f"❌ Erro ao deletar FAQ: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# ROTA DE CORRECAO - ADICIONAR IDs FALTANTES
+# ============================================================
+@router.get("/corrigir-ids")
+async def corrigir_ids_faltantes():
+    """
+    Corrige itens antigos que nao tem _id
+    Acesse: /admin/treinamento/corrigir-ids
+    """
+    try:
+        bot = await db.bots.find_one({"name": "Mia"})
+
+        if not bot:
+            return JSONResponse({"error": "Bot Mia nao encontrado"})
+
+        conhecimentos_corrigidos = 0
+        faqs_corrigidos = 0
+
+        # Corrigir knowledge_base
+        knowledge_base = bot.get("knowledge_base", [])
+        nova_knowledge_base = []
+        for item in knowledge_base:
+            if not item.get("_id"):
+                item["_id"] = str(ObjectId())
+                conhecimentos_corrigidos += 1
+            nova_knowledge_base.append(item)
+
+        # Corrigir FAQs
+        faqs = bot.get("faqs", [])
+        novos_faqs = []
+        for faq in faqs:
+            if not faq.get("_id"):
+                faq["_id"] = str(ObjectId())
+                faqs_corrigidos += 1
+            novos_faqs.append(faq)
+
+        # Salvar correcoes
+        if conhecimentos_corrigidos > 0 or faqs_corrigidos > 0:
+            await db.bots.update_one(
+                {"name": "Mia"},
+                {
+                    "$set": {
+                        "knowledge_base": nova_knowledge_base,
+                        "faqs": novos_faqs
+                    }
+                }
+            )
+
+        return JSONResponse({
+            "success": True,
+            "message": "IDs corrigidos com sucesso!",
+            "conhecimentos_corrigidos": conhecimentos_corrigidos,
+            "faqs_corrigidos": faqs_corrigidos,
+            "instrucao": "Agora volte para /admin/treinamento e os botoes Edit/Delete vao funcionar"
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao corrigir IDs: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
