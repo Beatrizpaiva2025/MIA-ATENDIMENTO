@@ -390,6 +390,30 @@
     </div>
 </div>
 
+<!-- CLIENTES EM MODO HUMANO (IA PAUSADA) -->
+<div class="control-card" style="margin-top: 25px; border-top-color: #e74c3c;">
+    <div class="control-header">
+        <span class="control-icon">🔴</span>
+        <div class="control-title">Clients with Paused AI</div>
+    </div>
+
+    <p class="info-text" style="margin-bottom: 15px;">
+        These clients have the AI paused (human mode). Click the button to resume AI.
+    </p>
+
+    <div id="clientes-humano-container" style="max-height: 300px; overflow-y: auto;">
+        <div style="color: #666;">Loading...</div>
+    </div>
+
+    <button class="btn-action" onclick="carregarClientesHumano()" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); margin-top: 15px;">
+        🔄 Update List
+    </button>
+
+    <button class="btn-action" onclick="retomarTodosIA()" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); margin-top: 10px;">
+        ✅ Resume AI for ALL Clients
+    </button>
+</div>
+
 <!-- CLIENTES ATIVOS -->
 <div class="control-card" style="margin-top: 25px;">
     <div class="control-header">
@@ -428,10 +452,12 @@
         carregarLogs();
         carregarConfig();
         carregarClientes();
+        carregarClientesHumano();
 
         // Auto-refresh a cada 5 segundos
         setInterval(carregarStatus, 5000);
         setInterval(carregarClientes, 10000);
+        setInterval(carregarClientesHumano, 15000);
     };
 
     async function carregarStatus() {
@@ -640,6 +666,109 @@
             } else {
                 alert('❌ Error saving: ' + (data.error || 'Unknown'));
             }
+        } catch (error) {
+            alert('❌ Connection error');
+        }
+    }
+
+    // ============================================================
+    // CLIENTES EM MODO HUMANO (IA PAUSADA)
+    // ============================================================
+    async function carregarClientesHumano() {
+        try {
+            const response = await fetch('/admin/api/clientes/modo-humano');
+            const data = await response.json();
+
+            const container = document.getElementById('clientes-humano-container');
+
+            if (data.clientes && data.clientes.length > 0) {
+                container.innerHTML = data.clientes.map(cliente => {
+                    return `
+                        <div class="client-card human-mode">
+                            <div class="client-info">
+                                <div class="client-phone">📱 ${cliente.phone}</div>
+                                <div class="client-details">
+                                    Nome: ${cliente.nome || 'Não informado'} | Motivo: ${cliente.motivo || 'N/A'}
+                                </div>
+                            </div>
+                            <button onclick="retomarIACliente('${cliente.phone}')"
+                                    style="background: #4caf50; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                ✅ Resume AI
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                container.innerHTML = '<div style="color: #4caf50; text-align: center; padding: 20px; background: #d4edda; border-radius: 8px;">✅ No clients with paused AI</div>';
+            }
+        } catch (error) {
+            document.getElementById('clientes-humano-container').innerHTML =
+                '<div style="color: #e74c3c;">Error loading clients</div>';
+        }
+    }
+
+    // Retomar IA para um cliente específico
+    async function retomarIACliente(phone) {
+        if (!confirm(`Resume AI for client ${phone}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/admin/api/cliente/${phone}/retomar`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert(`✅ AI resumed for ${phone}`);
+                carregarClientesHumano();
+                carregarClientes();
+            } else {
+                alert('❌ Error: ' + (data.detail || 'Unknown'));
+            }
+        } catch (error) {
+            alert('❌ Connection error');
+        }
+    }
+
+    // Retomar IA para TODOS os clientes
+    async function retomarTodosIA() {
+        if (!confirm('Resume AI for ALL clients in human mode?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/admin/api/clientes/modo-humano');
+            const data = await response.json();
+
+            if (!data.clientes || data.clientes.length === 0) {
+                alert('✅ No clients with paused AI');
+                return;
+            }
+
+            let sucessos = 0;
+            let erros = 0;
+
+            for (const cliente of data.clientes) {
+                try {
+                    const res = await fetch(`/admin/api/cliente/${cliente.phone}/retomar`, {
+                        method: 'POST'
+                    });
+                    const result = await res.json();
+                    if (result.success) {
+                        sucessos++;
+                    } else {
+                        erros++;
+                    }
+                } catch (e) {
+                    erros++;
+                }
+            }
+
+            alert(`✅ Done!\n\nResumed: ${sucessos}\nErrors: ${erros}`);
+            carregarClientesHumano();
+            carregarClientes();
+
         } catch (error) {
             alert('❌ Connection error');
         }

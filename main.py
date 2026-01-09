@@ -667,6 +667,45 @@ Seja especifico e util. Baseie-se na pergunta do cliente."""
 
 
 # ============================================================
+# ============================================================
+# SISTEMA DE DEDUPLICACAO DE MENSAGENS
+# ============================================================
+# Cache para evitar processar a mesma mensagem mais de uma vez
+# (Z-API pode reenviar se o webhook demorar)
+mensagens_processadas = {}
+DEDUP_TIMEOUT_SEGUNDOS = 60  # Manter messageId por 60 segundos
+
+
+def verificar_mensagem_duplicada(message_id: str) -> bool:
+    """
+    Verifica se mensagem ja foi processada.
+    Retorna True se for duplicada, False se for nova.
+    """
+    if not message_id:
+        return False  # Sem messageId, processar normalmente
+
+    agora = datetime.now()
+
+    # Limpar mensagens antigas do cache (mais de 60 segundos)
+    ids_para_remover = []
+    for mid, timestamp in mensagens_processadas.items():
+        if (agora - timestamp).total_seconds() > DEDUP_TIMEOUT_SEGUNDOS:
+            ids_para_remover.append(mid)
+
+    for mid in ids_para_remover:
+        del mensagens_processadas[mid]
+
+    # Verificar se mensagem ja foi processada
+    if message_id in mensagens_processadas:
+        logger.warning(f"[DEDUP] Mensagem duplicada ignorada: {message_id}")
+        return True
+
+    # Marcar como processada
+    mensagens_processadas[message_id] = agora
+    return False
+
+
+# ============================================================
 # SISTEMA DE AGRUPAMENTO DE IMAGENS
 # ============================================================
 image_sessions = {}  # Cache temporário de sessões de imagem
@@ -1956,6 +1995,17 @@ async def webhook_whatsapp(request: Request):
         # ============================================
         phone = data.get("phone", "")
         from_me = data.get("fromMe", False)
+        message_id = data.get("messageId", "")
+
+        # ============================================
+        # VERIFICAR MENSAGEM DUPLICADA
+        # ============================================
+        if verificar_mensagem_duplicada(message_id):
+            return JSONResponse({
+                "status": "ignored",
+                "reason": "duplicate_message",
+                "messageId": message_id
+            })
 
         # Extrair texto de forma mais robusta
         message_text = ""
@@ -1966,7 +2016,7 @@ async def webhook_whatsapp(request: Request):
                 message_text = data["text"]
         message_text = message_text.strip() if message_text else ""
 
-        logger.info(f"[WEBHOOK] phone={phone}, fromMe={from_me}, text='{message_text}'")
+        logger.info(f"[WEBHOOK] phone={phone}, fromMe={from_me}, messageId={message_id[:20] if message_id else 'N/A'}, text='{message_text}'")
 
         # ============================================
         # PROCESSAR COMANDOS DO OPERADOR (fromMe=true)
