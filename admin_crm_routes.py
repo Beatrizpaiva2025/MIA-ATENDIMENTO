@@ -362,24 +362,33 @@ async def api_import_whatsapp_contacts():
         # Buscar todos os phones unicos das conversas
         phones = await db.conversas.distinct("phone")
 
+        logger.info(f"[CRM-IMPORT] Total phones encontrados: {len(phones)}")
+        logger.info(f"[CRM-IMPORT] Exemplos de phones: {phones[:5] if phones else 'nenhum'}")
+
         importados = 0
         atualizados = 0
+        ignorados = 0
 
         for phone in phones:
-            if not phone or "@" not in str(phone):
-                # Nao eh um phone valido do WhatsApp
+            if not phone:
+                ignorados += 1
                 continue
 
-            phone_limpo = re.sub(r'[^\d]', '', phone.replace('@lid', '').replace('@c.us', ''))
+            # Limpar phone - remover @c.us, @lid, e caracteres nao numericos
+            phone_str = str(phone)
+            phone_limpo = re.sub(r'[^\d]', '', phone_str.replace('@lid', '').replace('@c.us', '').replace('@s.whatsapp.net', ''))
 
-            if len(phone_limpo) < 10:
+            # Validar tamanho minimo (telefone brasileiro tem pelo menos 10 digitos)
+            if len(phone_limpo) < 8:
+                logger.info(f"[CRM-IMPORT] Phone ignorado (muito curto): {phone_str} -> {phone_limpo}")
+                ignorados += 1
                 continue
 
             # Verificar se ja existe
             existente = await db.crm_contacts.find_one({"phone": phone_limpo})
 
-            # Extrair info das conversas
-            info = await extrair_info_conversa(phone)
+            # Extrair info das conversas (usar phone original para buscar)
+            info = await extrair_info_conversa(phone_str)
 
             if existente:
                 # Atualizar se tiver nova info
@@ -397,17 +406,18 @@ async def api_import_whatsapp_contacts():
                     atualizados += 1
             else:
                 # Criar novo contato
-                # Contar interacoes
-                total_msgs = await db.conversas.count_documents({"phone": phone})
+                # Contar interacoes (usar phone original)
+                total_msgs = await db.conversas.count_documents({"phone": phone_str})
 
                 # Primeira e ultima mensagem
-                primeira = await db.conversas.find_one({"phone": phone}, sort=[("timestamp", 1)])
-                ultima = await db.conversas.find_one({"phone": phone}, sort=[("timestamp", -1)])
+                primeira = await db.conversas.find_one({"phone": phone_str}, sort=[("timestamp", 1)])
+                ultima = await db.conversas.find_one({"phone": phone_str}, sort=[("timestamp", -1)])
 
                 agora = datetime.now()
 
                 novo_contato = {
                     "phone": phone_limpo,
+                    "phone_original": phone_str,  # Guardar formato original para referencia
                     "nome": info.get("nome"),
                     "email": info.get("email"),
                     "idioma": info.get("idioma", "pt"),
@@ -426,11 +436,15 @@ async def api_import_whatsapp_contacts():
 
                 await db.crm_contacts.insert_one(novo_contato)
                 importados += 1
+                logger.info(f"[CRM-IMPORT] Novo contato: {phone_limpo} ({total_msgs} msgs)")
+
+        logger.info(f"[CRM-IMPORT] Resultado: {importados} importados, {atualizados} atualizados, {ignorados} ignorados")
 
         return {
             "success": True,
             "importados": importados,
             "atualizados": atualizados,
+            "ignorados": ignorados,
             "message": f"Importados: {importados}, Atualizados: {atualizados}"
         }
 
