@@ -43,6 +43,7 @@ from admin_atendimento_routes import router as atendimento_router
 from admin_conversas_routes import router as conversas_router
 from admin_orcamentos_routes import router as orcamentos_router
 from webchat_routes import router as webchat_router
+from admin_crm_routes import router as crm_router, criar_ou_atualizar_contato
 
 # ============================================================
 # CONFIGURACAO DE LOGGING
@@ -1351,6 +1352,7 @@ app.include_router(atendimento_router)
 app.include_router(conversas_router)
 app.include_router(orcamentos_router)
 app.include_router(webchat_router)
+app.include_router(crm_router)
 
 # ============================================================
 # CONFIGURACOES Z-API
@@ -2206,6 +2208,21 @@ async def webhook_whatsapp(request: Request):
             # Ignorar outras mensagens enviadas pelo operador
             logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando)")
             return {"status": "ignored", "reason": "operator_message"}
+
+        # ============================================
+        # CAPTURA AUTOMATICA PARA CRM
+        # ============================================
+        try:
+            # Capturar contato no CRM automaticamente
+            sender_name = data.get("senderName", "") or data.get("pushName", "") or data.get("notifyName", "")
+            await criar_ou_atualizar_contato(phone, {
+                "name": sender_name,
+                "source": "WhatsApp - Auto",
+                "last_message": message_text[:200] if message_text else ""
+            })
+            logger.info(f"[CRM] Contato capturado/atualizado: {phone}")
+        except Exception as crm_error:
+            logger.error(f"[CRM] Erro ao capturar contato: {crm_error}")
 
         # ============================================
         # VERIFICAR STATUS DO BOT E MODO DO CLIENTE

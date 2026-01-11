@@ -1,0 +1,811 @@
+{% extends "admin_base.html" %}
+
+{% block title %}CRM - MIA Admin{% endblock %}
+
+{% block extra_style %}
+<style>
+    /* ============================================
+       LAYOUT PROFISSIONAL - CRM
+       ============================================ */
+
+    .page-header h1 {
+        font-size: 1.4em;
+        color: #1e3a5f;
+        margin-bottom: 5px;
+    }
+
+    .page-header p {
+        font-size: 0.85em;
+        color: #666;
+    }
+
+    .crm-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+
+    .stat-card {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 12px;
+        text-align: center;
+        border: 1px solid #e9ecef;
+        border-left: 3px solid #5dade2;
+    }
+
+    .stat-card.novo { border-left-color: #3498db; }
+    .stat-card.contato { border-left-color: #f39c12; }
+    .stat-card.qualificado { border-left-color: #9b59b6; }
+    .stat-card.convertido { border-left-color: #27ae60; }
+    .stat-card.perdido { border-left-color: #e74c3c; }
+    .stat-card.email { border-left-color: #1abc9c; }
+
+    .stat-value {
+        font-size: 1.5em;
+        font-weight: bold;
+        color: #1e3a5f;
+    }
+
+    .stat-label {
+        font-size: 0.65em;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .controls-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .search-box {
+        flex: 1;
+        min-width: 200px;
+        padding: 8px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+        font-size: 0.85em;
+    }
+
+    .search-box:focus {
+        outline: none;
+        border-color: #5dade2;
+    }
+
+    .filter-select {
+        padding: 8px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+        font-size: 0.85em;
+        background: white;
+    }
+
+    .btn {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 5px;
+        font-size: 0.8em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-primary { background: #5dade2; color: white; }
+    .btn-primary:hover { background: #4a9dd1; }
+    .btn-success { background: #27ae60; color: white; }
+    .btn-success:hover { background: #229954; }
+    .btn-warning { background: #f39c12; color: white; }
+    .btn-warning:hover { background: #d68910; }
+    .btn-danger { background: #e74c3c; color: white; }
+    .btn-danger:hover { background: #c0392b; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #5a6268; }
+
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 0.7em;
+    }
+
+    .section-card {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        margin-bottom: 15px;
+        border-left: 3px solid #5dade2;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .section-title {
+        font-size: 0.9em;
+        font-weight: 600;
+        color: #1e3a5f;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .contacts-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8em;
+    }
+
+    .contacts-table th {
+        background: #f8f9fa;
+        padding: 8px 10px;
+        text-align: left;
+        font-weight: 600;
+        color: #1e3a5f;
+        border-bottom: 1px solid #e0e0e0;
+        font-size: 0.85em;
+        position: sticky;
+        top: 0;
+    }
+
+    .contacts-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #f0f0f0;
+        vertical-align: middle;
+    }
+
+    .contacts-table tr:hover {
+        background: #f8f9fa;
+    }
+
+    .contact-phone {
+        font-weight: 600;
+        color: #1e3a5f;
+    }
+
+    .contact-name {
+        color: #444;
+    }
+
+    .contact-email {
+        color: #5dade2;
+        font-size: 0.9em;
+    }
+
+    .badge {
+        padding: 3px 8px;
+        border-radius: 10px;
+        font-size: 0.7em;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .badge-novo { background: #d6eaf8; color: #2980b9; }
+    .badge-em_contato { background: #fdebd0; color: #b9770e; }
+    .badge-qualificado { background: #e8daef; color: #7d3c98; }
+    .badge-convertido { background: #d4edda; color: #155724; }
+    .badge-perdido { background: #f8d7da; color: #721c24; }
+
+    .tag {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 8px;
+        font-size: 0.65em;
+        background: #e9ecef;
+        color: #495057;
+        margin-right: 3px;
+    }
+
+    .actions-cell {
+        white-space: nowrap;
+    }
+
+    .table-container {
+        overflow-x: auto;
+        max-height: 500px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 30px;
+        color: #666;
+        font-size: 0.9em;
+    }
+
+    /* Modal */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal.active {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal-content {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow-y: auto;
+        animation: slideIn 0.2s;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .modal-title {
+        font-size: 1em;
+        font-weight: 600;
+        color: #1e3a5f;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5em;
+        color: #999;
+        cursor: pointer;
+    }
+
+    .form-group {
+        margin-bottom: 12px;
+    }
+
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #444;
+        margin-bottom: 5px;
+        font-size: 0.8em;
+    }
+
+    .form-input, .form-select, .form-textarea {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+        font-size: 0.85em;
+        box-sizing: border-box;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+        outline: none;
+        border-color: #5dade2;
+    }
+
+    .form-textarea {
+        min-height: 60px;
+        resize: vertical;
+    }
+
+    .modal-buttons {
+        display: flex;
+        gap: 8px;
+        margin-top: 15px;
+    }
+
+    .modal-buttons .btn {
+        flex: 1;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateY(-30px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+
+    .conversation-list {
+        max-height: 200px;
+        overflow-y: auto;
+        background: #f8f9fa;
+        border-radius: 5px;
+        padding: 10px;
+        margin-top: 10px;
+    }
+
+    .conversation-item {
+        padding: 5px 0;
+        border-bottom: 1px solid #e9ecef;
+        font-size: 0.8em;
+    }
+
+    .conversation-item:last-child {
+        border-bottom: none;
+    }
+
+    .conversation-role {
+        font-weight: 600;
+        color: #1e3a5f;
+    }
+
+    .conversation-role.assistant {
+        color: #27ae60;
+    }
+
+    .whatsapp-btn {
+        background: #25d366;
+        color: white;
+    }
+
+    .whatsapp-btn:hover {
+        background: #1da851;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="crm-header">
+    <div class="page-header" style="margin-bottom: 0;">
+        <h1>CRM - Follow-up</h1>
+        <p>Manage contacts and leads from WhatsApp</p>
+    </div>
+    <div>
+        <button class="btn btn-warning" onclick="importarContatos()">Import from WhatsApp</button>
+        <button class="btn btn-success" onclick="abrirModalNovoContato()">+ New Contact</button>
+    </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value" id="stat-total">0</div>
+        <div class="stat-label">Total</div>
+    </div>
+    <div class="stat-card novo">
+        <div class="stat-value" id="stat-novos">0</div>
+        <div class="stat-label">New</div>
+    </div>
+    <div class="stat-card contato">
+        <div class="stat-value" id="stat-contato">0</div>
+        <div class="stat-label">In Contact</div>
+    </div>
+    <div class="stat-card qualificado">
+        <div class="stat-value" id="stat-qualificados">0</div>
+        <div class="stat-label">Qualified</div>
+    </div>
+    <div class="stat-card convertido">
+        <div class="stat-value" id="stat-convertidos">0</div>
+        <div class="stat-label">Converted</div>
+    </div>
+    <div class="stat-card perdido">
+        <div class="stat-value" id="stat-perdidos">0</div>
+        <div class="stat-label">Lost</div>
+    </div>
+    <div class="stat-card email">
+        <div class="stat-value" id="stat-email">0</div>
+        <div class="stat-label">With Email</div>
+    </div>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls-row">
+    <input type="text" class="search-box" id="search-input" placeholder="Search by phone, name or email..." onkeyup="filtrarContatos()">
+    <select class="filter-select" id="status-filter" onchange="filtrarContatos()">
+        <option value="all">All Status</option>
+        <option value="novo">New</option>
+        <option value="em_contato">In Contact</option>
+        <option value="qualificado">Qualified</option>
+        <option value="convertido">Converted</option>
+        <option value="perdido">Lost</option>
+    </select>
+    <button class="btn btn-secondary" onclick="carregarContatos()">Refresh</button>
+</div>
+
+<!-- CONTACTS TABLE -->
+<div class="section-card">
+    <div class="section-header">
+        <div class="section-title">Contacts</div>
+        <span id="contacts-count" style="font-size: 0.8em; color: #666;">0 contacts</span>
+    </div>
+    <div class="table-container">
+        <table class="contacts-table">
+            <thead>
+                <tr>
+                    <th>Phone</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Tags</th>
+                    <th>Last Contact</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="contacts-body">
+                <tr><td colspan="7" class="empty-state">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL NOVO CONTATO -->
+<div id="modal-novo-contato" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-title">New Contact</span>
+            <button class="modal-close" onclick="fecharModal('modal-novo-contato')">&times;</button>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Phone *</label>
+            <input type="text" class="form-input" id="novo-phone" placeholder="18572081139">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-input" id="novo-nome" placeholder="John Doe">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-input" id="novo-email" placeholder="john@email.com">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Origin</label>
+            <select class="form-select" id="novo-origem">
+                <option value="WhatsApp">WhatsApp</option>
+                <option value="Website">Website</option>
+                <option value="Referral">Referral</option>
+                <option value="Google">Google</option>
+                <option value="Facebook">Facebook</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea class="form-textarea" id="novo-notas" placeholder="Notes about this contact..."></textarea>
+        </div>
+        <div class="modal-buttons">
+            <button class="btn btn-secondary" onclick="fecharModal('modal-novo-contato')">Cancel</button>
+            <button class="btn btn-success" onclick="salvarNovoContato()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL EDITAR CONTATO -->
+<div id="modal-editar-contato" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-title">Edit Contact</span>
+            <button class="modal-close" onclick="fecharModal('modal-editar-contato')">&times;</button>
+        </div>
+        <input type="hidden" id="edit-id">
+        <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input type="text" class="form-input" id="edit-phone" disabled>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-input" id="edit-nome">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-input" id="edit-email">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-select" id="edit-status">
+                <option value="novo">New</option>
+                <option value="em_contato">In Contact</option>
+                <option value="qualificado">Qualified</option>
+                <option value="convertido">Converted</option>
+                <option value="perdido">Lost</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Origin</label>
+            <select class="form-select" id="edit-origem">
+                <option value="WhatsApp">WhatsApp</option>
+                <option value="Website">Website</option>
+                <option value="Referral">Referral</option>
+                <option value="Google">Google</option>
+                <option value="Facebook">Facebook</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Quote Value ($)</label>
+            <input type="number" class="form-input" id="edit-valor" step="0.01">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea class="form-textarea" id="edit-notas"></textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Recent Conversations</label>
+            <div id="edit-conversas" class="conversation-list">
+                <div style="color: #999; font-size: 0.85em;">Loading...</div>
+            </div>
+        </div>
+        <div class="modal-buttons">
+            <button class="btn btn-secondary" onclick="fecharModal('modal-editar-contato')">Cancel</button>
+            <button class="btn btn-success" onclick="salvarEdicaoContato()">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    window.onload = function() {
+        carregarStats();
+        carregarContatos();
+    };
+
+    async function carregarStats() {
+        try {
+            const response = await fetch('/admin/crm/api/stats');
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('stat-total').textContent = data.stats.total;
+                document.getElementById('stat-novos').textContent = data.stats.novos;
+                document.getElementById('stat-contato').textContent = data.stats.em_contato;
+                document.getElementById('stat-qualificados').textContent = data.stats.qualificados;
+                document.getElementById('stat-convertidos').textContent = data.stats.convertidos;
+                document.getElementById('stat-perdidos').textContent = data.stats.perdidos;
+                document.getElementById('stat-email').textContent = data.stats.com_email;
+            }
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+    }
+
+    async function carregarContatos() {
+        try {
+            const search = document.getElementById('search-input').value;
+            const status = document.getElementById('status-filter').value;
+
+            let url = '/admin/crm/api/contacts?limit=100';
+            if (search) url += '&search=' + encodeURIComponent(search);
+            if (status && status !== 'all') url += '&status=' + status;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            const tbody = document.getElementById('contacts-body');
+            document.getElementById('contacts-count').textContent = data.total + ' contacts';
+
+            if (!data.contacts || data.contacts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No contacts found. Click "Import from WhatsApp" to import.</td></tr>';
+                return;
+            }
+
+            let html = '';
+            data.contacts.forEach(function(c) {
+                const statusClass = 'badge-' + c.status;
+                const tags = c.tags.map(t => '<span class="tag">' + t + '</span>').join('');
+
+                html += '<tr>';
+                html += '<td class="contact-phone">' + c.phone + '</td>';
+                html += '<td class="contact-name">' + (c.nome || '-') + '</td>';
+                html += '<td class="contact-email">' + (c.email || '-') + '</td>';
+                html += '<td><span class="badge ' + statusClass + '">' + c.status.replace('_', ' ') + '</span></td>';
+                html += '<td>' + (tags || '-') + '</td>';
+                html += '<td>' + c.last_contact + '</td>';
+                html += '<td class="actions-cell">';
+                html += '<button class="btn btn-sm whatsapp-btn" onclick="abrirWhatsApp(\'' + c.phone + '\')">📱</button> ';
+                html += '<button class="btn btn-sm btn-primary" onclick="editarContato(\'' + c.id + '\')">Edit</button> ';
+                html += '<button class="btn btn-sm btn-danger" onclick="deletarContato(\'' + c.id + '\')">Del</button>';
+                html += '</td>';
+                html += '</tr>';
+            });
+
+            tbody.innerHTML = html;
+
+        } catch (error) {
+            console.error('Error loading contacts:', error);
+            document.getElementById('contacts-body').innerHTML = '<tr><td colspan="7" class="empty-state" style="color:#e74c3c;">Error loading contacts</td></tr>';
+        }
+    }
+
+    function filtrarContatos() {
+        carregarContatos();
+    }
+
+    function abrirWhatsApp(phone) {
+        window.open('https://wa.me/' + phone, '_blank');
+    }
+
+    function abrirModalNovoContato() {
+        document.getElementById('novo-phone').value = '';
+        document.getElementById('novo-nome').value = '';
+        document.getElementById('novo-email').value = '';
+        document.getElementById('novo-origem').value = 'WhatsApp';
+        document.getElementById('novo-notas').value = '';
+        document.getElementById('modal-novo-contato').classList.add('active');
+    }
+
+    function fecharModal(id) {
+        document.getElementById(id).classList.remove('active');
+    }
+
+    async function salvarNovoContato() {
+        const phone = document.getElementById('novo-phone').value.trim();
+        if (!phone) {
+            alert('Phone is required');
+            return;
+        }
+
+        try {
+            const response = await fetch('/admin/crm/api/contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone: phone,
+                    nome: document.getElementById('novo-nome').value.trim(),
+                    email: document.getElementById('novo-email').value.trim(),
+                    origem: document.getElementById('novo-origem').value,
+                    notas: document.getElementById('novo-notas').value.trim()
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert('Contact created!');
+                fecharModal('modal-novo-contato');
+                carregarContatos();
+                carregarStats();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (error) {
+            alert('Connection error');
+        }
+    }
+
+    async function editarContato(id) {
+        try {
+            const response = await fetch('/admin/crm/api/contact/' + id);
+            const data = await response.json();
+
+            if (!data.success) {
+                alert('Error loading contact');
+                return;
+            }
+
+            const c = data.contact;
+            document.getElementById('edit-id').value = id;
+            document.getElementById('edit-phone').value = c.phone;
+            document.getElementById('edit-nome').value = c.nome || '';
+            document.getElementById('edit-email').value = c.email || '';
+            document.getElementById('edit-status').value = c.status;
+            document.getElementById('edit-origem').value = c.origem;
+            document.getElementById('edit-valor').value = c.valor_orcamento || '';
+            document.getElementById('edit-notas').value = c.notas || '';
+
+            // Mostrar conversas
+            const conversasDiv = document.getElementById('edit-conversas');
+            if (data.conversas && data.conversas.length > 0) {
+                let html = '';
+                data.conversas.forEach(function(conv) {
+                    const roleClass = conv.role === 'assistant' ? 'assistant' : '';
+                    html += '<div class="conversation-item">';
+                    html += '<span class="conversation-role ' + roleClass + '">' + conv.role + ':</span> ';
+                    html += conv.message;
+                    html += '</div>';
+                });
+                conversasDiv.innerHTML = html;
+            } else {
+                conversasDiv.innerHTML = '<div style="color: #999; font-size: 0.85em;">No conversations found</div>';
+            }
+
+            document.getElementById('modal-editar-contato').classList.add('active');
+
+        } catch (error) {
+            alert('Error loading contact');
+        }
+    }
+
+    async function salvarEdicaoContato() {
+        const id = document.getElementById('edit-id').value;
+
+        try {
+            const response = await fetch('/admin/crm/api/contact/' + id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nome: document.getElementById('edit-nome').value.trim(),
+                    email: document.getElementById('edit-email').value.trim(),
+                    status: document.getElementById('edit-status').value,
+                    origem: document.getElementById('edit-origem').value,
+                    valor_orcamento: parseFloat(document.getElementById('edit-valor').value) || null,
+                    notas: document.getElementById('edit-notas').value.trim()
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert('Contact updated!');
+                fecharModal('modal-editar-contato');
+                carregarContatos();
+                carregarStats();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (error) {
+            alert('Connection error');
+        }
+    }
+
+    async function deletarContato(id) {
+        if (!confirm('Delete this contact?')) return;
+
+        try {
+            const response = await fetch('/admin/crm/api/contact/' + id, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                carregarContatos();
+                carregarStats();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (error) {
+            alert('Connection error');
+        }
+    }
+
+    async function importarContatos() {
+        if (!confirm('Import all contacts from WhatsApp conversations?\n\nThis will add new contacts and update existing ones with any new information found.')) return;
+
+        try {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Importing...';
+
+            const response = await fetch('/admin/crm/api/import-whatsapp', {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            btn.disabled = false;
+            btn.textContent = 'Import from WhatsApp';
+
+            if (data.success) {
+                alert('Import complete!\n\nNew contacts: ' + data.importados + '\nUpdated: ' + data.atualizados);
+                carregarContatos();
+                carregarStats();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (error) {
+            alert('Connection error');
+        }
+    }
+</script>
+{% endblock %}
