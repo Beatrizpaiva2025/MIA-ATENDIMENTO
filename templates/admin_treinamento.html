@@ -4,138 +4,194 @@
 
 {% block extra_style %}
 <style>
+    /* ============================================
+       LAYOUT PROFISSIONAL - FONTES MENORES
+       ============================================ */
+
+    .page-header h1 {
+        font-size: 1.4em;
+        color: #1e3a5f;
+        margin-bottom: 5px;
+    }
+
+    .page-header p {
+        font-size: 0.85em;
+        color: #666;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+        text-align: center;
+        border: 1px solid #e9ecef;
+    }
+
+    .stat-card.primary { border-left: 3px solid #5dade2; }
+    .stat-card.warning { border-left: 3px solid #ff9800; }
+
+    .stat-number {
+        font-size: 1.8em;
+        font-weight: bold;
+        color: #1e3a5f;
+    }
+
+    .stat-label {
+        font-size: 0.7em;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
     .section-card {
         background: white;
-        border-radius: 12px;
-        padding: 25px;
-        margin-bottom: 25px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        border-left: 4px solid #ff9800;
+        border-radius: 8px;
+        padding: 18px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-left: 3px solid #5dade2;
+    }
+
+    .section-card.config {
+        border-left-color: #ff9800;
+    }
+
+    .section-card.faq {
+        border-left-color: #9b59b6;
     }
 
     .section-header {
         display: flex;
         align-items: center;
-        margin-bottom: 20px;
-        padding-bottom: 15px;
-        border-bottom: 2px solid #f0f0f0;
+        margin-bottom: 15px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #f0f0f0;
     }
 
     .section-icon {
-        font-size: 2em;
-        margin-right: 15px;
+        font-size: 1.2em;
+        margin-right: 10px;
     }
 
     .section-title {
-        font-size: 1.5em;
+        font-size: 0.95em;
         color: #1e3a5f;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
         margin: 0;
     }
 
     .form-group {
-        margin-bottom: 20px;
+        margin-bottom: 12px;
     }
 
     .form-label {
         display: block;
         font-weight: 600;
-        color: #1e3a5f;
-        margin-bottom: 8px;
-        font-size: 1.05em;
+        color: #444;
+        margin-bottom: 5px;
+        font-size: 0.8em;
     }
 
     .form-input, .form-textarea, .form-select {
         width: 100%;
-        padding: 12px 15px;
-        border: 2px solid #e0e0e0;
-        border-radius: 8px;
-        font-size: 1em;
-        transition: all 0.3s;
+        padding: 8px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+        font-size: 0.85em;
+        transition: border-color 0.2s;
         font-family: inherit;
     }
 
     .form-input:focus, .form-textarea:focus, .form-select:focus {
         outline: none;
         border-color: #5dade2;
-        box-shadow: 0 0 0 3px rgba(93, 173, 226, 0.1);
     }
 
     .form-textarea {
-        min-height: 120px;
+        min-height: 80px;
         resize: vertical;
     }
 
     .btn-primary {
-        background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+        background: #5dade2;
         color: white;
-        padding: 12px 30px;
+        padding: 8px 16px;
         border: none;
-        border-radius: 8px;
-        font-size: 1.1em;
+        border-radius: 5px;
+        font-size: 0.8em;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.3s;
-        box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+        transition: all 0.2s;
     }
 
     .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(255, 152, 0, 0.4);
-    }
-
-    .btn-secondary {
-        background: #5dade2;
-        color: white;
-        padding: 10px 20px;
-        border: none;
-        border-radius: 6px;
-        font-size: 0.95em;
-        cursor: pointer;
-        margin-right: 10px;
-        transition: all 0.3s;
-    }
-
-    .btn-secondary:hover {
         background: #4a9dd1;
+    }
+
+    .btn-primary.success {
+        background: #27ae60;
+    }
+
+    .btn-primary.success:hover {
+        background: #229954;
     }
 
     .knowledge-item, .faq-item {
         background: #f8f9fa;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-radius: 6px;
+        margin-bottom: 8px;
         border-left: 3px solid #5dade2;
         display: flex;
         justify-content: space-between;
         align-items: center;
     }
 
+    .faq-item {
+        border-left-color: #9b59b6;
+    }
+
     .item-content {
         flex: 1;
+        min-width: 0;
     }
 
     .item-title {
         font-weight: 600;
         color: #1e3a5f;
-        margin-bottom: 5px;
+        font-size: 0.85em;
+        margin-bottom: 2px;
     }
 
     .item-text {
         color: #666;
-        font-size: 0.95em;
+        font-size: 0.75em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .item-actions {
         display: flex;
-        gap: 8px;
+        gap: 5px;
+        margin-left: 10px;
     }
 
     .btn-edit, .btn-delete {
-        padding: 6px 12px;
+        padding: 4px 8px;
         border: none;
-        border-radius: 5px;
+        border-radius: 4px;
         cursor: pointer;
-        font-size: 0.9em;
+        font-size: 0.7em;
         transition: all 0.2s;
     }
 
@@ -157,30 +213,19 @@
         background: #c0392b;
     }
 
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 15px;
-        margin-bottom: 25px;
-    }
-
-    .stat-card {
-        background: linear-gradient(135deg, #5dade2 0%, #4a9dd1 100%);
-        color: white;
-        padding: 20px;
-        border-radius: 10px;
+    .empty-state {
         text-align: center;
+        padding: 20px;
+        color: #666;
+        background: #f8f9fa;
+        border-radius: 6px;
+        font-size: 0.85em;
     }
 
-    .stat-number {
-        font-size: 2.5em;
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-
-    .stat-label {
-        font-size: 0.95em;
-        opacity: 0.9;
+    .help-text {
+        color: #666;
+        font-size: 0.7em;
+        margin-top: 4px;
     }
 
     /* MODAL STYLES */
@@ -193,7 +238,7 @@
         width: 100%;
         height: 100%;
         background-color: rgba(0,0,0,0.5);
-        animation: fadeIn 0.3s;
+        animation: fadeIn 0.2s;
     }
 
     .modal.active {
@@ -204,38 +249,39 @@
 
     .modal-content {
         background: white;
-        padding: 30px;
-        border-radius: 12px;
+        padding: 20px;
+        border-radius: 8px;
         width: 90%;
-        max-width: 600px;
+        max-width: 500px;
         box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-        animation: slideIn 0.3s;
+        animation: slideIn 0.2s;
     }
 
     .modal-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
-        padding-bottom: 15px;
-        border-bottom: 2px solid #f0f0f0;
+        margin-bottom: 15px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #f0f0f0;
     }
 
     .modal-title {
-        font-size: 1.5em;
+        font-size: 1em;
         color: #1e3a5f;
         margin: 0;
+        font-weight: 600;
     }
 
     .modal-close {
         background: none;
         border: none;
-        font-size: 2em;
+        font-size: 1.5em;
         color: #999;
         cursor: pointer;
         padding: 0;
-        width: 40px;
-        height: 40px;
+        width: 30px;
+        height: 30px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -254,7 +300,7 @@
     }
 
     @keyframes slideIn {
-        from { transform: translateY(-50px); opacity: 0; }
+        from { transform: translateY(-30px); opacity: 0; }
         to { transform: translateY(0); opacity: 1; }
     }
 </style>
@@ -262,24 +308,24 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>🎓 AI Training</h1>
+    <h1>AI Training</h1>
     <p>Configure MIA's knowledge and personality</p>
 </div>
 
 <!-- STATS -->
 <div class="stats-grid">
-    <div class="stat-card">
+    <div class="stat-card primary">
         <div class="stat-number">{{ conhecimentos|length }}</div>
         <div class="stat-label">Knowledge Base</div>
     </div>
-    <div class="stat-card" style="background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);">
+    <div class="stat-card warning">
         <div class="stat-number">{{ faqs|length }}</div>
         <div class="stat-label">Registered FAQs</div>
     </div>
 </div>
 
 <!-- PERSONALIDADE -->
-<div class="section-card">
+<div class="section-card config">
     <div class="section-header">
         <span class="section-icon">🤖</span>
         <h2 class="section-title">AI Personality</h2>
@@ -295,18 +341,18 @@
         </div>
         <div class="form-group">
             <label class="form-label">AI Goals & Instructions</label>
-            <textarea name="goals" class="form-textarea" placeholder="Ex: You are the official assistant of Legacy Translations, specialized in..." required>{{ personalidade.goals or '' }}</textarea>
+            <textarea name="goals" class="form-textarea" placeholder="Ex: You are the official assistant of Legacy Translations..." required>{{ personalidade.goals or '' }}</textarea>
         </div>
         <div class="form-group">
             <label class="form-label">Restrictions</label>
             <textarea name="restrictions" class="form-textarea" placeholder="One restriction per line">{{ personalidade.restrictions or '' }}</textarea>
         </div>
         <div class="form-group">
-            <label class="form-label">⏱️ Response Delay (seconds)</label>
+            <label class="form-label">Response Delay (seconds)</label>
             <input type="number" name="response_delay" class="form-input" min="0" max="30" step="1" value="{{ personalidade.response_delay or 3 }}" placeholder="3">
-            <small style="color: #666; font-size: 0.9em; display: block; margin-top: 5px;">Time to wait before sending response (0-30 seconds). Recommended: 3-5 seconds.</small>
+            <p class="help-text">Time to wait before sending response (0-30s). Recommended: 3-5s.</p>
         </div>
-        <button type="submit" class="btn-primary">💾 Save Personality</button>
+        <button type="submit" class="btn-primary success">Save Personality</button>
     </form>
 </div>
 
@@ -316,42 +362,45 @@
         <span class="section-icon">📚</span>
         <h2 class="section-title">Knowledge Base</h2>
     </div>
-    <form method="POST" action="/admin/treinamento/conhecimento" style="margin-bottom: 25px;">
+    <form method="POST" action="/admin/treinamento/conhecimento" style="margin-bottom: 15px;">
         <div class="form-group">
             <label class="form-label">Title</label>
             <input type="text" name="title" class="form-input" placeholder="Ex: Legal Translation Services" required>
         </div>
         <div class="form-group">
             <label class="form-label">Content</label>
-            <textarea name="content" class="form-textarea" placeholder="Describe the information the AI should know about this topic..." required></textarea>
+            <textarea name="content" class="form-textarea" placeholder="Describe the information..." required></textarea>
         </div>
-        <button type="submit" class="btn-primary">➕ Add Knowledge</button>
+        <button type="submit" class="btn-primary">Add Knowledge</button>
     </form>
-    {% if conhecimentos %}
-        {% for item in conhecimentos %}
-        <div class="knowledge-item">
-            <div class="item-content">
-                <div class="item-title">{{ item.title or item.titulo }}</div>
-                <div class="item-text">{{ (item.content or item.conteudo)[:100] }}...</div>
+
+    <div style="max-height: 250px; overflow-y: auto;">
+        {% if conhecimentos %}
+            {% for item in conhecimentos %}
+            <div class="knowledge-item">
+                <div class="item-content">
+                    <div class="item-title">{{ item.title or item.titulo }}</div>
+                    <div class="item-text">{{ (item.content or item.conteudo)[:80] }}...</div>
+                </div>
+                <div class="item-actions">
+                    <button class="btn-edit" onclick="editarConhecimento('{{ item._id }}')">Edit</button>
+                    <button class="btn-delete" onclick="deletarConhecimento('{{ item._id }}')">Delete</button>
+                </div>
             </div>
-            <div class="item-actions">
-                <button class="btn-edit" onclick="editarConhecimento('{{ item._id }}')">✏️ Edit</button>
-                <button class="btn-delete" onclick="deletarConhecimento('{{ item._id }}')">🗑️ Delete</button>
-            </div>
-        </div>
-        {% endfor %}
-    {% else %}
-        <p style="text-align: center; color: #999; padding: 30px;">No knowledge registered yet.</p>
-    {% endif %}
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">No knowledge registered yet.</div>
+        {% endif %}
+    </div>
 </div>
 
 <!-- FAQs -->
-<div class="section-card">
+<div class="section-card faq">
     <div class="section-header">
         <span class="section-icon">❓</span>
         <h2 class="section-title">Registered FAQs</h2>
     </div>
-    <form method="POST" action="/admin/treinamento/faq" style="margin-bottom: 25px;">
+    <form method="POST" action="/admin/treinamento/faq" style="margin-bottom: 15px;">
         <div class="form-group">
             <label class="form-label">Question</label>
             <input type="text" name="question" class="form-input" placeholder="Ex: How much does a sworn translation cost?" required>
@@ -360,31 +409,34 @@
             <label class="form-label">Answer</label>
             <textarea name="answer" class="form-textarea" placeholder="Enter the complete answer..." required></textarea>
         </div>
-        <button type="submit" class="btn-primary">➕ Add FAQ</button>
+        <button type="submit" class="btn-primary">Add FAQ</button>
     </form>
-    {% if faqs %}
-        {% for faq in faqs %}
-        <div class="faq-item">
-            <div class="item-content">
-                <div class="item-title">{{ faq.question or faq.pergunta }}</div>
-                <div class="item-text">{{ (faq.answer or faq.resposta)[:100] }}...</div>
+
+    <div style="max-height: 250px; overflow-y: auto;">
+        {% if faqs %}
+            {% for faq in faqs %}
+            <div class="faq-item">
+                <div class="item-content">
+                    <div class="item-title">{{ faq.question or faq.pergunta }}</div>
+                    <div class="item-text">{{ (faq.answer or faq.resposta)[:80] }}...</div>
+                </div>
+                <div class="item-actions">
+                    <button class="btn-edit" onclick="editarFAQ('{{ faq._id }}')">Edit</button>
+                    <button class="btn-delete" onclick="deletarFAQ('{{ faq._id }}')">Delete</button>
+                </div>
             </div>
-            <div class="item-actions">
-                <button class="btn-edit" onclick="editarFAQ('{{ faq._id }}')">✏️ Edit</button>
-                <button class="btn-delete" onclick="deletarFAQ('{{ faq._id }}')">🗑️ Delete</button>
-            </div>
-        </div>
-        {% endfor %}
-    {% else %}
-        <p style="text-align: center; color: #999; padding: 30px;">No FAQ registered yet.</p>
-    {% endif %}
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">No FAQ registered yet.</div>
+        {% endif %}
+    </div>
 </div>
 
 <!-- MODAL EDITAR CONHECIMENTO -->
 <div id="modalEditarConhecimento" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3 class="modal-title">✏️ Edit Knowledge</h3>
+            <h3 class="modal-title">Edit Knowledge</h3>
             <button class="modal-close" onclick="fecharModal('modalEditarConhecimento')">&times;</button>
         </div>
         <form id="formEditarConhecimento" method="POST">
@@ -396,7 +448,7 @@
                 <label class="form-label">Content</label>
                 <textarea id="editKnowledgeContent" name="content" class="form-textarea" required></textarea>
             </div>
-            <button type="submit" class="btn-primary">💾 Save Changes</button>
+            <button type="submit" class="btn-primary success">Save Changes</button>
         </form>
     </div>
 </div>
@@ -405,7 +457,7 @@
 <div id="modalEditarFAQ" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3 class="modal-title">✏️ Edit FAQ</h3>
+            <h3 class="modal-title">Edit FAQ</h3>
             <button class="modal-close" onclick="fecharModal('modalEditarFAQ')">&times;</button>
         </div>
         <form id="formEditarFAQ" method="POST">
@@ -417,18 +469,14 @@
                 <label class="form-label">Answer</label>
                 <textarea id="editFAQAnswer" name="answer" class="form-textarea" required></textarea>
             </div>
-            <button type="submit" class="btn-primary">💾 Save Changes</button>
+            <button type="submit" class="btn-primary success">Save Changes</button>
         </form>
     </div>
 </div>
-
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-    // ============================================================
-    // FUNÇÕES DE MODAL
-    // ============================================================
     function abrirModal(modalId) {
         document.getElementById(modalId).classList.add('active');
     }
@@ -437,39 +485,25 @@
         document.getElementById(modalId).classList.remove('active');
     }
 
-    // Fechar modal ao clicar fora
     window.onclick = function(event) {
         if (event.target.classList.contains('modal')) {
             event.target.classList.remove('active');
         }
     }
 
-    // ============================================================
-    // EDITAR CONHECIMENTO
-    // ============================================================
     async function editarConhecimento(id) {
         try {
-            // Buscar dados do conhecimento
             const response = await fetch(`/admin/treinamento/conhecimento/${id}`);
             const data = await response.json();
-
-            // Preencher formulário
             document.getElementById('editKnowledgeTitle').value = data.title;
             document.getElementById('editKnowledgeContent').value = data.content;
-
-            // Configurar ação do formulário
             document.getElementById('formEditarConhecimento').action = `/admin/treinamento/conhecimento/editar/${id}`;
-
-            // Abrir modal
             abrirModal('modalEditarConhecimento');
         } catch (error) {
-            alert('Erro ao carregar conhecimento: ' + error);
+            alert('Error loading: ' + error);
         }
     }
 
-    // ============================================================
-    // DELETAR CONHECIMENTO
-    // ============================================================
     function deletarConhecimento(id) {
         if (confirm('Delete this knowledge?')) {
             fetch(`/admin/treinamento/conhecimento/deletar/${id}`, { method: 'POST' })
@@ -477,32 +511,19 @@
         }
     }
 
-    // ============================================================
-    // EDITAR FAQ
-    // ============================================================
     async function editarFAQ(id) {
         try {
-            // Buscar dados do FAQ
             const response = await fetch(`/admin/treinamento/faq/${id}`);
             const data = await response.json();
-
-            // Preencher formulário
             document.getElementById('editFAQQuestion').value = data.question;
             document.getElementById('editFAQAnswer').value = data.answer;
-
-            // Configurar ação do formulário
             document.getElementById('formEditarFAQ').action = `/admin/treinamento/faq/editar/${id}`;
-
-            // Abrir modal
             abrirModal('modalEditarFAQ');
         } catch (error) {
-            alert('Erro ao carregar FAQ: ' + error);
+            alert('Error loading: ' + error);
         }
     }
 
-    // ============================================================
-    // DELETAR FAQ
-    // ============================================================
     function deletarFAQ(id) {
         if (confirm('Delete this FAQ?')) {
             fetch(`/admin/treinamento/faq/deletar/${id}`, { method: 'POST' })
