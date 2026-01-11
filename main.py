@@ -1997,6 +1997,9 @@ async def webhook_whatsapp(request: Request):
         from_me = data.get("fromMe", False)
         message_id = data.get("messageId", "")
 
+        # LOG DETALHADO PARA DEBUG DE COMANDOS
+        logger.info(f"[DEBUG] fromMe={from_me} (type={type(from_me).__name__})")
+
         # ============================================
         # VERIFICAR MENSAGEM DUPLICADA
         # ============================================
@@ -2008,44 +2011,73 @@ async def webhook_whatsapp(request: Request):
             })
 
         # Extrair texto de forma mais robusta
+        # Z-API pode enviar o texto em diferentes formatos
         message_text = ""
         if "text" in data:
             if isinstance(data["text"], dict):
                 message_text = data["text"].get("message", "")
             elif isinstance(data["text"], str):
                 message_text = data["text"]
+
+        # Fallback: tentar outros campos comuns
+        if not message_text:
+            message_text = data.get("body", "") or data.get("message", "") or ""
+
         message_text = message_text.strip() if message_text else ""
 
-        logger.info(f"[WEBHOOK] phone={phone}, fromMe={from_me}, messageId={message_id[:20] if message_id else 'N/A'}, text='{message_text}'")
+        logger.info(f"[WEBHOOK] phone={phone}, fromMe={from_me}, text='{message_text}'")
 
         # ============================================
-        # PROCESSAR COMANDOS DO OPERADOR (fromMe=true)
-        # Quando operador envia * ou + na conversa com cliente
-        # O phone aqui e o numero do CLIENTE para quem o operador enviou
+        # PROCESSAR COMANDOS DO OPERADOR
+        # Metodo 1: fromMe=true (mensagem enviada pelo numero conectado)
+        # Metodo 2: mensagem vem do numero do operador diretamente
         # ============================================
+
+        # Verificar se e comando do operador (fromMe ou numero do operador)
+        comando = message_text.strip()
+        e_comando_operador = comando in ["*", "+"]
+
+        # Log detalhado para debug
+        logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}', e_comando={e_comando_operador}")
+
+        # METODO 1: fromMe=true (operador enviando na conversa do cliente)
         if from_me:
-            comando = message_text.strip()
-            logger.info(f"[OPERADOR] Mensagem fromMe detectada: '{comando}' para cliente {phone}")
+            logger.info(f"[OPERADOR] ========================================")
+            logger.info(f"[OPERADOR] Mensagem fromMe=True detectada!")
+            logger.info(f"[OPERADOR] Comando recebido: '{comando}'")
+            logger.info(f"[OPERADOR] Cliente (phone): {phone}")
+            logger.info(f"[OPERADOR] ========================================")
 
             if comando == "*":
-                # Pausar IA para este cliente
-                await pausar_ia_para_cliente(phone)
-                logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone} - Operador assumiu o atendimento")
+                resultado = await pausar_ia_para_cliente(phone)
+                logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone} - Resultado: {resultado}")
                 return {"status": "ia_paused", "client": phone, "message": "IA pausada com sucesso"}
 
             elif comando == "+":
-                # Retomar IA para este cliente
-                await retomar_ia_para_cliente(phone)
-                logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone} - Bot voltou a atender")
-
-                # Opcional: enviar mensagem ao cliente informando que a IA voltou
-                # await send_whatsapp_message(phone, "A assistente virtual voltou a te atender. Como posso ajudar?")
-
+                resultado = await retomar_ia_para_cliente(phone)
+                logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone} - Resultado: {resultado}")
                 return {"status": "ia_resumed", "client": phone, "message": "IA retomada com sucesso"}
 
-            # Ignorar outras mensagens enviadas pelo operador (nao interferir)
-            logger.info(f"[OPERADOR] Mensagem normal do operador para cliente {phone}")
+            # Ignorar outras mensagens enviadas pelo operador
+            logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando)")
             return {"status": "ignored", "reason": "operator_message"}
+
+        # METODO 2: Cliente enviando * ou + diretamente (comando pelo chat)
+        # Alguns clientes podem querer usar esses comandos tambem
+        if e_comando_operador and not from_me:
+            logger.info(f"[COMANDO-CLIENTE] Cliente {phone} enviou comando: '{comando}'")
+
+            if comando == "*":
+                # Cliente pedindo para pausar IA (falar com humano)
+                await transferir_para_humano(phone, "Cliente digitou * para falar com humano")
+                return {"status": "transferred_to_human", "phone": phone}
+
+            elif comando == "+":
+                # Cliente pedindo para voltar a falar com IA
+                resultado = await retomar_ia_para_cliente(phone)
+                logger.info(f"[COMANDO-CLIENTE] Cliente {phone} solicitou retomar IA - Resultado: {resultado}")
+                await send_whatsapp_message(phone, "Ok! A assistente virtual voltou a te atender. Como posso ajudar?")
+                return {"status": "ia_resumed_by_client", "phone": phone}
 
         # ============================================
         # VERIFICAR STATUS DO BOT E MODO DO CLIENTE
