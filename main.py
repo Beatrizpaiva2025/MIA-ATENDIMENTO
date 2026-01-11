@@ -93,6 +93,24 @@ bot_status_cache = {
     "last_update": datetime.now()
 }
 
+# ============================================================
+# DEBUG LOG - WEBHOOK ACTIVITY
+# ============================================================
+webhook_debug_log = []  # Lista para armazenar ultimos eventos do webhook
+MAX_DEBUG_LOG_SIZE = 50  # Manter apenas os ultimos 50 eventos
+
+def add_webhook_debug(event_type: str, data: dict):
+    """Adiciona evento ao log de debug do webhook"""
+    global webhook_debug_log
+    webhook_debug_log.append({
+        "timestamp": datetime.now().isoformat(),
+        "event": event_type,
+        "data": data
+    })
+    # Manter apenas os ultimos N eventos
+    if len(webhook_debug_log) > MAX_DEBUG_LOG_SIZE:
+        webhook_debug_log = webhook_debug_log[-MAX_DEBUG_LOG_SIZE:]
+
 
 async def get_bot_status():
     """Retorna status atual do bot (ativo/inativo)"""
@@ -1882,6 +1900,27 @@ async def api_debug_config():
     }
 
 
+@app.get("/admin/api/debug/webhook")
+async def api_debug_webhook():
+    """
+    DEBUG: Mostra ultimos eventos do webhook para verificar se * e + estao chegando
+    Acesse: /admin/api/debug/webhook
+    """
+    return {
+        "total_eventos": len(webhook_debug_log),
+        "ultimos_eventos": webhook_debug_log[-20:][::-1],  # Ultimos 20, mais recentes primeiro
+        "comandos_detectados": [
+            e for e in webhook_debug_log
+            if e["event"] in ["COMMAND_DETECTED", "COMMAND_EXECUTED"]
+        ][-10:][::-1],  # Ultimos 10 comandos
+        "instrucoes": {
+            "como_testar": "Envie * ou + no WhatsApp e atualize esta pagina",
+            "o_que_verificar": "Procure por eventos COMMAND_DETECTED com fromMe=true",
+            "se_fromMe_false": "O Z-API nao esta enviando suas mensagens ao webhook. Verifique as configuracoes do Z-API."
+        }
+    }
+
+
 @app.post("/admin/api/bot/toggle")
 async def api_bot_toggle(enabled: bool):
     """Liga ou desliga o bot globalmente"""
@@ -2027,6 +2066,14 @@ async def webhook_whatsapp(request: Request):
 
         logger.info(f"[WEBHOOK] phone={phone}, fromMe={from_me}, text='{message_text}'")
 
+        # Registrar no debug log
+        add_webhook_debug("WEBHOOK_RECEIVED", {
+            "phone": phone,
+            "fromMe": from_me,
+            "text": message_text[:50] if message_text else "",
+            "message_id": message_id
+        })
+
         # ============================================
         # PROCESSAR COMANDOS DO OPERADOR
         # Metodo 1: fromMe=true (mensagem enviada pelo numero conectado)
@@ -2040,6 +2087,15 @@ async def webhook_whatsapp(request: Request):
         # Log detalhado para debug
         logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}', e_comando={e_comando_operador}")
 
+        # Registrar comandos no debug log
+        if e_comando_operador:
+            add_webhook_debug("COMMAND_DETECTED", {
+                "phone": phone,
+                "fromMe": from_me,
+                "comando": comando,
+                "will_process": from_me  # So processa se fromMe=true
+            })
+
         # METODO 1: fromMe=true (operador enviando na conversa do cliente)
         if from_me:
             logger.info(f"[OPERADOR] ========================================")
@@ -2051,11 +2107,23 @@ async def webhook_whatsapp(request: Request):
             if comando == "*":
                 resultado = await pausar_ia_para_cliente(phone)
                 logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone} - Resultado: {resultado}")
+                add_webhook_debug("COMMAND_EXECUTED", {
+                    "comando": "*",
+                    "acao": "PAUSAR_IA",
+                    "phone": phone,
+                    "resultado": resultado
+                })
                 return {"status": "ia_paused", "client": phone, "message": "IA pausada com sucesso"}
 
             elif comando == "+":
                 resultado = await retomar_ia_para_cliente(phone)
                 logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone} - Resultado: {resultado}")
+                add_webhook_debug("COMMAND_EXECUTED", {
+                    "comando": "+",
+                    "acao": "RETOMAR_IA",
+                    "phone": phone,
+                    "resultado": resultado
+                })
                 return {"status": "ia_resumed", "client": phone, "message": "IA retomada com sucesso"}
 
             # Ignorar outras mensagens enviadas pelo operador
