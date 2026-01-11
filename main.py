@@ -2052,19 +2052,38 @@ async def webhook_whatsapp(request: Request):
         # Extrair texto de forma mais robusta
         # Z-API pode enviar o texto em diferentes formatos
         message_text = ""
+
+        # Log dos campos disponiveis para debug
+        campos_disponiveis = [k for k in data.keys() if k not in ['_traceContext', 'photo', 'senderPhoto']]
+        logger.info(f"[DEBUG-CAMPOS] Campos no webhook: {campos_disponiveis}")
+
+        # Tentar extrair texto de varios campos possiveis
         if "text" in data:
             if isinstance(data["text"], dict):
-                message_text = data["text"].get("message", "")
+                message_text = data["text"].get("message", "") or data["text"].get("body", "")
             elif isinstance(data["text"], str):
                 message_text = data["text"]
 
-        # Fallback: tentar outros campos comuns
+        # Fallback: tentar outros campos comuns do Z-API
         if not message_text:
-            message_text = data.get("body", "") or data.get("message", "") or ""
+            message_text = (
+                data.get("body", "") or
+                data.get("message", "") or
+                data.get("content", "") or
+                data.get("caption", "") or
+                ""
+            )
+
+        # Para mensagens de texto simples, Z-API as vezes usa "text.message"
+        if not message_text and "text" in data and isinstance(data.get("text"), dict):
+            message_text = data["text"].get("message", "")
 
         message_text = message_text.strip() if message_text else ""
 
+        # Log detalhado
         logger.info(f"[WEBHOOK] phone={phone}, fromMe={from_me}, text='{message_text}'")
+        if from_me:
+            logger.info(f"[DEBUG-FROMME] Mensagem do operador - text='{message_text}', campos={campos_disponiveis}")
 
         # Registrar no debug log
         add_webhook_debug("WEBHOOK_RECEIVED", {
