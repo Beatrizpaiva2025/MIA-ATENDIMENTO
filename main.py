@@ -93,6 +93,24 @@ bot_status_cache = {
     "last_update": datetime.now()
 }
 
+# ============================================================
+# DEBUG LOG - WEBHOOK ACTIVITY
+# ============================================================
+webhook_debug_log = []  # Lista para armazenar ultimos eventos do webhook
+MAX_DEBUG_LOG_SIZE = 50  # Manter apenas os ultimos 50 eventos
+
+def add_webhook_debug(event_type: str, data: dict):
+    """Adiciona evento ao log de debug do webhook"""
+    global webhook_debug_log
+    webhook_debug_log.append({
+        "timestamp": datetime.now().isoformat(),
+        "event": event_type,
+        "data": data
+    })
+    # Manter apenas os ultimos N eventos
+    if len(webhook_debug_log) > MAX_DEBUG_LOG_SIZE:
+        webhook_debug_log = webhook_debug_log[-MAX_DEBUG_LOG_SIZE:]
+
 
 async def get_bot_status():
     """Retorna status atual do bot (ativo/inativo)"""
@@ -1264,6 +1282,64 @@ Responda APENAS: SIM ou NAO"""
     return None
 
 
+async def processar_etapa_pos_pagamento(phone: str, mensagem: str, is_image: bool = False, image_bytes: bytes = None) -> str:
+    """
+    Processa mensagens APÓS o pagamento ser confirmado.
+    Evita que imagens/documentos sejam tratados como novos pedidos de tradução.
+    """
+    estado = await get_cliente_estado(phone)
+    idioma = estado.get("idioma", "pt")
+    nome = estado.get("nome", "")
+
+    # Se recebeu imagem após pagamento confirmado
+    if is_image:
+        # Perguntar se é novo documento ou só complemento/dúvida
+        if idioma == "en":
+            return (
+                f"Hi {nome}! I received an image. 📷\n\n"
+                f"Your translation order is already being processed! ✅\n\n"
+                f"Is this:\n"
+                f"• A NEW DOCUMENT - for a new quote?\n"
+                f"• ADDITIONAL INFO - related to your current order?\n\n"
+                f"Just let me know how I can help!"
+            )
+        elif idioma == "es":
+            return (
+                f"¡Hola {nome}! Recibí una imagen. 📷\n\n"
+                f"¡Tu pedido de traducción ya está siendo procesado! ✅\n\n"
+                f"¿Es esto:\n"
+                f"• NUEVO DOCUMENTO - para nueva cotización?\n"
+                f"• INFO ADICIONAL - relacionado con tu pedido actual?\n\n"
+                f"¡Dime cómo puedo ayudarte!"
+            )
+        else:
+            return (
+                f"Oi {nome}! Recebi uma imagem. 📷\n\n"
+                f"Seu pedido de traducao ja esta sendo processado! ✅\n\n"
+                f"Isso e:\n"
+                f"• NOVO DOCUMENTO - para novo orcamento?\n"
+                f"• INFO ADICIONAL - relacionado ao seu pedido atual?\n\n"
+                f"Me diz como posso te ajudar!"
+            )
+
+    # Processar texto - verificar se quer novo orçamento
+    msg_lower = mensagem.lower()
+
+    # Cliente quer novo documento/orçamento
+    palavras_novo = ["novo", "new", "nuevo", "another", "outro", "otra", "more", "mais", "mas"]
+    if any(p in msg_lower for p in palavras_novo):
+        await set_cliente_estado(phone, etapa=ETAPAS["INICIAL"])
+        if idioma == "en":
+            return "Perfect! Send the new document and I'll prepare a quote for you. 📄"
+        elif idioma == "es":
+            return "¡Perfecto! Envía el nuevo documento y te preparo la cotización. 📄"
+        else:
+            return "Perfeito! Envie o novo documento que eu preparo o orcamento. 📄"
+
+    # Caso contrário, deixar a IA responder normalmente
+    return None
+
+
 # ============================================================
 # INCLUIR ROTAS DO PAINEL ADMIN
 # ============================================================
@@ -1882,6 +1958,27 @@ async def api_debug_config():
     }
 
 
+@app.get("/admin/api/debug/webhook")
+async def api_debug_webhook():
+    """
+    DEBUG: Mostra ultimos eventos do webhook para verificar se * e + estao chegando
+    Acesse: /admin/api/debug/webhook
+    """
+    return {
+        "total_eventos": len(webhook_debug_log),
+        "ultimos_eventos": webhook_debug_log[-20:][::-1],  # Ultimos 20, mais recentes primeiro
+        "comandos_detectados": [
+            e for e in webhook_debug_log
+            if e["event"] in ["COMMAND_DETECTED", "COMMAND_EXECUTED"]
+        ][-10:][::-1],  # Ultimos 10 comandos
+        "instrucoes": {
+            "como_testar": "Envie * ou + no WhatsApp e atualize esta pagina",
+            "o_que_verificar": "Procure por eventos COMMAND_DETECTED com fromMe=true",
+            "se_fromMe_false": "O Z-API nao esta enviando suas mensagens ao webhook. Verifique as configuracoes do Z-API."
+        }
+    }
+
+
 @app.post("/admin/api/bot/toggle")
 async def api_bot_toggle(enabled: bool):
     """Liga ou desliga o bot globalmente"""
@@ -1997,6 +2094,9 @@ async def webhook_whatsapp(request: Request):
         from_me = data.get("fromMe", False)
         message_id = data.get("messageId", "")
 
+        # LOG DETALHADO PARA DEBUG DE COMANDOS
+        logger.info(f"[DEBUG] fromMe={from_me} (type={type(from_me).__name__})")
+
         # ============================================
         # VERIFICAR MENSAGEM DUPLICADA
         # ============================================
@@ -2008,43 +2108,103 @@ async def webhook_whatsapp(request: Request):
             })
 
         # Extrair texto de forma mais robusta
+        # Z-API pode enviar o texto em diferentes formatos
         message_text = ""
+
+        # Log dos campos disponiveis para debug
+        campos_disponiveis = [k for k in data.keys() if k not in ['_traceContext', 'photo', 'senderPhoto']]
+        logger.info(f"[DEBUG-CAMPOS] Campos no webhook: {campos_disponiveis}")
+
+        # Tentar extrair texto de varios campos possiveis
         if "text" in data:
             if isinstance(data["text"], dict):
-                message_text = data["text"].get("message", "")
+                message_text = data["text"].get("message", "") or data["text"].get("body", "")
             elif isinstance(data["text"], str):
                 message_text = data["text"]
+
+        # Fallback: tentar outros campos comuns do Z-API
+        if not message_text:
+            message_text = (
+                data.get("body", "") or
+                data.get("message", "") or
+                data.get("content", "") or
+                data.get("caption", "") or
+                ""
+            )
+
+        # Para mensagens de texto simples, Z-API as vezes usa "text.message"
+        if not message_text and "text" in data and isinstance(data.get("text"), dict):
+            message_text = data["text"].get("message", "")
+
         message_text = message_text.strip() if message_text else ""
 
-        logger.info(f"[WEBHOOK] phone={phone}, fromMe={from_me}, messageId={message_id[:20] if message_id else 'N/A'}, text='{message_text}'")
+        # Log detalhado
+        logger.info(f"[WEBHOOK] phone={phone}, fromMe={from_me}, text='{message_text}'")
+        if from_me:
+            logger.info(f"[DEBUG-FROMME] Mensagem do operador - text='{message_text}', campos={campos_disponiveis}")
+
+        # Registrar no debug log
+        add_webhook_debug("WEBHOOK_RECEIVED", {
+            "phone": phone,
+            "fromMe": from_me,
+            "text": message_text[:50] if message_text else "",
+            "message_id": message_id
+        })
 
         # ============================================
-        # PROCESSAR COMANDOS DO OPERADOR (fromMe=true)
-        # Quando operador envia * ou + na conversa com cliente
-        # O phone aqui e o numero do CLIENTE para quem o operador enviou
+        # PROCESSAR COMANDOS DO OPERADOR
+        # Metodo 1: fromMe=true (mensagem enviada pelo numero conectado)
+        # Metodo 2: mensagem vem do numero do operador diretamente
         # ============================================
+
+        # Verificar se e comando do operador (fromMe ou numero do operador)
+        comando = message_text.strip()
+        e_comando_operador = comando in ["*", "+"]
+
+        # Log detalhado para debug
+        logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}', e_comando={e_comando_operador}")
+
+        # Registrar comandos no debug log
+        if e_comando_operador:
+            add_webhook_debug("COMMAND_DETECTED", {
+                "phone": phone,
+                "fromMe": from_me,
+                "comando": comando,
+                "will_process": from_me  # So processa se fromMe=true
+            })
+
+        # METODO 1: fromMe=true (operador enviando na conversa do cliente)
         if from_me:
-            comando = message_text.strip()
-            logger.info(f"[OPERADOR] Mensagem fromMe detectada: '{comando}' para cliente {phone}")
+            logger.info(f"[OPERADOR] ========================================")
+            logger.info(f"[OPERADOR] Mensagem fromMe=True detectada!")
+            logger.info(f"[OPERADOR] Comando recebido: '{comando}'")
+            logger.info(f"[OPERADOR] Cliente (phone): {phone}")
+            logger.info(f"[OPERADOR] ========================================")
 
             if comando == "*":
-                # Pausar IA para este cliente
-                await pausar_ia_para_cliente(phone)
-                logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone} - Operador assumiu o atendimento")
+                resultado = await pausar_ia_para_cliente(phone)
+                logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone} - Resultado: {resultado}")
+                add_webhook_debug("COMMAND_EXECUTED", {
+                    "comando": "*",
+                    "acao": "PAUSAR_IA",
+                    "phone": phone,
+                    "resultado": resultado
+                })
                 return {"status": "ia_paused", "client": phone, "message": "IA pausada com sucesso"}
 
             elif comando == "+":
-                # Retomar IA para este cliente
-                await retomar_ia_para_cliente(phone)
-                logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone} - Bot voltou a atender")
-
-                # Opcional: enviar mensagem ao cliente informando que a IA voltou
-                # await send_whatsapp_message(phone, "A assistente virtual voltou a te atender. Como posso ajudar?")
-
+                resultado = await retomar_ia_para_cliente(phone)
+                logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone} - Resultado: {resultado}")
+                add_webhook_debug("COMMAND_EXECUTED", {
+                    "comando": "+",
+                    "acao": "RETOMAR_IA",
+                    "phone": phone,
+                    "resultado": resultado
+                })
                 return {"status": "ia_resumed", "client": phone, "message": "IA retomada com sucesso"}
 
-            # Ignorar outras mensagens enviadas pelo operador (nao interferir)
-            logger.info(f"[OPERADOR] Mensagem normal do operador para cliente {phone}")
+            # Ignorar outras mensagens enviadas pelo operador
+            logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando)")
             return {"status": "ignored", "reason": "operator_message"}
 
         # ============================================
@@ -2258,6 +2418,13 @@ Para urgencias: (contato)"""
                     logger.info(f"[ETAPA] {phone}: Processando resposta na etapa AGUARDANDO_PAGAMENTO")
                 # Se reply for None, continua para processamento normal com IA
 
+            elif etapa_atual == ETAPAS["PAGAMENTO_RECEBIDO"]:
+                # NOVO: Handler para após pagamento confirmado
+                reply = await processar_etapa_pos_pagamento(phone, text)
+                if reply:
+                    logger.info(f"[ETAPA] {phone}: Processando resposta na etapa PAGAMENTO_RECEBIDO")
+                # Se reply for None, continua para processamento normal com IA
+
             # Se nenhuma etapa especifica tratou, processar normalmente com IA
             if reply is None:
                 # Detectar conversao (pagamento) - sistema antigo
@@ -2359,6 +2526,37 @@ Para urgencias: (contato)"""
                     return JSONResponse({"status": "processed", "type": "receipt_check"})
 
             # ============================================
+            # NOVO: VERIFICAR SE ESTA NA ETAPA POS-PAGAMENTO
+            # Evita tratar imagens como novos documentos após pagamento
+            # ============================================
+            elif etapa_atual == ETAPAS["PAGAMENTO_RECEBIDO"]:
+                logger.info(f"[ETAPA] {phone}: Recebeu imagem na etapa PAGAMENTO_RECEBIDO - perguntando se e novo documento")
+
+                reply = await processar_etapa_pos_pagamento(phone, "", is_image=True, image_bytes=image_bytes)
+
+                if reply:
+                    # Salvar no banco
+                    await db.conversas.insert_one({
+                        "phone": phone,
+                        "message": "[IMAGEM RECEBIDA - POS PAGAMENTO]",
+                        "role": "user",
+                        "timestamp": datetime.now(),
+                        "canal": "WhatsApp",
+                        "type": "image"
+                    })
+
+                    await db.conversas.insert_one({
+                        "phone": phone,
+                        "message": reply,
+                        "role": "assistant",
+                        "timestamp": datetime.now(),
+                        "canal": "WhatsApp"
+                    })
+
+                    await send_whatsapp_message(phone, reply)
+                    return JSONResponse({"status": "processed", "type": "post_payment_image"})
+
+            # ============================================
             # FLUXO NORMAL: Sistema de agrupamento (4 segundos)
             # ============================================
             deve_perguntar = await adicionar_imagem_sessao(phone, image_bytes)
@@ -2378,12 +2576,45 @@ Para urgencias: (contato)"""
                 total_atual = session["count"]
                 idioma = estado.get("idioma", "pt")
 
-                if idioma == "en":
-                    pergunta = f"I received {total_atual} page{'s' if total_atual > 1 else ''}. Do you have any more pages to translate?"
-                elif idioma == "es":
-                    pergunta = f"Recibí {total_atual} página{'s' if total_atual > 1 else ''}. ¿Tienes más páginas para traducir?"
+                # ============================================
+                # VERIFICAR SE É PRIMEIRA INTERAÇÃO (NOVO CLIENTE)
+                # Se for, dar boas-vindas contextualizadas
+                # ============================================
+                conversas_anteriores = await db.conversas.count_documents({"phone": phone})
+                e_primeiro_contato = conversas_anteriores <= 1  # Primeira ou segunda mensagem
+
+                if e_primeiro_contato:
+                    # NOVO CLIENTE - Mensagem de boas-vindas contextualizada
+                    logger.info(f"[NOVO-CLIENTE] {phone}: Primeiro contato com documento - enviando boas-vindas")
+                    if idioma == "en":
+                        pergunta = (
+                            f"Hi there! 👋 Welcome to Legacy Translations!\n\n"
+                            f"I'm Mia, your virtual assistant. I received {total_atual} page{'s' if total_atual > 1 else ''} of your document! 📄\n\n"
+                            f"Do you have any more pages to send, or is this all?\n\n"
+                            f"Once you confirm, I'll analyze the document and provide a quick quote! ⚡"
+                        )
+                    elif idioma == "es":
+                        pergunta = (
+                            f"¡Hola! 👋 ¡Bienvenido a Legacy Translations!\n\n"
+                            f"Soy Mia, tu asistente virtual. ¡Recibí {total_atual} página{'s' if total_atual > 1 else ''} de tu documento! 📄\n\n"
+                            f"¿Tienes más páginas para enviar o es todo?\n\n"
+                            f"Cuando confirmes, analizaré el documento y te daré una cotización rápida! ⚡"
+                        )
+                    else:
+                        pergunta = (
+                            f"Oi! 👋 Bem-vindo(a) a Legacy Translations!\n\n"
+                            f"Sou a Mia, sua assistente virtual. Recebi {total_atual} pagina{'s' if total_atual > 1 else ''} do seu documento! 📄\n\n"
+                            f"Tem mais alguma pagina para enviar ou e so isso?\n\n"
+                            f"Assim que confirmar, vou analisar o documento e te passar um orcamento rapidinho! ⚡"
+                        )
                 else:
-                    pergunta = f"Recebi {total_atual} pagina{'s' if total_atual > 1 else ''}. Tem mais alguma pagina para traduzir?"
+                    # CLIENTE JÁ CONHECIDO - Mensagem mais direta
+                    if idioma == "en":
+                        pergunta = f"I received {total_atual} page{'s' if total_atual > 1 else ''}. Do you have any more pages to translate?"
+                    elif idioma == "es":
+                        pergunta = f"Recibí {total_atual} página{'s' if total_atual > 1 else ''}. ¿Tienes más páginas para traducir?"
+                    else:
+                        pergunta = f"Recebi {total_atual} pagina{'s' if total_atual > 1 else ''}. Tem mais alguma pagina para traduzir?"
 
                 await send_whatsapp_message(phone, pergunta)
 
