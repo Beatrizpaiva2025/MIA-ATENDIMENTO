@@ -4,91 +4,108 @@
 
 {% block extra_style %}
 <style>
+    /* ============================================
+       LAYOUT PROFISSIONAL - FONTES MENORES
+       ============================================ */
+
+    .page-header h1 {
+        font-size: 1.4em;
+        color: #1e3a5f;
+        margin-bottom: 5px;
+    }
+
+    .page-header p {
+        font-size: 0.85em;
+        color: #666;
+    }
+
     .under-construction {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        min-height: 500px;
+        min-height: 350px;
         text-align: center;
         background: white;
-        border-radius: 15px;
-        padding: 50px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-left: 3px solid #ff9800;
     }
 
     .construction-icon {
-        font-size: 120px;
-        margin-bottom: 30px;
+        font-size: 60px;
+        margin-bottom: 20px;
         animation: bounce 2s infinite;
     }
 
     @keyframes bounce {
         0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-20px); }
+        50% { transform: translateY(-10px); }
     }
 
     .construction-title {
-        font-size: 2.5em;
+        font-size: 1.3em;
         color: #1e3a5f;
-        margin-bottom: 20px;
-        font-weight: 700;
+        margin-bottom: 10px;
+        font-weight: 600;
     }
 
     .construction-subtitle {
-        font-size: 1.3em;
+        font-size: 0.9em;
         color: #666;
-        margin-bottom: 15px;
+        margin-bottom: 10px;
     }
 
     .construction-description {
-        font-size: 1.1em;
+        font-size: 0.8em;
         color: #999;
-        max-width: 600px;
-        line-height: 1.6;
+        max-width: 500px;
+        line-height: 1.5;
     }
 
     .feature-list {
-        margin-top: 40px;
+        margin-top: 25px;
         text-align: left;
-        max-width: 500px;
+        max-width: 400px;
+        width: 100%;
     }
 
     .feature-item {
         display: flex;
         align-items: center;
-        padding: 15px;
-        margin-bottom: 10px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
         background: #f8f9fa;
-        border-radius: 10px;
-        border-left: 4px solid #ff9800;
+        border-radius: 6px;
+        border-left: 3px solid #5dade2;
     }
 
     .feature-icon {
-        font-size: 1.8em;
-        margin-right: 15px;
+        font-size: 1.2em;
+        margin-right: 10px;
     }
 
     .feature-text {
-        font-size: 1.05em;
-        color: #1e3a5f;
+        font-size: 0.8em;
+        color: #444;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>🧠 Learning</h1>
+    <h1>Learning</h1>
     <p>AI continuous learning system</p>
 </div>
 
 <div class="under-construction">
     <div class="construction-icon">🚧</div>
-    
+
     <h2 class="construction-title">Under Development</h2>
-    
+
     <p class="construction-subtitle">This feature is coming soon!</p>
-    
+
     <p class="construction-description">
         We're working on an advanced learning system that will allow the AI to continuously improve based on real interactions.
     </p>
@@ -98,17 +115,17 @@
             <span class="feature-icon">📊</span>
             <span class="feature-text">Automatic conversation analysis</span>
         </div>
-        
+
         <div class="feature-item">
             <span class="feature-icon">🎯</span>
             <span class="feature-text">Improvement suggestions</span>
         </div>
-        
+
         <div class="feature-item">
             <span class="feature-icon">📈</span>
             <span class="feature-text">Performance metrics</span>
         </div>
-        
+
         <div class="feature-item">
             <span class="feature-icon">🔄</span>
             <span class="feature-text">Continuous learning</span>
