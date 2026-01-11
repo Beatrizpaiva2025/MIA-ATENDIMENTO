@@ -2062,23 +2062,6 @@ async def webhook_whatsapp(request: Request):
             logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando)")
             return {"status": "ignored", "reason": "operator_message"}
 
-        # METODO 2: Cliente enviando * ou + diretamente (comando pelo chat)
-        # Alguns clientes podem querer usar esses comandos tambem
-        if e_comando_operador and not from_me:
-            logger.info(f"[COMANDO-CLIENTE] Cliente {phone} enviou comando: '{comando}'")
-
-            if comando == "*":
-                # Cliente pedindo para pausar IA (falar com humano)
-                await transferir_para_humano(phone, "Cliente digitou * para falar com humano")
-                return {"status": "transferred_to_human", "phone": phone}
-
-            elif comando == "+":
-                # Cliente pedindo para voltar a falar com IA
-                resultado = await retomar_ia_para_cliente(phone)
-                logger.info(f"[COMANDO-CLIENTE] Cliente {phone} solicitou retomar IA - Resultado: {resultado}")
-                await send_whatsapp_message(phone, "Ok! A assistente virtual voltou a te atender. Como posso ajudar?")
-                return {"status": "ia_resumed_by_client", "phone": phone}
-
         # ============================================
         # VERIFICAR STATUS DO BOT E MODO DO CLIENTE
         # ============================================
