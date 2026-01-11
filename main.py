@@ -1282,6 +1282,64 @@ Responda APENAS: SIM ou NAO"""
     return None
 
 
+async def processar_etapa_pos_pagamento(phone: str, mensagem: str, is_image: bool = False, image_bytes: bytes = None) -> str:
+    """
+    Processa mensagens APÓS o pagamento ser confirmado.
+    Evita que imagens/documentos sejam tratados como novos pedidos de tradução.
+    """
+    estado = await get_cliente_estado(phone)
+    idioma = estado.get("idioma", "pt")
+    nome = estado.get("nome", "")
+
+    # Se recebeu imagem após pagamento confirmado
+    if is_image:
+        # Perguntar se é novo documento ou só complemento/dúvida
+        if idioma == "en":
+            return (
+                f"Hi {nome}! I received an image. 📷\n\n"
+                f"Your translation order is already being processed! ✅\n\n"
+                f"Is this:\n"
+                f"• A NEW DOCUMENT - for a new quote?\n"
+                f"• ADDITIONAL INFO - related to your current order?\n\n"
+                f"Just let me know how I can help!"
+            )
+        elif idioma == "es":
+            return (
+                f"¡Hola {nome}! Recibí una imagen. 📷\n\n"
+                f"¡Tu pedido de traducción ya está siendo procesado! ✅\n\n"
+                f"¿Es esto:\n"
+                f"• NUEVO DOCUMENTO - para nueva cotización?\n"
+                f"• INFO ADICIONAL - relacionado con tu pedido actual?\n\n"
+                f"¡Dime cómo puedo ayudarte!"
+            )
+        else:
+            return (
+                f"Oi {nome}! Recebi uma imagem. 📷\n\n"
+                f"Seu pedido de traducao ja esta sendo processado! ✅\n\n"
+                f"Isso e:\n"
+                f"• NOVO DOCUMENTO - para novo orcamento?\n"
+                f"• INFO ADICIONAL - relacionado ao seu pedido atual?\n\n"
+                f"Me diz como posso te ajudar!"
+            )
+
+    # Processar texto - verificar se quer novo orçamento
+    msg_lower = mensagem.lower()
+
+    # Cliente quer novo documento/orçamento
+    palavras_novo = ["novo", "new", "nuevo", "another", "outro", "otra", "more", "mais", "mas"]
+    if any(p in msg_lower for p in palavras_novo):
+        await set_cliente_estado(phone, etapa=ETAPAS["INICIAL"])
+        if idioma == "en":
+            return "Perfect! Send the new document and I'll prepare a quote for you. 📄"
+        elif idioma == "es":
+            return "¡Perfecto! Envía el nuevo documento y te preparo la cotización. 📄"
+        else:
+            return "Perfeito! Envie o novo documento que eu preparo o orcamento. 📄"
+
+    # Caso contrário, deixar a IA responder normalmente
+    return None
+
+
 # ============================================================
 # INCLUIR ROTAS DO PAINEL ADMIN
 # ============================================================
@@ -2360,6 +2418,13 @@ Para urgencias: (contato)"""
                     logger.info(f"[ETAPA] {phone}: Processando resposta na etapa AGUARDANDO_PAGAMENTO")
                 # Se reply for None, continua para processamento normal com IA
 
+            elif etapa_atual == ETAPAS["PAGAMENTO_RECEBIDO"]:
+                # NOVO: Handler para após pagamento confirmado
+                reply = await processar_etapa_pos_pagamento(phone, text)
+                if reply:
+                    logger.info(f"[ETAPA] {phone}: Processando resposta na etapa PAGAMENTO_RECEBIDO")
+                # Se reply for None, continua para processamento normal com IA
+
             # Se nenhuma etapa especifica tratou, processar normalmente com IA
             if reply is None:
                 # Detectar conversao (pagamento) - sistema antigo
@@ -2461,6 +2526,37 @@ Para urgencias: (contato)"""
                     return JSONResponse({"status": "processed", "type": "receipt_check"})
 
             # ============================================
+            # NOVO: VERIFICAR SE ESTA NA ETAPA POS-PAGAMENTO
+            # Evita tratar imagens como novos documentos após pagamento
+            # ============================================
+            elif etapa_atual == ETAPAS["PAGAMENTO_RECEBIDO"]:
+                logger.info(f"[ETAPA] {phone}: Recebeu imagem na etapa PAGAMENTO_RECEBIDO - perguntando se e novo documento")
+
+                reply = await processar_etapa_pos_pagamento(phone, "", is_image=True, image_bytes=image_bytes)
+
+                if reply:
+                    # Salvar no banco
+                    await db.conversas.insert_one({
+                        "phone": phone,
+                        "message": "[IMAGEM RECEBIDA - POS PAGAMENTO]",
+                        "role": "user",
+                        "timestamp": datetime.now(),
+                        "canal": "WhatsApp",
+                        "type": "image"
+                    })
+
+                    await db.conversas.insert_one({
+                        "phone": phone,
+                        "message": reply,
+                        "role": "assistant",
+                        "timestamp": datetime.now(),
+                        "canal": "WhatsApp"
+                    })
+
+                    await send_whatsapp_message(phone, reply)
+                    return JSONResponse({"status": "processed", "type": "post_payment_image"})
+
+            # ============================================
             # FLUXO NORMAL: Sistema de agrupamento (4 segundos)
             # ============================================
             deve_perguntar = await adicionar_imagem_sessao(phone, image_bytes)
@@ -2480,12 +2576,45 @@ Para urgencias: (contato)"""
                 total_atual = session["count"]
                 idioma = estado.get("idioma", "pt")
 
-                if idioma == "en":
-                    pergunta = f"I received {total_atual} page{'s' if total_atual > 1 else ''}. Do you have any more pages to translate?"
-                elif idioma == "es":
-                    pergunta = f"Recibí {total_atual} página{'s' if total_atual > 1 else ''}. ¿Tienes más páginas para traducir?"
+                # ============================================
+                # VERIFICAR SE É PRIMEIRA INTERAÇÃO (NOVO CLIENTE)
+                # Se for, dar boas-vindas contextualizadas
+                # ============================================
+                conversas_anteriores = await db.conversas.count_documents({"phone": phone})
+                e_primeiro_contato = conversas_anteriores <= 1  # Primeira ou segunda mensagem
+
+                if e_primeiro_contato:
+                    # NOVO CLIENTE - Mensagem de boas-vindas contextualizada
+                    logger.info(f"[NOVO-CLIENTE] {phone}: Primeiro contato com documento - enviando boas-vindas")
+                    if idioma == "en":
+                        pergunta = (
+                            f"Hi there! 👋 Welcome to Legacy Translations!\n\n"
+                            f"I'm Mia, your virtual assistant. I received {total_atual} page{'s' if total_atual > 1 else ''} of your document! 📄\n\n"
+                            f"Do you have any more pages to send, or is this all?\n\n"
+                            f"Once you confirm, I'll analyze the document and provide a quick quote! ⚡"
+                        )
+                    elif idioma == "es":
+                        pergunta = (
+                            f"¡Hola! 👋 ¡Bienvenido a Legacy Translations!\n\n"
+                            f"Soy Mia, tu asistente virtual. ¡Recibí {total_atual} página{'s' if total_atual > 1 else ''} de tu documento! 📄\n\n"
+                            f"¿Tienes más páginas para enviar o es todo?\n\n"
+                            f"Cuando confirmes, analizaré el documento y te daré una cotización rápida! ⚡"
+                        )
+                    else:
+                        pergunta = (
+                            f"Oi! 👋 Bem-vindo(a) a Legacy Translations!\n\n"
+                            f"Sou a Mia, sua assistente virtual. Recebi {total_atual} pagina{'s' if total_atual > 1 else ''} do seu documento! 📄\n\n"
+                            f"Tem mais alguma pagina para enviar ou e so isso?\n\n"
+                            f"Assim que confirmar, vou analisar o documento e te passar um orcamento rapidinho! ⚡"
+                        )
                 else:
-                    pergunta = f"Recebi {total_atual} pagina{'s' if total_atual > 1 else ''}. Tem mais alguma pagina para traduzir?"
+                    # CLIENTE JÁ CONHECIDO - Mensagem mais direta
+                    if idioma == "en":
+                        pergunta = f"I received {total_atual} page{'s' if total_atual > 1 else ''}. Do you have any more pages to translate?"
+                    elif idioma == "es":
+                        pergunta = f"Recibí {total_atual} página{'s' if total_atual > 1 else ''}. ¿Tienes más páginas para traducir?"
+                    else:
+                        pergunta = f"Recebi {total_atual} pagina{'s' if total_atual > 1 else ''}. Tem mais alguma pagina para traduzir?"
 
                 await send_whatsapp_message(phone, pergunta)
 
