@@ -1146,10 +1146,18 @@ async def processar_etapa_pagamento(phone: str, mensagem: str, is_image: bool = 
     idioma = estado.get("idioma", "pt")
     nome = estado.get("nome", "")
     valor = estado.get("valor_orcamento", "")
+    doc_info = estado.get("documento_info", {})
+
+    # Extrair apenas o numero do valor para comparacao
+    valor_numerico = re.sub(r'[^\d.]', '', valor.replace(',', '.')) if valor else ""
+
+    logger.info(f"[PAGAMENTO] {phone}: Processando na etapa AGUARDANDO_PAGAMENTO. Valor esperado: {valor} ({valor_numerico})")
 
     # Se recebeu imagem ou PDF, tratar como comprovante
     if is_image and image_bytes:
-        # Analisar se parece comprovante
+        logger.info(f"[PAGAMENTO] {phone}: Recebeu imagem - analisando como comprovante")
+
+        # Analisar imagem buscando valor e se e comprovante
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
 
         response = openai_client.chat.completions.create(
@@ -1157,59 +1165,155 @@ async def processar_etapa_pagamento(phone: str, mensagem: str, is_image: bool = 
             messages=[
                 {
                     "role": "system",
-                    "content": """Analise se esta imagem e um comprovante de pagamento.
-Procure por: valores, datas, nomes de bancos, apps de pagamento (Zelle, Venmo, PayPal, PIX),
-numeros de transacao, confirmacoes.
-Responda APENAS: SIM ou NAO"""
+                    "content": f"""Analise esta imagem com ATENCAO.
+
+CONTEXTO: Estamos aguardando um comprovante de pagamento no valor de {valor} ({valor_numerico}).
+
+TAREFA:
+1. Verificar se a imagem e um comprovante de pagamento (Zelle, Venmo, PayPal, PIX, transferencia bancaria, etc)
+2. Se for comprovante, extrair o valor pago
+
+Sinais de comprovante: "Payment sent", "Your payment is sent", "Transferencia", "Comprovante",
+"Transaction", "Amount", "Valor", numeros de confirmacao, logos de bancos/apps de pagamento.
+
+IMPORTANTE: Esta imagem NAO e um documento para traducao. E um recibo/comprovante.
+
+Responda em JSON:
+{{"e_comprovante": true/false, "valor_encontrado": "XX.XX", "app_pagamento": "nome_do_app"}}"""
                 },
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Esta imagem e um comprovante de pagamento?"},
+                        {"type": "text", "text": f"Esta imagem e um comprovante de pagamento de {valor}?"},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                     ]
                 }
             ],
-            max_tokens=10
+            max_tokens=100
         )
 
-        parece_comprovante = "sim" in response.choices[0].message.content.lower()
+        resposta_gpt = response.choices[0].message.content
+        logger.info(f"[PAGAMENTO] {phone}: Resposta GPT: {resposta_gpt}")
 
-        if parece_comprovante:
-            if idioma == "en":
-                return (
-                    f"I received the receipt! 📄\n\n"
-                    f"Just confirming: is this the payment of {valor} for the translation order above?\n\n"
-                    f"Reply YES to confirm or NO if it's something else."
-                )
-            elif idioma == "es":
-                return (
-                    f"¡Recibí el comprobante! 📄\n\n"
-                    f"Solo confirmando: ¿es el pago de {valor} del pedido de traducción?\n\n"
-                    f"Responde SI para confirmar o NO si es otra cosa."
-                )
+        # Tentar parsear JSON
+        try:
+            # Limpar resposta
+            json_str = re.search(r'\{.*\}', resposta_gpt, re.DOTALL)
+            if json_str:
+                resultado = json.loads(json_str.group())
             else:
-                return (
-                    f"Recebi o comprovante! 📄\n\n"
-                    f"So confirmando: e o pagamento de {valor} referente ao pedido de traducao acima?\n\n"
-                    f"Responda SIM para confirmar ou NAO se for outra coisa."
-                )
+                resultado = {"e_comprovante": "sim" in resposta_gpt.lower() or "true" in resposta_gpt.lower()}
+        except:
+            resultado = {"e_comprovante": "sim" in resposta_gpt.lower() or "true" in resposta_gpt.lower()}
+
+        e_comprovante = resultado.get("e_comprovante", False)
+        valor_encontrado = resultado.get("valor_encontrado", "")
+        app_pagamento = resultado.get("app_pagamento", "")
+
+        logger.info(f"[PAGAMENTO] {phone}: e_comprovante={e_comprovante}, valor_encontrado={valor_encontrado}")
+
+        if e_comprovante:
+            # Verificar se o valor bate (aproximadamente)
+            valor_ok = False
+            if valor_encontrado:
+                try:
+                    val_esperado = float(valor_numerico) if valor_numerico else 0
+                    val_recebido = float(re.sub(r'[^\d.]', '', str(valor_encontrado).replace(',', '.')))
+                    # Aceitar se valor for igual ou ate 10% maior (gorjeta)
+                    valor_ok = val_recebido >= val_esperado * 0.95 and val_recebido <= val_esperado * 1.5
+                    logger.info(f"[PAGAMENTO] {phone}: Comparando valores: esperado={val_esperado}, recebido={val_recebido}, ok={valor_ok}")
+                except:
+                    pass
+
+            if valor_ok:
+                # VALOR CONFERE - Auto-confirmar pagamento!
+                logger.info(f"[PAGAMENTO] {phone}: VALOR CONFERE! Auto-confirmando pagamento")
+                await set_cliente_estado(phone, etapa=ETAPAS["PAGAMENTO_RECEBIDO"])
+
+                # Atualizar status do orcamento para PAGO
+                try:
+                    await db.orcamentos.update_one(
+                        {"phone": phone, "status": {"$in": ["pendente", "confirmado"]}},
+                        {"$set": {"status": "pago", "updated_at": datetime.now()}},
+                    )
+                except Exception as e:
+                    logger.error(f"Erro ao atualizar orcamento: {e}")
+
+                # Notificar atendente
+                await notificar_atendente(phone, f"PAGAMENTO CONFIRMADO AUTOMATICAMENTE - {nome} - {valor}")
+
+                if idioma == "en":
+                    return (
+                        f"Payment confirmed! 🎉✅\n\n"
+                        f"Thank you, {nome}! I received the ${valor_encontrado} payment via {app_pagamento}.\n\n"
+                        f"We'll start working on your translation right away!\n\n"
+                        f"📋 Your order:\n"
+                        f"• {doc_info.get('total_pages', 1)} page(s) of {doc_info.get('tipo', 'document')}\n\n"
+                        f"⏰ Estimated delivery: 2-3 business days\n"
+                        f"📧 We'll send the translation to your email.\n\n"
+                        f"Any questions, just message here! 😊"
+                    )
+                elif idioma == "es":
+                    return (
+                        f"¡Pago confirmado! 🎉✅\n\n"
+                        f"¡Gracias, {nome}! Recibí el pago de ${valor_encontrado} por {app_pagamento}.\n\n"
+                        f"¡Comenzaremos tu traducción de inmediato!\n\n"
+                        f"📋 Tu pedido:\n"
+                        f"• {doc_info.get('total_pages', 1)} página(s) de {doc_info.get('tipo', 'documento')}\n\n"
+                        f"⏰ Entrega estimada: 2-3 días hábiles\n"
+                        f"📧 Enviaremos la traducción a tu email.\n\n"
+                        f"¡Cualquier duda, escribe aquí! 😊"
+                    )
+                else:
+                    return (
+                        f"Pagamento confirmado! 🎉✅\n\n"
+                        f"Obrigada, {nome}! Recebi o pagamento de ${valor_encontrado} via {app_pagamento}.\n\n"
+                        f"Ja vamos iniciar sua traducao!\n\n"
+                        f"📋 Seu pedido:\n"
+                        f"• {doc_info.get('total_pages', 1)} pagina(s) de {doc_info.get('tipo', 'documento')}\n\n"
+                        f"⏰ Prazo estimado: 2-3 dias uteis\n"
+                        f"📧 Enviaremos a traducao para seu email.\n\n"
+                        f"Qualquer duvida, e so chamar! 😊"
+                    )
+            else:
+                # E comprovante mas valor nao confere ou nao foi extraido - pedir confirmacao
+                if idioma == "en":
+                    return (
+                        f"I received the receipt! 📄\n\n"
+                        f"Just confirming: is this the payment of {valor} for the translation order?\n\n"
+                        f"Reply YES to confirm."
+                    )
+                elif idioma == "es":
+                    return (
+                        f"¡Recibí el comprobante! 📄\n\n"
+                        f"Solo confirmando: ¿es el pago de {valor} del pedido de traducción?\n\n"
+                        f"Responde SI para confirmar."
+                    )
+                else:
+                    return (
+                        f"Recebi o comprovante! 📄\n\n"
+                        f"So confirmando: e o pagamento de {valor} referente ao pedido de traducao?\n\n"
+                        f"Responda SIM para confirmar."
+                    )
         else:
-            # Nao parece comprovante - perguntar
+            # Nao parece comprovante - mas estamos em etapa de pagamento, ser gentil
             if idioma == "en":
                 return (
-                    f"I received an image! Is this a payment receipt or a new document for quote?\n\n"
-                    f"Reply:\n• RECEIPT - if it's the payment confirmation\n• NEW DOCUMENT - if you want a new quote"
+                    f"I received an image! 📷\n\n"
+                    f"We're waiting for the payment receipt of {valor}.\n\n"
+                    f"Is this the payment confirmation? Reply YES or send the receipt."
                 )
             elif idioma == "es":
                 return (
-                    f"¡Recibí una imagen! ¿Es un comprobante de pago o un nuevo documento para cotizar?\n\n"
-                    f"Responde:\n• COMPROBANTE - si es la confirmación de pago\n• NUEVO DOCUMENTO - si quieres nueva cotización"
+                    f"¡Recibí una imagen! 📷\n\n"
+                    f"Estamos esperando el comprobante de pago de {valor}.\n\n"
+                    f"¿Es la confirmación de pago? Responde SI o envía el comprobante."
                 )
             else:
                 return (
-                    f"Recebi uma imagem! E um comprovante de pagamento ou um novo documento para orcamento?\n\n"
-                    f"Responda:\n• COMPROVANTE - se for a confirmacao de pagamento\n• NOVO DOCUMENTO - se quiser novo orcamento"
+                    f"Recebi uma imagem! 📷\n\n"
+                    f"Estamos aguardando o comprovante de pagamento de {valor}.\n\n"
+                    f"E a confirmacao de pagamento? Responda SIM ou envie o comprovante."
                 )
 
     # Processar texto
@@ -2365,11 +2469,20 @@ Para urgencias: (contato)"""
 
             # Verificar se está aguardando confirmação de páginas (imagens)
             if phone in image_sessions and image_sessions[phone].get("waiting_confirmation"):
-                respostas_negativas = ["não", "nao", "só isso", "so isso", "não tenho", "nao tenho", "é só", "e so"]
+                respostas_negativas = ["não", "nao", "só isso", "so isso", "não tenho", "nao tenho", "é só", "e so", "só essa", "so essa", "é essa", "e essa", "that's all", "thats all", "no more", "eso es todo", "solo eso"]
 
-                if any(neg in text.lower() for neg in respostas_negativas):
+                # NOVO: Pedidos de orçamento/valor também significam "não tem mais páginas"
+                respostas_orcamento = ["valor", "preço", "preco", "quanto", "price", "how much", "cuanto", "cuesta", "custo", "orçamento", "orcamento", "quote", "entregar", "prazo", "delivery", "entrega"]
+
+                texto_lower = text.lower()
+
+                # Se menciona valor/preço/orçamento, entender como "só isso, me dá o orçamento"
+                quer_orcamento = any(orc in texto_lower for orc in respostas_orcamento)
+                confirmou_fim = any(neg in texto_lower for neg in respostas_negativas)
+
+                if confirmou_fim or quer_orcamento:
                     # Cliente confirmou que não tem mais páginas
-                    logger.info(f"Cliente confirmou - processando {image_sessions[phone]['count']} páginas")
+                    logger.info(f"Cliente confirmou (fim ou pediu orcamento) - processando {image_sessions[phone]['count']} páginas")
 
                     resposta = await processar_sessao_imagem(phone)
 
