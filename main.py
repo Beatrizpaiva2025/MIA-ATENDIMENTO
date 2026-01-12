@@ -2265,10 +2265,45 @@ async def webhook_whatsapp(request: Request):
 
         # Verificar se e comando do operador (fromMe ou numero do operador)
         comando = message_text.strip()
+
+        # FALLBACK: Se texto estiver vazio mas fromMe=true, tentar extrair de outros campos
+        if from_me and not comando:
+            logger.info(f"[DEBUG-CMD] fromMe=true mas texto vazio, buscando em outros campos...")
+
+            # Tentar extrair de campos alternativos do Z-API
+            possible_text_fields = [
+                data.get("body"),
+                data.get("message"),
+                data.get("content"),
+                data.get("text", {}).get("message") if isinstance(data.get("text"), dict) else data.get("text"),
+                data.get("conversation"),
+                data.get("extendedTextMessage", {}).get("text") if isinstance(data.get("extendedTextMessage"), dict) else None,
+            ]
+
+            for field in possible_text_fields:
+                if field and isinstance(field, str) and field.strip():
+                    comando = field.strip()
+                    logger.info(f"[DEBUG-CMD] Encontrou texto em campo alternativo: '{comando}'")
+                    break
+
+            # ULTIMO RECURSO: Buscar * ou + no JSON bruto
+            if not comando:
+                raw_json = json.dumps(data)
+                if '"*"' in raw_json or '": "*"' in raw_json or "': '*'" in raw_json:
+                    comando = "*"
+                    logger.info(f"[DEBUG-CMD] Encontrou * no JSON bruto!")
+                elif '"+"' in raw_json or '": "+"' in raw_json or "': '+'" in raw_json:
+                    comando = "+"
+                    logger.info(f"[DEBUG-CMD] Encontrou + no JSON bruto!")
+
         e_comando_operador = comando in ["*", "+"]
 
         # Log detalhado para debug
         logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}', e_comando={e_comando_operador}")
+
+        # Log COMPLETO do webhook quando fromMe=true para debug
+        if from_me:
+            logger.info(f"[DEBUG-FROMME-FULL] Dados completos: {json.dumps(data, indent=2, default=str)}")
 
         # Registrar comandos no debug log
         if e_comando_operador:
