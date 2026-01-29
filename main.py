@@ -33,6 +33,7 @@ from io import BytesIO
 import time
 import re
 import asyncio
+import pytz
 
 # Importar rotas do admin
 from admin_routes import router as admin_router
@@ -53,6 +54,97 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# ============================================================
+# TIMEZONE E HORARIO COMERCIAL
+# ============================================================
+EST_TIMEZONE = pytz.timezone('US/Eastern')
+
+def is_business_hours() -> bool:
+    """
+    Verifica se está dentro do horário comercial.
+    Horário comercial: 8:30am - 5:00pm EST (Segunda a Sexta)
+    Fora do horário: 5pm EST - 8:30am EST e fins de semana
+    """
+    now_est = datetime.now(EST_TIMEZONE)
+    weekday = now_est.weekday()  # 0=Monday, 6=Sunday
+    hour = now_est.hour
+    minute = now_est.minute
+
+    # Fim de semana
+    if weekday >= 5:  # Saturday=5, Sunday=6
+        return False
+
+    # Converter para minutos para facilitar comparação
+    current_minutes = hour * 60 + minute
+    start_minutes = 8 * 60 + 30   # 8:30am = 510 minutos
+    end_minutes = 17 * 60         # 5:00pm = 1020 minutos
+
+    return start_minutes <= current_minutes < end_minutes
+
+def get_after_hours_message(idioma: str = "pt") -> str:
+    """Retorna mensagem para horário fora do expediente"""
+    messages = {
+        "en": """Hi! Thank you for contacting Legacy Translations. 😊
+
+Our team is currently offline, but you can place your order directly on our website:
+👉 https://portal.legacytranslations.com
+
+We'll respond to your message as soon as we're back online!""",
+
+        "pt": """Olá! Obrigada por entrar em contato com a Legacy Translations. 😊
+
+Nossa equipe está offline no momento, mas você pode fazer seu pedido diretamente pelo nosso site:
+👉 https://portal.legacytranslations.com
+
+Responderemos sua mensagem assim que estivermos online!""",
+
+        "es": """¡Hola! Gracias por contactar Legacy Translations. 😊
+
+Nuestro equipo está desconectado en este momento, pero puede hacer su pedido directamente en nuestro sitio web:
+👉 https://portal.legacytranslations.com
+
+¡Responderemos su mensaje tan pronto estemos en línea!"""
+    }
+    return messages.get(idioma, messages["pt"])
+
+# ============================================================
+# FILTRO DE MENSAGENS DE SISTEMA
+# ============================================================
+SYSTEM_MESSAGE_PATTERNS = [
+    # MongoDB Atlas Alerts
+    r"ALERT:",
+    r"Query Targeting",
+    r"Scanned Objects",
+    r"View Metrics",
+    r"Acknowledge Alert",
+    r"mongodb\.com",
+    r"cluster\d+",
+    r"atlas",
+    # General system patterns
+    r"^\[SYSTEM\]",
+    r"^\[ALERTA\]",
+    r"^NOTIFICATION:",
+    r"^NOTIFICAÇÃO:",
+]
+
+def is_system_message(text: str) -> bool:
+    """
+    Detecta se a mensagem é um alerta de sistema (MongoDB, etc.)
+    Essas mensagens NÃO devem ser processadas pelo bot.
+    """
+    if not text:
+        return False
+
+    text_lower = text.lower()
+
+    # Verificar padrões de mensagem de sistema
+    for pattern in SYSTEM_MESSAGE_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            logger.info(f"[FILTRO] Mensagem de sistema detectada: {text[:50]}...")
+            return True
+
+    return False
 
 # ============================================================
 # INICIALIZACAO
@@ -1411,16 +1503,62 @@ class Message(BaseModel):
 # ============================================================
 # FUNCAO: BUSCAR TREINAMENTO DINAMICO DO MONGODB
 # ============================================================
+DEFAULT_BOT_TRAINING = """
+Você é Mia, a assistente virtual oficial da Legacy Translations.
+
+**IDENTIDADE:**
+A Legacy Translations é especializada em:
+- Tradução certificada
+- Tradução juramentada
+- Serviços em português, inglês e espanhol
+- Traduções de diversos idiomas para o inglês
+
+Sede: Boston, MA | Filial: Orlando, FL
+Membro da American Translators Association (ATA)
+
+**REGRAS DE IDIOMA:**
+- Responda SEMPRE no idioma utilizado pelo cliente
+- No início, pergunte: "Olá! Eu sou a Mia, assistente virtual da Legacy Translations. Como posso ajudar? Qual é o seu nome?"
+- Após saber o nome, trate o cliente pelo nome em TODAS as mensagens
+
+**TABELA DE PREÇOS:**
+- Português → Inglês (Certificada): $24.99/página | 3 dias úteis
+- Espanhol → Inglês (Certificada): $24.99/página | 3 dias úteis
+- Tradução Juramentada (Sworn): $35.00/página | 5 dias úteis
+- Urgência Priority (24h): +25%
+- Urgência Urgente (12h): +50%
+- Envio físico Priority Mail: $18.99
+- Desconto: Acima de 7 páginas = 10% de desconto automático
+
+**OPÇÃO DE ENVIO POR EMAIL:**
+Se o cliente preferir enviar o documento por e-mail:
+"Você pode enviar o documento para: contact@legacytranslations.com"
+
+**FORMA DE PAGAMENTO (SEMPRE ENVIAR):**
+Para concluir o processo, basta efetuar o pagamento:
+VENMO: @legacytranslations
+ZELLE: Contact@legacytranslations.com — LEGACY TRANSLATIONS INC
+
+**APÓS PAGAMENTO CONFIRMADO:**
+Enviar: "Aproveite para nos seguir no Instagram: https://www.instagram.com/legacytranslations/"
+
+**CLIENTE CONFUSO OU PEDE MAIS DESCONTO:**
+Transferir educadamente para um atendente humano.
+
+**REGRAS:**
+- Sempre peça confirmação do número de páginas antes do orçamento
+- Todas as traduções são certificadas e aceitas por USCIS, universidades, escolas, bancos
+- Seja educada, profissional e use um toque humano nas respostas
+"""
+
 async def get_bot_training() -> str:
     """Busca treinamento dinamico do bot Mia no MongoDB"""
     try:
         bot = await db.bots.find_one({"name": "Mia"})
 
         if not bot:
-            logger.warning("Bot Mia nao encontrado no banco, usando padrao")
-            return """Voce e a Mia, assistente da Legacy Translations.
-
-Responda de forma profissional e educada."""
+            logger.warning("Bot Mia nao encontrado no banco, usando padrao completo")
+            return DEFAULT_BOT_TRAINING
 
         # Extrair dados do bot
         personality = bot.get("personality", {})
@@ -1468,9 +1606,7 @@ Responda de forma profissional e educada."""
 
     except Exception as e:
         logger.error(f"Erro ao buscar treinamento: {e}")
-        return """Voce e a Mia, assistente da Legacy Translations.
-
-Responda de forma profissional e educada."""
+        return DEFAULT_BOT_TRAINING
 
 
 # ============================================================
@@ -1811,18 +1947,25 @@ async def get_conversation_context(phone: str, limit: int = 10) -> List[Dict]:
 # ============================================================
 # FUNCAO: PROCESSAR MENSAGEM COM IA
 # ============================================================
+def get_transfer_message(idioma: str = "pt") -> str:
+    """Retorna mensagem de transferência para atendente no idioma correto"""
+    messages = {
+        "en": "I'll transfer you to one of our specialists. Please wait a moment! 😊",
+        "pt": "Vou transferir você para um de nossos especialistas. Aguarde um momento! 😊",
+        "es": "Te transfiero a uno de nuestros especialistas. ¡Espera un momento! 😊"
+    }
+    return messages.get(idioma, messages["pt"])
+
 async def process_message_with_ai(phone: str, message: str) -> str:
     """Processar mensagem com GPT-4 usando treinamento dinamico"""
     try:
         # Detectar se cliente quer falar com humano
         if await detectar_solicitacao_humano(message):
             await transferir_para_humano(phone, "Cliente solicitou atendente")
-            # Retornar mensagem informativa sobre a transferencia
-            return (
-                "Perfeito! Estou encaminhando voce para um de nossos especialistas. "
-                "Por favor aguarde, em breve alguem ira te atender. "
-                "Se preferir, pode continuar enviando suas duvidas enquanto aguarda."
-            )
+            # Retornar mensagem simples de transferência no idioma do cliente
+            estado = await get_cliente_estado(phone)
+            idioma = estado.get("idioma", "pt")
+            return get_transfer_message(idioma)
 
         # Buscar treinamento dinamico do MongoDB
         system_prompt = await get_bot_training()
@@ -2317,6 +2460,11 @@ async def webhook_whatsapp(request: Request):
             logger.info(f"Mensagem de grupo ignorada")
             return JSONResponse({"status": "ignored", "reason": "group message"})
 
+        # FILTRO: Ignorar mensagens de sistema (MongoDB alerts, etc.)
+        if message_text and is_system_message(message_text):
+            logger.info(f"[FILTRO] Mensagem de sistema ignorada de {phone}: {message_text[:50]}...")
+            return JSONResponse({"status": "ignored", "reason": "system_message"})
+
         # DETECCAO CORRETA DE TIPO DE MENSAGEM
         # Z-API nao envia "messageType", detectar pela presenca dos campos
         message_type = "text"  # padrao
@@ -2351,6 +2499,45 @@ Para urgencias: (contato)"""
         if not ia_enabled:
             logger.info(f"IA desabilitada - mensagem de {phone} ignorada")
             return JSONResponse({"status": "ia_disabled"})
+
+        # ============================================
+        # VERIFICAR HORÁRIO COMERCIAL (5pm-8:30am EST -> Website)
+        # ============================================
+        if not is_business_hours():
+            logger.info(f"[HORÁRIO] Fora do expediente - cliente {phone}")
+
+            # Detectar idioma do cliente para mensagem apropriada
+            estado = await get_cliente_estado(phone)
+            idioma = estado.get("idioma", "pt")
+
+            # Enviar mensagem redirecionando para o website
+            after_hours_msg = get_after_hours_message(idioma)
+            await send_whatsapp_message(phone, after_hours_msg)
+
+            # Salvar no banco
+            await db.conversas.insert_one({
+                "phone": phone,
+                "message": message_text or "[MENSAGEM FORA DO HORÁRIO]",
+                "role": "user",
+                "timestamp": datetime.now(),
+                "canal": "WhatsApp",
+                "type": message_type,
+                "after_hours": True
+            })
+
+            await db.conversas.insert_one({
+                "phone": phone,
+                "message": after_hours_msg,
+                "role": "assistant",
+                "timestamp": datetime.now(),
+                "canal": "WhatsApp",
+                "after_hours_response": True
+            })
+
+            return JSONResponse({
+                "status": "after_hours",
+                "message": "Mensagem fora do horário comercial - redirecionado para website"
+            })
 
         # ============================================
         # PROCESSAR MENSAGEM DE TEXTO
