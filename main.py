@@ -784,6 +784,7 @@ Seja especifico e util. Baseie-se na pergunta do cliente."""
 # Cache para evitar processar a mesma mensagem mais de uma vez
 # (Z-API pode reenviar se o webhook demorar)
 mensagens_processadas = {}
+imagens_processadas = {}  # Cache para dedup de imagens por URL
 DEDUP_TIMEOUT_SEGUNDOS = 60  # Manter messageId por 60 segundos
 
 
@@ -816,6 +817,32 @@ def verificar_mensagem_duplicada(message_id: str) -> bool:
     return False
 
 
+def verificar_imagem_duplicada(image_url: str) -> bool:
+    """
+    Verifica se uma imagem com essa URL ja foi processada recentemente.
+    Previne que Z-API reenvie a mesma imagem em webhooks diferentes.
+    """
+    if not image_url:
+        return False
+
+    agora = datetime.now()
+
+    # Limpar URLs antigas (mais de 30 segundos)
+    urls_para_remover = []
+    for url, timestamp in imagens_processadas.items():
+        if (agora - timestamp).total_seconds() > 30:
+            urls_para_remover.append(url)
+    for url in urls_para_remover:
+        del imagens_processadas[url]
+
+    if image_url in imagens_processadas:
+        logger.warning(f"[DEDUP-IMG] Imagem duplicada ignorada (URL): {image_url[:60]}")
+        return True
+
+    imagens_processadas[image_url] = agora
+    return False
+
+
 # ============================================================
 # SISTEMA DE AGRUPAMENTO DE IMAGENS
 # ============================================================
@@ -826,6 +853,7 @@ async def iniciar_sessao_imagem(phone: str):
     image_sessions[phone] = {
         "count": 0,
         "images": [],
+        "image_urls": set(),  # Track URLs to prevent duplicate counting
         "last_received": datetime.now(),
         "waiting_confirmation": False,
         "already_asked": False
@@ -833,16 +861,31 @@ async def iniciar_sessao_imagem(phone: str):
     logger.info(f"Sessão de imagem iniciada: {phone}")
 
 
-async def adicionar_imagem_sessao(phone: str, image_bytes: bytes):
+async def adicionar_imagem_sessao(phone: str, image_bytes: bytes, image_url: str = ""):
     """Adiciona imagem à sessão e retorna se deve processar"""
     if phone not in image_sessions:
         await iniciar_sessao_imagem(phone)
-    
+
     session = image_sessions[phone]
+
+    # Deduplicação por URL da imagem - Z-API pode enviar múltiplos webhooks para a mesma imagem
+    if image_url and image_url in session["image_urls"]:
+        logger.warning(f"[DEDUP-IMG] Imagem duplicada ignorada para {phone}: {image_url[:50]}")
+        # Ainda aguardar para manter o timer correto
+        await asyncio.sleep(4)
+        time_diff = (datetime.now() - session["last_received"]).total_seconds()
+        if time_diff >= 3.5:
+            session["waiting_confirmation"] = True
+            return True
+        return False
+
+    if image_url:
+        session["image_urls"].add(image_url)
+
     session["count"] += 1
     session["images"].append(image_bytes)
     session["last_received"] = datetime.now()
-    
+
     logger.info(f"Imagem {session['count']} adicionada à sessão de {phone}")
     
     # Aguardar 4 segundos para ver se vem mais imagens
@@ -2678,6 +2721,11 @@ Para urgencias: (contato)"""
             if not image_url:
                 return JSONResponse({"status": "ignored", "reason": "no image url"})
 
+            # DEDUP: Verificar se essa mesma URL de imagem ja foi processada
+            if verificar_imagem_duplicada(image_url):
+                logger.warning(f"[DEDUP-IMG] Webhook duplicado para imagem de {phone}: {image_url[:50]}")
+                return JSONResponse({"status": "ignored", "reason": "duplicate_image_url"})
+
             logger.info(f"Imagem de {phone}: {image_url[:50]}")
 
             # Baixar imagem
@@ -2763,7 +2811,7 @@ Para urgencias: (contato)"""
             # ============================================
             # FLUXO NORMAL: Sistema de agrupamento (4 segundos)
             # ============================================
-            deve_perguntar = await adicionar_imagem_sessao(phone, image_bytes)
+            deve_perguntar = await adicionar_imagem_sessao(phone, image_bytes, image_url)
 
             if deve_perguntar:
                 # VERIFICAR SE JÁ PERGUNTOU (EVITAR DUPLICATA)
