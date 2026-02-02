@@ -93,19 +93,22 @@
         </div>
     </div>
     <script>
+    // Campanha ativa: Pesquisa 01 (Google Ads - Rede de Pesquisa)
+    // Campaign ID: 22639135145 | Conta: 409-094-0790 (beatriz.tradutora@gmail.com)
+    // Orcamento diario: $15.00 | Maximizar Cliques (CPC max $1.50) | MA, NY
+    // Campanhas removidas: [SALES] - Translation (PAUSADA), Translation Sales (substituida por Pesquisa 01)
     const CAMPAIGN_DATA = {
-        totalInvestment: 560.54, totalClicks: 545, totalImpressions: 16700, totalLeads: 16, ctr: 3.26,
+        totalInvestment: 0, totalClicks: 0, totalImpressions: 0, totalLeads: 16, ctr: 0,
         campaigns: [
-            { name: '[SALES] - Translation', investment: 544.46, clicks: 532, impressions: 16000, ctr: 3.20, conversions: 11, status: 'PAUSED' },
-            { name: 'Translation Sales', investment: 16.08, clicks: 13, impressions: 700, ctr: 13.13, conversions: 5, status: 'ACTIVE' }
+            { name: 'Pesquisa 01', campaignId: '22639135145', platform: 'Google Ads', type: 'Search', dailyBudget: 15.00, locations: 'Massachusetts, New York', investment: 0, clicks: 0, impressions: 0, ctr: 0, conversions: 0, status: 'ACTIVE' }
         ],
-        leadsByOrigin: { 'Google Ads': 11, 'Facebook Ads': 1, 'Organic': 3, 'WhatsApp': 2 },
-        investmentByPlatform: { 'Google Ads': 544.46, 'Facebook Ads': 16.08 },
+        leadsByOrigin: { 'Google Ads': 11, 'Organic': 3, 'WhatsApp': 2 },
+        investmentByPlatform: { 'Google Ads': 0 },
         dailyConversions: [
-            { date: 'Nov 28', leads: 1, clicks: 75 }, { date: 'Nov 29', leads: 2, clicks: 78 },
-            { date: 'Nov 30', leads: 1, clicks: 80 }, { date: 'Dec 01', leads: 3, clicks: 82 },
-            { date: 'Dec 02', leads: 2, clicks: 76 }, { date: 'Dec 03', leads: 0, clicks: 74 },
-            { date: 'Dec 04', leads: 1, clicks: 80 }
+            { date: 'Jan 27', leads: 0, clicks: 0 }, { date: 'Jan 28', leads: 0, clicks: 0 },
+            { date: 'Jan 29', leads: 0, clicks: 0 }, { date: 'Jan 30', leads: 0, clicks: 0 },
+            { date: 'Jan 31', leads: 0, clicks: 0 }, { date: 'Feb 01', leads: 0, clicks: 0 },
+            { date: 'Feb 02', leads: 0, clicks: 0 }
         ]
     };
     let charts = {};
@@ -117,7 +120,7 @@
     function createLeadsByOriginChart() { const canvas = document.getElementById('leadsByOriginChart'); if (!canvas) return; const data = CAMPAIGN_DATA.leadsByOrigin; if (charts.leadsByOrigin) charts.leadsByOrigin.destroy(); charts.leadsByOrigin = new Chart(canvas, { type: 'doughnut', data: { labels: Object.keys(data), datasets: [{ data: Object.values(data), backgroundColor: ['#9C27B0', '#1877F2', '#25D366', '#FF6B6B'], borderWidth: 3, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: ctx => { const total = ctx.dataset.data.reduce((a, b) => a + b, 0); return `${ctx.label}: ${ctx.parsed} leads (${((ctx.parsed / total) * 100).toFixed(1)}%)`; } } } } } }); }
     function createInvestmentChart() { const canvas = document.getElementById('investmentChart'); if (!canvas) return; const data = CAMPAIGN_DATA.investmentByPlatform; if (charts.investment) charts.investment.destroy(); charts.investment = new Chart(canvas, { type: 'bar', data: { labels: Object.keys(data), datasets: [{ data: Object.values(data), backgroundColor: ['#9C27B0', '#1877F2'], borderRadius: 12 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `Invested: $${ctx.parsed.y.toFixed(2)}` } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => `$${v}` } }, x: { grid: { display: false } } } } }); }
     function createDailyConversionsChart() { const canvas = document.getElementById('dailyConversionsChart'); if (!canvas) return; const data = CAMPAIGN_DATA.dailyConversions; if (charts.daily) charts.daily.destroy(); charts.daily = new Chart(canvas, { type: 'line', data: { labels: data.map(d => d.date), datasets: [{ label: 'Leads per day', data: data.map(d => d.leads), borderColor: '#4CAF50', backgroundColor: 'rgba(76,175,80,0.1)', borderWidth: 3, tension: 0.4, fill: true, pointRadius: 6, yAxisID: 'y' }, { label: 'Clicks per day', data: data.map(d => d.clicks), borderColor: '#2196F3', borderWidth: 2, tension: 0.4, pointRadius: 4, yAxisID: 'y1' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } }, scales: { y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Leads' } }, y1: { type: 'linear', position: 'right', beginAtZero: true, title: { display: true, text: 'Clicks' }, grid: { drawOnChartArea: false } }, x: { grid: { display: false } } } } }); }
-    function updateTable() { const tbody = document.getElementById('kpisTableBody'); if (!tbody) return; tbody.innerHTML = ''; CAMPAIGN_DATA.campaigns.forEach(c => { const avgCpc = c.clicks > 0 ? c.investment / c.clicks : 0; const statusColor = c.status === 'ACTIVE' ? 'color:#4CAF50;' : 'color:#f44336;'; const row = tbody.insertRow(); row.innerHTML = `<td><strong>${c.name}</strong></td><td>$${c.investment.toFixed(2)}</td><td>${c.impressions.toLocaleString('en-US')}</td><td>${c.clicks}</td><td>${c.ctr.toFixed(2)}%</td><td>$${avgCpc.toFixed(2)}</td><td>${c.conversions}</td><td><span style="font-weight:bold;${statusColor}">${c.status}</span></td>`; }); }
+    function updateTable() { const tbody = document.getElementById('kpisTableBody'); if (!tbody) return; tbody.innerHTML = ''; CAMPAIGN_DATA.campaigns.forEach(c => { const avgCpc = c.clicks > 0 ? c.investment / c.clicks : 0; const statusColor = c.status === 'ACTIVE' ? 'color:#4CAF50;' : 'color:#f44336;'; const row = tbody.insertRow(); row.innerHTML = `<td><strong>${c.name}</strong><br><small style="color:#888">ID: ${c.campaignId || 'N/A'} | ${c.locations || ''}</small></td><td>$${c.investment.toFixed(2)}</td><td>${c.impressions.toLocaleString('en-US')}</td><td>${c.clicks}</td><td>${c.ctr.toFixed(2)}%</td><td>$${avgCpc.toFixed(2)}</td><td>${c.conversions}</td><td><span style="font-weight:bold;${statusColor}">${c.status}</span></td>`; }); }
     function setupEventListeners() { document.getElementById('refreshData')?.addEventListener('click', () => { updateTimestamp(); alert('Dashboard updated!'); }); document.getElementById('exportExcel')?.addEventListener('click', exportToExcel); }
     function exportToExcel() { if (typeof XLSX === 'undefined') { alert('Export library not loaded.'); return; } const wb = XLSX.utils.book_new(); const data = [['MIA DASHBOARD'], [''], ['Total Investment', `$${CAMPAIGN_DATA.totalInvestment}`], ['Total Clicks', CAMPAIGN_DATA.totalClicks], ['Total Impressions', CAMPAIGN_DATA.totalImpressions], ['Average CTR', `${CAMPAIGN_DATA.ctr}%`], ['Total Leads', CAMPAIGN_DATA.totalLeads]]; XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), 'Summary'); XLSX.writeFile(wb, `MIA_Dashboard_${new Date().toISOString().split('T')[0]}.xlsx`); }
     function updateTimestamp() { const el = document.getElementById('lastUpdate'); if (el) el.textContent = `Last update: ${new Date().toLocaleTimeString('en-US')}`; }
