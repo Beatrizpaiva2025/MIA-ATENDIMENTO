@@ -274,6 +274,7 @@ HUMAN_MODE_TIMEOUT_MINUTES = int(os.getenv("HUMAN_MODE_TIMEOUT_MINUTES", "30"))
 # - INICIAL: Conversa normal, sem documento analisado
 # - AGUARDANDO_NOME: Bot pediu o nome do cliente
 # - AGUARDANDO_ORIGEM: Bot pediu como conheceu a Legacy
+# - AGUARDANDO_OPCAO_ATENDIMENTO: Fora do horario - opcoes: continuar aqui / website / atendente
 # - AGUARDANDO_CONFIRMACAO: Orcamento enviado, aguardando cliente confirmar
 # - AGUARDANDO_PAGAMENTO: Cliente confirmou, aguardando comprovante
 # - PAGAMENTO_RECEBIDO: Comprovante recebido e confirmado
@@ -282,6 +283,7 @@ ETAPAS = {
     "INICIAL": "inicial",
     "AGUARDANDO_NOME": "aguardando_nome",
     "AGUARDANDO_ORIGEM": "aguardando_origem",
+    "AGUARDANDO_OPCAO_ATENDIMENTO": "aguardando_opcao_atendimento",
     "AGUARDANDO_CONFIRMACAO": "aguardando_confirmacao",
     "AGUARDANDO_PAGAMENTO": "aguardando_pagamento",
     "PAGAMENTO_RECEBIDO": "pagamento_recebido"
@@ -1192,7 +1194,7 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
 
 
 async def processar_etapa_origem(phone: str, mensagem: str) -> str:
-    """Processa resposta da origem e gera orcamento"""
+    """Processa resposta da origem e gera orcamento (ou opcoes fora do horario)"""
     estado = await get_cliente_estado(phone)
     idioma = estado.get("idioma", "pt")
     nome = estado.get("nome", "")
@@ -1221,10 +1223,148 @@ async def processar_etapa_origem(phone: str, mensagem: str) -> str:
     else:
         agradecimento = f"Obrigada, {nome}! Que bom saber que nos conheceu pelo {origem}. 🙏\n\n"
 
-    # Gerar orcamento
+    # Se fora do horario comercial E cliente nao tem documento ainda, apresentar opcoes
+    doc_info = estado.get("documento_info")
+    if not is_business_hours() and not doc_info:
+        await set_cliente_estado(phone, etapa=ETAPAS["AGUARDANDO_OPCAO_ATENDIMENTO"])
+
+        if idioma == "en":
+            opcoes = (
+                f"{agradecimento}"
+                f"How would you like to proceed?\n\n"
+                f"1️⃣ Continue the service right here\n"
+                f"2️⃣ Place my order through the website\n"
+                f"3️⃣ I'd like to speak with a representative\n\n"
+                f"Just reply with the number!"
+            )
+        elif idioma == "es":
+            opcoes = (
+                f"{agradecimento}"
+                f"¿Cómo prefieres continuar?\n\n"
+                f"1️⃣ Continuar la atención aquí\n"
+                f"2️⃣ Hacer mi pedido por el sitio web\n"
+                f"3️⃣ Quiero hablar con un representante\n\n"
+                f"¡Solo responde con el número!"
+            )
+        else:
+            opcoes = (
+                f"{agradecimento}"
+                f"Como voce prefere prosseguir?\n\n"
+                f"1️⃣ Continuar o atendimento aqui\n"
+                f"2️⃣ Fazer meu pedido pelo website\n"
+                f"3️⃣ Quero falar com um atendente\n\n"
+                f"Responda com o numero!"
+            )
+        return opcoes
+
+    # Fluxo normal (horario comercial ou ja tem documento): gerar orcamento
     orcamento = await gerar_orcamento_final(phone)
 
     return agradecimento + orcamento
+
+
+async def processar_etapa_opcao_atendimento(phone: str, mensagem: str) -> str:
+    """Processa a escolha do cliente entre as 3 opcoes de atendimento (fora do horario)"""
+    estado = await get_cliente_estado(phone)
+    idioma = estado.get("idioma", "pt")
+    nome = estado.get("nome", "")
+
+    msg_lower = mensagem.lower().strip()
+
+    # Opcao 1: Continuar atendimento aqui
+    if "1" in mensagem or "continuar" in msg_lower or "aqui" in msg_lower or "here" in msg_lower or "continue" in msg_lower or "aquí" in msg_lower:
+        # Voltar para etapa inicial para receber documentos
+        await set_cliente_estado(phone, etapa=ETAPAS["INICIAL"])
+
+        if idioma == "en":
+            return (
+                f"Great, {nome}! 😊\n\n"
+                f"You can send the document you'd like to have translated right here.\n\n"
+                f"Just send a photo or PDF of each page and I'll take care of everything!"
+            )
+        elif idioma == "es":
+            return (
+                f"¡Perfecto, {nome}! 😊\n\n"
+                f"Puedes enviar el documento que deseas traducir aquí mismo.\n\n"
+                f"¡Solo envía una foto o PDF de cada página y yo me encargo de todo!"
+            )
+        else:
+            return (
+                f"Perfeito, {nome}! 😊\n\n"
+                f"Pode enviar o documento que deseja traduzir aqui mesmo.\n\n"
+                f"E so mandar uma foto ou PDF de cada pagina que eu cuido de tudo!"
+            )
+
+    # Opcao 2: Fazer pelo website
+    elif "2" in mensagem or "website" in msg_lower or "site" in msg_lower or "web" in msg_lower or "online" in msg_lower:
+        await set_cliente_estado(phone, etapa=ETAPAS["INICIAL"])
+
+        if idioma == "en":
+            return (
+                f"Sure, {nome}! You can place your order directly on our website:\n\n"
+                f"👉 https://portal.legacytranslations.com\n\n"
+                f"If you need any help, just send a message here. 😊"
+            )
+        elif idioma == "es":
+            return (
+                f"¡Claro, {nome}! Puedes hacer tu pedido directamente en nuestro sitio web:\n\n"
+                f"👉 https://portal.legacytranslations.com\n\n"
+                f"Si necesitas ayuda, solo envía un mensaje aquí. 😊"
+            )
+        else:
+            return (
+                f"Claro, {nome}! Voce pode fazer seu pedido diretamente pelo nosso site:\n\n"
+                f"👉 https://portal.legacytranslations.com\n\n"
+                f"Se precisar de ajuda, e so mandar uma mensagem aqui. 😊"
+            )
+
+    # Opcao 3: Falar com atendente
+    elif "3" in mensagem or "atendente" in msg_lower or "humano" in msg_lower or "representante" in msg_lower or "speak" in msg_lower or "hablar" in msg_lower or "agent" in msg_lower or "person" in msg_lower:
+        # Transferir para humano
+        await transferir_para_humano(phone, f"Cliente {nome} solicitou atendente (fora do horario)")
+
+        if idioma == "en":
+            return (
+                f"Of course, {nome}! I'm forwarding you to our team right now.\n\n"
+                f"A representative will get in touch with you as soon as possible. 😊"
+            )
+        elif idioma == "es":
+            return (
+                f"¡Por supuesto, {nome}! Te estoy transfiriendo a nuestro equipo.\n\n"
+                f"Un representante se pondrá en contacto contigo lo antes posible. 😊"
+            )
+        else:
+            return (
+                f"Claro, {nome}! Estou encaminhando voce para nossa equipe.\n\n"
+                f"Um atendente entrara em contato o mais breve possivel. 😊"
+            )
+
+    # Resposta nao reconhecida - repetir opcoes
+    else:
+        if idioma == "en":
+            return (
+                f"{nome}, could you please choose one of the options?\n\n"
+                f"1️⃣ Continue the service right here\n"
+                f"2️⃣ Place my order through the website\n"
+                f"3️⃣ I'd like to speak with a representative\n\n"
+                f"Just reply with the number!"
+            )
+        elif idioma == "es":
+            return (
+                f"{nome}, ¿podrías elegir una de las opciones?\n\n"
+                f"1️⃣ Continuar la atención aquí\n"
+                f"2️⃣ Hacer mi pedido por el sitio web\n"
+                f"3️⃣ Quiero hablar con un representante\n\n"
+                f"¡Solo responde con el número!"
+            )
+        else:
+            return (
+                f"{nome}, poderia escolher uma das opcoes?\n\n"
+                f"1️⃣ Continuar o atendimento aqui\n"
+                f"2️⃣ Fazer meu pedido pelo website\n"
+                f"3️⃣ Quero falar com um atendente\n\n"
+                f"Responda com o numero!"
+            )
 
 
 async def processar_etapa_confirmacao(phone: str, mensagem: str) -> str:
@@ -1592,6 +1732,10 @@ Transferir educadamente para um atendente humano.
 - Sempre peça confirmação do número de páginas antes do orçamento
 - Todas as traduções são certificadas e aceitas por USCIS, universidades, escolas, bancos
 - Seja educada, profissional e use um toque humano nas respostas
+- NUNCA pergunte "tem mais paginas?", "pode mandar mais?" ou "so isso?" - apenas confirme o total recebido
+- NUNCA diga "estou a disposicao se tiver alguma duvida" ou frases genéricas de encerramento
+- NUNCA repita o link do portal mais de uma vez na mesma conversa
+- Apos o cliente confirmar o total de paginas, siga direto para o proximo passo sem insistir
 """
 
 async def get_bot_training() -> str:
@@ -2544,43 +2688,82 @@ Para urgencias: (contato)"""
             return JSONResponse({"status": "ia_disabled"})
 
         # ============================================
-        # VERIFICAR HORÁRIO COMERCIAL (5pm-8:30am EST -> Website)
+        # VERIFICAR HORÁRIO COMERCIAL (5pm-8:30am EST)
+        # Fora do horario: iniciar fluxo de apresentacao + opcoes
+        # ao inves de bloquear com mensagem offline
         # ============================================
         if not is_business_hours():
             logger.info(f"[HORÁRIO] Fora do expediente - cliente {phone}")
 
-            # Detectar idioma do cliente para mensagem apropriada
             estado = await get_cliente_estado(phone)
+            etapa_atual = estado.get("etapa", ETAPAS["INICIAL"])
             idioma = estado.get("idioma", "pt")
 
-            # Enviar mensagem redirecionando para o website
-            after_hours_msg = get_after_hours_message(idioma)
-            await send_whatsapp_message(phone, after_hours_msg)
+            # Se o cliente ja esta em uma etapa ativa (nome, origem, opcoes, etc.),
+            # deixar o fluxo normal processar (nao bloquear)
+            if etapa_atual not in [ETAPAS["INICIAL"]]:
+                logger.info(f"[HORÁRIO] Cliente {phone} ja em etapa {etapa_atual} - continuando fluxo normal")
+                # Nao bloquear - cai no processamento normal abaixo
+            else:
+                # Cliente em etapa INICIAL fora do horario:
+                # Iniciar fluxo de apresentacao -> pedir nome
+                if message_type == "text":
+                    text_msg = data.get("text", {}).get("message", "")
+                    idioma_detectado = detectar_idioma(text_msg) if text_msg else "pt"
+                else:
+                    idioma_detectado = idioma
 
-            # Salvar no banco
-            await db.conversas.insert_one({
-                "phone": phone,
-                "message": message_text or "[MENSAGEM FORA DO HORÁRIO]",
-                "role": "user",
-                "timestamp": datetime.now(),
-                "canal": "WhatsApp",
-                "type": message_type,
-                "after_hours": True
-            })
+                await set_cliente_estado(
+                    phone,
+                    etapa=ETAPAS["AGUARDANDO_NOME"],
+                    idioma=idioma_detectado
+                )
 
-            await db.conversas.insert_one({
-                "phone": phone,
-                "message": after_hours_msg,
-                "role": "assistant",
-                "timestamp": datetime.now(),
-                "canal": "WhatsApp",
-                "after_hours_response": True
-            })
+                if idioma_detectado == "en":
+                    intro_msg = (
+                        f"Hello! 👋 I'm Mia, the virtual assistant at Legacy Translations.\n\n"
+                        f"Welcome! We specialize in certified and sworn translations.\n\n"
+                        f"May I have your name, please?"
+                    )
+                elif idioma_detectado == "es":
+                    intro_msg = (
+                        f"¡Hola! 👋 Soy Mia, la asistente virtual de Legacy Translations.\n\n"
+                        f"¡Bienvenido(a)! Somos especialistas en traducciones certificadas y juramentadas.\n\n"
+                        f"¿Me puedes decir tu nombre, por favor?"
+                    )
+                else:
+                    intro_msg = (
+                        f"Ola! 👋 Eu sou a Mia, assistente virtual da Legacy Translations.\n\n"
+                        f"Bem-vindo(a)! Somos especialistas em traducoes certificadas e juramentadas.\n\n"
+                        f"Qual e o seu nome?"
+                    )
 
-            return JSONResponse({
-                "status": "after_hours",
-                "message": "Mensagem fora do horário comercial - redirecionado para website"
-            })
+                # Salvar mensagem do usuario
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": message_text or "[MENSAGEM FORA DO HORÁRIO]",
+                    "role": "user",
+                    "timestamp": datetime.now(),
+                    "canal": "WhatsApp",
+                    "type": message_type,
+                    "after_hours": True
+                })
+
+                await send_whatsapp_message(phone, intro_msg)
+
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": intro_msg,
+                    "role": "assistant",
+                    "timestamp": datetime.now(),
+                    "canal": "WhatsApp",
+                    "after_hours": True
+                })
+
+                return JSONResponse({
+                    "status": "after_hours_intro",
+                    "message": "Fora do horario - iniciando fluxo de apresentacao"
+                })
 
         # ============================================
         # PROCESSAR MENSAGEM DE TEXTO
@@ -2595,10 +2778,33 @@ Para urgencias: (contato)"""
 
             # Verificar se está aguardando confirmação de páginas (imagens)
             if phone in image_sessions and image_sessions[phone].get("waiting_confirmation"):
-                respostas_negativas = ["não", "nao", "só isso", "so isso", "não tenho", "nao tenho", "é só", "e so"]
+                # Respostas que confirmam que o total de paginas esta correto (sim, e isso, etc.)
+                respostas_confirmacao_paginas = [
+                    "sim", "yes", "si", "isso", "e isso", "é isso", "isso mesmo",
+                    "correto", "certo", "exato", "confirmado", "confirmo",
+                    "só isso", "so isso", "só esse", "so esse", "só essa", "so essa",
+                    "somente", "apenas", "only", "that's it", "that's all", "thats it", "thats all",
+                    "não", "nao", "no", "nao tenho", "não tenho",
+                    "é só", "e so", "so 1", "só 1", "somente 1", "apenas 1",
+                    "1 pagina", "1 página", "one page", "just one", "just that",
+                    "é esse", "e esse", "é essa", "e essa", "só esse documento", "so esse documento",
+                    "apenas esse", "apenas essa", "just this", "just this one",
+                    "pode traduzir", "pode seguir", "pode continuar"
+                ]
 
-                if any(neg in text.lower() for neg in respostas_negativas):
-                    # Cliente confirmou que não tem mais páginas
+                text_lower = text.lower().strip()
+                confirmou_paginas = any(conf in text_lower for conf in respostas_confirmacao_paginas)
+
+                # Tambem confirmar se o cliente respondeu com um numero igual ao total recebido
+                try:
+                    total_session = image_sessions[phone]["count"]
+                    if text.strip().isdigit() and int(text.strip()) == total_session:
+                        confirmou_paginas = True
+                except:
+                    pass
+
+                if confirmou_paginas:
+                    # Cliente confirmou o total de paginas
                     logger.info(f"Cliente confirmou - processando {image_sessions[phone]['count']} páginas")
 
                     resposta = await processar_sessao_imagem(phone)
@@ -2607,17 +2813,21 @@ Para urgencias: (contato)"""
                         await send_whatsapp_message(phone, resposta)
                         return JSONResponse({"status": "processed", "type": "image_batch"})
                 else:
-                    # Cliente disse que tem mais páginas
+                    # Cliente indicou que tem mais paginas para enviar
                     image_sessions[phone]["waiting_confirmation"] = False
                     image_sessions[phone]["already_asked"] = False
                     estado = await get_cliente_estado(phone)
                     idioma = estado.get("idioma", "pt")
+                    nome = estado.get("nome", "")
+                    nome_prefix = f"{nome}, p" if nome else "P"
                     if idioma == "en":
-                        msg = "Ok! You can send the remaining pages."
+                        nome_prefix_en = f"{nome}, y" if nome else "Y"
+                        msg = f"Got it! {nome_prefix_en}ou can send the remaining pages."
                     elif idioma == "es":
-                        msg = "¡Ok! Puedes enviar las demás páginas."
+                        nome_prefix_es = f"{nome}, p" if nome else "P"
+                        msg = f"¡Entendido! {nome_prefix_es}uedes enviar las demás páginas."
                     else:
-                        msg = "Ok! Pode enviar as demais páginas."
+                        msg = f"Entendido! {nome_prefix}ode enviar as demais páginas."
                     await send_whatsapp_message(phone, msg)
                     return JSONResponse({"status": "waiting_more_images"})
 
@@ -2651,7 +2861,14 @@ Para urgencias: (contato)"""
 
             elif etapa_atual == ETAPAS["AGUARDANDO_ORIGEM"]:
                 reply = await processar_etapa_origem(phone, text)
-                logger.info(f"[ETAPA] {phone}: AGUARDANDO_ORIGEM -> AGUARDANDO_CONFIRMACAO")
+                # Pode ir para AGUARDANDO_OPCAO_ATENDIMENTO (fora do horario) ou AGUARDANDO_CONFIRMACAO
+                estado_atualizado = await get_cliente_estado(phone)
+                nova_etapa = estado_atualizado.get("etapa", "")
+                logger.info(f"[ETAPA] {phone}: AGUARDANDO_ORIGEM -> {nova_etapa}")
+
+            elif etapa_atual == ETAPAS["AGUARDANDO_OPCAO_ATENDIMENTO"]:
+                reply = await processar_etapa_opcao_atendimento(phone, text)
+                logger.info(f"[ETAPA] {phone}: AGUARDANDO_OPCAO_ATENDIMENTO -> opcao processada")
 
             elif etapa_atual == ETAPAS["AGUARDANDO_CONFIRMACAO"]:
                 reply = await processar_etapa_confirmacao(phone, text)
@@ -2842,31 +3059,31 @@ Para urgencias: (contato)"""
                         pergunta = (
                             f"Hi there! 👋 Welcome to Legacy Translations!\n\n"
                             f"I'm Mia, your virtual assistant. I received {total_atual} page{'s' if total_atual > 1 else ''} of your document! 📄\n\n"
-                            f"Do you have any more pages to send, or is this all?\n\n"
+                            f"Can you confirm that {'these are all the pages' if total_atual > 1 else 'this is the only page'} for translation?\n\n"
                             f"Once you confirm, I'll analyze the document and provide a quick quote! ⚡"
                         )
                     elif idioma == "es":
                         pergunta = (
-                            f"¡Hola! 👋 ¡Bienvenido a Legacy Translations!\n\n"
+                            f"¡Hola! 👋 ¡Bienvenido(a) a Legacy Translations!\n\n"
                             f"Soy Mia, tu asistente virtual. ¡Recibí {total_atual} página{'s' if total_atual > 1 else ''} de tu documento! 📄\n\n"
-                            f"¿Tienes más páginas para enviar o es todo?\n\n"
-                            f"Cuando confirmes, analizaré el documento y te daré una cotización rápida! ⚡"
+                            f"¿Puedes confirmar que {'son todas las páginas' if total_atual > 1 else 'es solo esta página'} para la traducción?\n\n"
+                            f"¡Cuando confirmes, analizaré el documento y te daré una cotización rápida! ⚡"
                         )
                     else:
                         pergunta = (
                             f"Oi! 👋 Bem-vindo(a) a Legacy Translations!\n\n"
                             f"Sou a Mia, sua assistente virtual. Recebi {total_atual} pagina{'s' if total_atual > 1 else ''} do seu documento! 📄\n\n"
-                            f"Tem mais alguma pagina para enviar ou e so isso?\n\n"
+                            f"Pode confirmar se {'sao todas as paginas' if total_atual > 1 else 'e somente essa pagina'} para a traducao?\n\n"
                             f"Assim que confirmar, vou analisar o documento e te passar um orcamento rapidinho! ⚡"
                         )
                 else:
                     # CLIENTE JÁ CONHECIDO - Mensagem mais direta
                     if idioma == "en":
-                        pergunta = f"I received {total_atual} page{'s' if total_atual > 1 else ''}. Do you have any more pages to translate?"
+                        pergunta = f"I received {total_atual} page{'s' if total_atual > 1 else ''}. Can you confirm {'these are all the pages' if total_atual > 1 else 'this is the only page'} for translation?"
                     elif idioma == "es":
-                        pergunta = f"Recibí {total_atual} página{'s' if total_atual > 1 else ''}. ¿Tienes más páginas para traducir?"
+                        pergunta = f"Recibí {total_atual} página{'s' if total_atual > 1 else ''}. ¿Puedes confirmar que {'son todas las páginas' if total_atual > 1 else 'es solo esta página'} para la traducción?"
                     else:
-                        pergunta = f"Recebi {total_atual} pagina{'s' if total_atual > 1 else ''}. Tem mais alguma pagina para traduzir?"
+                        pergunta = f"Recebi {total_atual} pagina{'s' if total_atual > 1 else ''}. Pode confirmar se {'sao todas as paginas' if total_atual > 1 else 'e somente essa pagina'} para a traducao?"
 
                 await send_whatsapp_message(phone, pergunta)
 
