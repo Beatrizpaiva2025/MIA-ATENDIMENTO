@@ -326,6 +326,25 @@ async def get_cliente_estado(phone: str) -> dict:
                 "created_at": datetime.now(),
                 "updated_at": datetime.now()
             }
+
+        # Sanitizar nome: limpar nomes invalidos que foram salvos por engano
+        nome = estado.get("nome", "")
+        if nome:
+            palavras_invalidas = [
+                "humano", "atendente", "falar", "traduzir", "traducao",
+                "tradução", "transferir", "operador", "pessoa", "pagina",
+                "página", "documento", "comprovante", "pagamento"
+            ]
+            nome_lower = nome.lower()
+            if any(p in nome_lower for p in palavras_invalidas):
+                estado["nome"] = ""
+                # Limpar no banco tambem
+                await db.cliente_estados.update_one(
+                    {"phone": phone},
+                    {"$set": {"nome": "", "updated_at": datetime.now()}}
+                )
+                logger.warning(f"[SANITIZE] Nome invalido '{nome}' limpo para {phone}")
+
         return estado
     except Exception as e:
         logger.error(f"Erro ao buscar estado do cliente: {e}")
@@ -2567,10 +2586,11 @@ async def webhook_whatsapp(request: Request):
         phone_normalizado = phone.replace("+", "").replace("-", "").replace(" ", "")
 
         # Verificar se a mensagem vem do operador/atendente
-        e_operador = from_me or phone_normalizado == ATENDENTE_PHONE or phone_normalizado == NOTIFICACAO_PHONE
+        # Somente ATENDENTE_PHONE pode enviar comandos * e +
+        e_operador = from_me or phone_normalizado == ATENDENTE_PHONE
 
         # METODO 1: fromMe=true (operador enviando na conversa do cliente)
-        # METODO 2: mensagem vem do numero do operador/atendente diretamente
+        # METODO 2: mensagem vem do numero do atendente diretamente
         if e_operador:
             logger.info(f"[OPERADOR] ========================================")
             logger.info(f"[OPERADOR] Mensagem de operador detectada! (fromMe={from_me}, phone={phone})")
@@ -2601,8 +2621,8 @@ async def webhook_whatsapp(request: Request):
                 })
                 return {"status": "ia_resumed", "client": phone, "message": "IA retomada com sucesso"}
 
-            elif not from_me and (phone_normalizado == ATENDENTE_PHONE or phone_normalizado == NOTIFICACAO_PHONE):
-                # Operador enviando do seu numero pessoal - comandos * e +
+            elif not from_me and phone_normalizado == ATENDENTE_PHONE:
+                # Atendente enviando do seu numero pessoal - comandos * e +
                 # Buscar o ultimo cliente atendido para aplicar o comando
                 if comando == "*" or comando == "+":
                     ultimo_cliente = await db.conversas.find_one(
