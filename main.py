@@ -1054,6 +1054,8 @@ async def gerar_orcamento_final(phone: str) -> str:
     nome = estado.get("nome", "")
 
     total_pages = doc_info.get("total_pages", 1)
+    if not total_pages or total_pages < 1:
+        total_pages = 1
     tipo_doc = doc_info.get("tipo", "documento")
     idioma_origem = doc_info.get("idioma_origem", "")
     idioma_destino = doc_info.get("idioma_destino", "ingles")
@@ -2779,29 +2781,56 @@ Para urgencias: (contato)"""
             # Verificar se está aguardando confirmação de páginas (imagens)
             if phone in image_sessions and image_sessions[phone].get("waiting_confirmation"):
                 # Respostas que confirmam que o total de paginas esta correto (sim, e isso, etc.)
+                # NOTA: Como a pergunta agora e "Pode confirmar se sao todas as paginas?",
+                # "sim" = confirmado, "nao" = tem mais paginas (NAO incluir nao/no aqui)
                 respostas_confirmacao_paginas = [
                     "sim", "yes", "si", "isso", "e isso", "é isso", "isso mesmo",
                     "correto", "certo", "exato", "confirmado", "confirmo",
                     "só isso", "so isso", "só esse", "so esse", "só essa", "so essa",
                     "somente", "apenas", "only", "that's it", "that's all", "thats it", "thats all",
-                    "não", "nao", "no", "nao tenho", "não tenho",
                     "é só", "e so", "so 1", "só 1", "somente 1", "apenas 1",
                     "1 pagina", "1 página", "one page", "just one", "just that",
                     "é esse", "e esse", "é essa", "e essa", "só esse documento", "so esse documento",
                     "apenas esse", "apenas essa", "just this", "just this one",
-                    "pode traduzir", "pode seguir", "pode continuar"
+                    "pode traduzir", "pode seguir", "pode continuar",
+                    "todas", "são todas", "sao todas", "is all", "all of them", "that is all"
                 ]
 
                 text_lower = text.lower().strip()
                 confirmou_paginas = any(conf in text_lower for conf in respostas_confirmacao_paginas)
 
                 # Tambem confirmar se o cliente respondeu com um numero igual ao total recebido
+                total_session = image_sessions[phone]["count"]
                 try:
-                    total_session = image_sessions[phone]["count"]
                     if text.strip().isdigit() and int(text.strip()) == total_session:
                         confirmou_paginas = True
                 except:
                     pass
+
+                # Detectar se o cliente informou um numero DIFERENTE de paginas
+                # Ex: bot recebeu 2, cliente diz "sao 3 paginas"
+                import re
+                numero_match = re.search(r'(\d+)\s*(pagina|página|pages?|pg)', text_lower)
+                if numero_match:
+                    numero_informado = int(numero_match.group(1))
+                    if numero_informado > total_session:
+                        # Cliente diz que tem mais paginas do que o bot recebeu
+                        confirmou_paginas = False
+                        image_sessions[phone]["waiting_confirmation"] = False
+                        image_sessions[phone]["already_asked"] = False
+                        estado = await get_cliente_estado(phone)
+                        idioma = estado.get("idioma", "pt")
+                        faltam = numero_informado - total_session
+                        if idioma == "en":
+                            msg = f"Got it! I received {total_session} so far. You can send the remaining {faltam} page{'s' if faltam > 1 else ''}."
+                        elif idioma == "es":
+                            msg = f"¡Entendido! Recibí {total_session} hasta ahora. Puedes enviar {'las' if faltam > 1 else 'la'} {faltam} página{'s' if faltam > 1 else ''} restante{'s' if faltam > 1 else ''}."
+                        else:
+                            msg = f"Entendido! Recebi {total_session} ate agora. Pode enviar {'as' if faltam > 1 else 'a'} {faltam} pagina{'s' if faltam > 1 else ''} que falta{'m' if faltam > 1 else ''}."
+                        await send_whatsapp_message(phone, msg)
+                        return JSONResponse({"status": "waiting_more_images"})
+                    elif numero_informado == total_session:
+                        confirmou_paginas = True
 
                 if confirmou_paginas:
                     # Cliente confirmou o total de paginas
@@ -2818,16 +2847,12 @@ Para urgencias: (contato)"""
                     image_sessions[phone]["already_asked"] = False
                     estado = await get_cliente_estado(phone)
                     idioma = estado.get("idioma", "pt")
-                    nome = estado.get("nome", "")
-                    nome_prefix = f"{nome}, p" if nome else "P"
                     if idioma == "en":
-                        nome_prefix_en = f"{nome}, y" if nome else "Y"
-                        msg = f"Got it! {nome_prefix_en}ou can send the remaining pages."
+                        msg = "Got it! You can send the remaining pages."
                     elif idioma == "es":
-                        nome_prefix_es = f"{nome}, p" if nome else "P"
-                        msg = f"¡Entendido! {nome_prefix_es}uedes enviar las demás páginas."
+                        msg = "¡Entendido! Puedes enviar las demás páginas."
                     else:
-                        msg = f"Entendido! {nome_prefix}ode enviar as demais páginas."
+                        msg = "Entendido! Pode enviar as demais páginas."
                     await send_whatsapp_message(phone, msg)
                     return JSONResponse({"status": "waiting_more_images"})
 
