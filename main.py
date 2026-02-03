@@ -326,6 +326,25 @@ async def get_cliente_estado(phone: str) -> dict:
                 "created_at": datetime.now(),
                 "updated_at": datetime.now()
             }
+
+        # Sanitizar nome: limpar nomes invalidos que foram salvos por engano
+        nome = estado.get("nome", "")
+        if nome:
+            palavras_invalidas = [
+                "humano", "atendente", "falar", "traduzir", "traducao",
+                "tradução", "transferir", "operador", "pessoa", "pagina",
+                "página", "documento", "comprovante", "pagamento"
+            ]
+            nome_lower = nome.lower()
+            if any(p in nome_lower for p in palavras_invalidas):
+                estado["nome"] = ""
+                # Limpar no banco tambem
+                await db.cliente_estados.update_one(
+                    {"phone": phone},
+                    {"$set": {"nome": "", "updated_at": datetime.now()}}
+                )
+                logger.warning(f"[SANITIZE] Nome invalido '{nome}' limpo para {phone}")
+
         return estado
     except Exception as e:
         logger.error(f"Erro ao buscar estado do cliente: {e}")
@@ -473,6 +492,8 @@ async def detectar_solicitacao_humano(message: str) -> bool:
     palavras_chave = [
         # Palavras principais
         "atendente", "humano", "pessoa", "operador",
+        # Nomes dos atendentes
+        "beatriz", "eduarda",
         # Frases comuns
         "falar com alguem", "falar com alguém",
         "falar com humano", "falar com atendente",
@@ -482,6 +503,9 @@ async def detectar_solicitacao_humano(message: str) -> bool:
         "quero um atendente", "quero atendente",
         "preciso de atendente", "preciso atendente",
         "transferir", "transfere",
+        # English
+        "speak with someone", "talk to someone", "human agent",
+        "real person", "speak to a person", "talk to a person",
         # Variações de frustração
         "nao entende", "não entende",
         "nao esta entendendo", "não está entendendo",
@@ -1144,6 +1168,17 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
     # Detectar e atualizar idioma
     idioma = detectar_idioma(mensagem)
 
+    # PRIMEIRO: verificar se o cliente esta pedindo atendente humano
+    # ao inves de informar o nome
+    if await detectar_solicitacao_humano(mensagem):
+        await transferir_para_humano(phone, "Cliente solicitou atendente (etapa nome)")
+        if idioma == "en":
+            return "Of course! I'm forwarding you to our team. A representative will get in touch with you as soon as possible. 😊"
+        elif idioma == "es":
+            return "¡Por supuesto! Te estoy transfiriendo a nuestro equipo. Un representante se pondrá en contacto contigo lo antes posible. 😊"
+        else:
+            return "Claro! Estou encaminhando voce para nossa equipe. Um atendente entrara em contato o mais breve possivel. 😊"
+
     # Extrair nome (geralmente e a primeira palavra ou frase curta)
     nome = mensagem.strip().split('\n')[0].strip()
     # Limpar pontuacao
@@ -1151,6 +1186,26 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
     # Se for muito longo, pegar primeiras palavras
     if len(nome.split()) > 4:
         nome = ' '.join(nome.split()[:3])
+
+    # Validar que o nome nao contem palavras que nao sao nomes
+    palavras_invalidas_nome = [
+        "humano", "atendente", "falar", "traduzir", "traducao", "tradução",
+        "pagina", "página", "documento", "comprovante", "pagamento",
+        "transferir", "operador", "pessoa", "ajuda", "help",
+        "human", "agent", "translate", "translation", "page", "document",
+        "beatriz", "eduarda"
+    ]
+    nome_lower = nome.lower()
+    nome_parece_invalido = any(p in nome_lower for p in palavras_invalidas_nome)
+
+    if nome_parece_invalido or len(nome) < 2:
+        # Nome parece invalido - pedir novamente
+        if idioma == "en":
+            return "Could you please tell me just your first name? 😊"
+        elif idioma == "es":
+            return "¿Podrías decirme solo tu nombre? 😊"
+        else:
+            return "Poderia me dizer apenas o seu nome? 😊"
 
     # Salvar nome e idioma
     await set_cliente_estado(
@@ -1376,6 +1431,18 @@ async def processar_etapa_confirmacao(phone: str, mensagem: str) -> str:
     nome = estado.get("nome", "")
     valor = estado.get("valor_orcamento", "")
 
+    # Se o valor estiver vazio ou zero, recalcular baseado no documento
+    if not valor or valor in ["0", "$0", "0.0", ""]:
+        doc_info = estado.get("documento_info", {})
+        total_pages = doc_info.get("total_pages", 1)
+        if not total_pages or total_pages < 1:
+            total_pages = 1
+        # Preco padrao: $24.99 por pagina
+        valor_calculado = total_pages * 24.99
+        valor = f"${valor_calculado:.2f}"
+        await set_cliente_estado(phone, valor_orcamento=valor)
+        logger.warning(f"[ORCAMENTO] Valor era 0 - recalculado para {valor} ({total_pages} paginas)")
+
     if detectar_confirmacao_prosseguimento(mensagem):
         # Cliente confirmou - mudar para aguardando pagamento
         await set_cliente_estado(phone, etapa=ETAPAS["AGUARDANDO_PAGAMENTO"])
@@ -1390,25 +1457,32 @@ async def processar_etapa_confirmacao(phone: str, mensagem: str) -> str:
         except Exception as e:
             logger.error(f"Erro ao atualizar status do orcamento: {e}")
 
+        # Montar saudacao (sem nome se nao tiver)
         if idioma == "en":
+            saudacao = f"Perfect{', ' + nome if nome else ''}! 🎉"
             resposta = (
-                f"Perfect, {nome}! 🎉\n\n"
-                f"To proceed, please send the payment of {valor} via:\n"
-                f"• Zelle\n• Venmo\n• PayPal\n• Bank Transfer\n\n"
+                f"{saudacao}\n\n"
+                f"To proceed, please send the payment of {valor} via:\n\n"
+                f"VENMO: @legacytranslations\n"
+                f"ZELLE: Contact@legacytranslations.com (LEGACY TRANSLATIONS INC)\n\n"
                 f"After payment, just send the receipt/screenshot here and I'll confirm! ✅"
             )
         elif idioma == "es":
+            saudacao = f"¡Perfecto{', ' + nome if nome else ''}! 🎉"
             resposta = (
-                f"¡Perfecto, {nome}! 🎉\n\n"
-                f"Para continuar, envía el pago de {valor} por:\n"
-                f"• Zelle\n• Venmo\n• PayPal\n• Transferencia bancaria\n\n"
+                f"{saudacao}\n\n"
+                f"Para continuar, envía el pago de {valor} por:\n\n"
+                f"VENMO: @legacytranslations\n"
+                f"ZELLE: Contact@legacytranslations.com (LEGACY TRANSLATIONS INC)\n\n"
                 f"Después del pago, solo envía el comprobante aquí y confirmo! ✅"
             )
         else:
+            saudacao = f"Perfeito{', ' + nome if nome else ''}! 🎉"
             resposta = (
-                f"Perfeito, {nome}! 🎉\n\n"
-                f"Para prosseguir, envie o pagamento de {valor} via:\n"
-                f"• Zelle\n• Venmo\n• PayPal\n• Transferencia bancaria\n\n"
+                f"{saudacao}\n\n"
+                f"Para concluir o processo, basta efetuar o pagamento de {valor} atraves de um dos meios abaixo:\n\n"
+                f"VENMO: @legacytranslations\n"
+                f"ZELLE: Contact@legacytranslations.com (LEGACY TRANSLATIONS INC)\n\n"
                 f"Apos o pagamento, e so enviar o comprovante aqui que eu confirmo! ✅"
             )
         return resposta
@@ -1511,10 +1585,11 @@ Responda APENAS: SIM ou NAO"""
         # Notificar atendente sobre pagamento
         await notificar_atendente(phone, f"PAGAMENTO RECEBIDO - {nome} - {valor}")
 
+        nome_display = f", {nome}" if nome else ""
         if idioma == "en":
             return (
                 f"Payment confirmed! 🎉✅\n\n"
-                f"Thank you, {nome}! We'll start working on your translation right away.\n\n"
+                f"Thank you{nome_display}! We'll start working on your translation right away.\n\n"
                 f"📋 Order details:\n"
                 f"• {doc_info.get('total_pages', 1)} page(s) of {doc_info.get('tipo', 'document')}\n"
                 f"• From {doc_info.get('idioma_origem', '')} to {doc_info.get('idioma_destino', 'English')}\n\n"
@@ -1525,7 +1600,7 @@ Responda APENAS: SIM ou NAO"""
         elif idioma == "es":
             return (
                 f"¡Pago confirmado! 🎉✅\n\n"
-                f"¡Gracias, {nome}! Comenzaremos tu traducción de inmediato.\n\n"
+                f"¡Gracias{nome_display}! Comenzaremos tu traducción de inmediato.\n\n"
                 f"📋 Detalles del pedido:\n"
                 f"• {doc_info.get('total_pages', 1)} página(s) de {doc_info.get('tipo', 'documento')}\n"
                 f"• De {doc_info.get('idioma_origem', '')} a {doc_info.get('idioma_destino', 'inglés')}\n\n"
@@ -1536,7 +1611,7 @@ Responda APENAS: SIM ou NAO"""
         else:
             return (
                 f"Pagamento confirmado! 🎉✅\n\n"
-                f"Obrigada, {nome}! Ja vamos iniciar sua traducao.\n\n"
+                f"Obrigada{nome_display}! Ja vamos iniciar sua traducao.\n\n"
                 f"📋 Detalhes do pedido:\n"
                 f"• {doc_info.get('total_pages', 1)} pagina(s) de {doc_info.get('tipo', 'documento')}\n"
                 f"• De {doc_info.get('idioma_origem', '')} para {doc_info.get('idioma_destino', 'ingles')}\n\n"
@@ -2507,15 +2582,23 @@ async def webhook_whatsapp(request: Request):
                 "will_process": from_me  # So processa se fromMe=true
             })
 
+        # Normalizar phone para comparacao com numeros do sistema
+        phone_normalizado = phone.replace("+", "").replace("-", "").replace(" ", "")
+
+        # Verificar se a mensagem vem do operador/atendente
+        # Somente ATENDENTE_PHONE pode enviar comandos * e +
+        e_operador = from_me or phone_normalizado == ATENDENTE_PHONE
+
         # METODO 1: fromMe=true (operador enviando na conversa do cliente)
-        if from_me:
+        # METODO 2: mensagem vem do numero do atendente diretamente
+        if e_operador:
             logger.info(f"[OPERADOR] ========================================")
-            logger.info(f"[OPERADOR] Mensagem fromMe=True detectada!")
+            logger.info(f"[OPERADOR] Mensagem de operador detectada! (fromMe={from_me}, phone={phone})")
             logger.info(f"[OPERADOR] Comando recebido: '{comando}'")
-            logger.info(f"[OPERADOR] Cliente (phone): {phone}")
             logger.info(f"[OPERADOR] ========================================")
 
-            if comando == "*":
+            if from_me and comando == "*":
+                # fromMe: o phone e o cliente na conversa
                 resultado = await pausar_ia_para_cliente(phone)
                 logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone} - Resultado: {resultado}")
                 add_webhook_debug("COMMAND_EXECUTED", {
@@ -2526,7 +2609,8 @@ async def webhook_whatsapp(request: Request):
                 })
                 return {"status": "ia_paused", "client": phone, "message": "IA pausada com sucesso"}
 
-            elif comando == "+":
+            elif from_me and comando == "+":
+                # fromMe: o phone e o cliente na conversa
                 resultado = await retomar_ia_para_cliente(phone)
                 logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone} - Resultado: {resultado}")
                 add_webhook_debug("COMMAND_EXECUTED", {
@@ -2537,7 +2621,34 @@ async def webhook_whatsapp(request: Request):
                 })
                 return {"status": "ia_resumed", "client": phone, "message": "IA retomada com sucesso"}
 
-            # Ignorar outras mensagens enviadas pelo operador
+            elif not from_me and phone_normalizado == ATENDENTE_PHONE:
+                # Atendente enviando do seu numero pessoal - comandos * e +
+                # Buscar o ultimo cliente atendido para aplicar o comando
+                if comando == "*" or comando == "+":
+                    ultimo_cliente = await db.conversas.find_one(
+                        {"role": "user", "phone": {"$nin": [ATENDENTE_PHONE, NOTIFICACAO_PHONE]}},
+                        sort=[("timestamp", -1)]
+                    )
+                    if ultimo_cliente:
+                        cliente_phone = ultimo_cliente["phone"]
+                        if comando == "*":
+                            resultado = await pausar_ia_para_cliente(cliente_phone)
+                            logger.info(f"[OPERADOR] IA PAUSADA para ultimo cliente {cliente_phone}")
+                            await send_whatsapp_message(phone, f"IA pausada para {cliente_phone}")
+                        else:
+                            resultado = await retomar_ia_para_cliente(cliente_phone)
+                            logger.info(f"[OPERADOR] IA RETOMADA para ultimo cliente {cliente_phone}")
+                            await send_whatsapp_message(phone, f"IA retomada para {cliente_phone}")
+                        return {"status": "command_processed", "client": cliente_phone}
+                    else:
+                        await send_whatsapp_message(phone, "Nenhum cliente recente encontrado.")
+                        return {"status": "no_recent_client"}
+
+                # Ignorar outras mensagens do operador
+                logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando) - ignorando")
+                return {"status": "ignored", "reason": "operator_message"}
+
+            # Ignorar outras mensagens enviadas pelo operador (fromMe)
             logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando)")
             return {"status": "ignored", "reason": "operator_message"}
 
@@ -2878,6 +2989,41 @@ Para urgencias: (contato)"""
             })
 
             reply = None
+
+            # VERIFICAR SE CLIENTE QUER FALAR COM HUMANO (em qualquer etapa)
+            if await detectar_solicitacao_humano(text):
+                logger.info(f"[HUMANO] Cliente {phone} solicitou atendente na etapa {etapa_atual}")
+                await transferir_para_humano(phone, f"Cliente solicitou atendente (etapa: {etapa_atual})")
+                idioma_cliente = estado.get("idioma", "pt")
+                nome_cliente = estado.get("nome", "")
+                if idioma_cliente == "en":
+                    reply = (
+                        f"Of course{', ' + nome_cliente if nome_cliente else ''}! "
+                        f"I'm forwarding you to our team right now.\n\n"
+                        f"A representative will get in touch with you as soon as possible. 😊"
+                    )
+                elif idioma_cliente == "es":
+                    reply = (
+                        f"¡Por supuesto{', ' + nome_cliente if nome_cliente else ''}! "
+                        f"Te estoy transfiriendo a nuestro equipo.\n\n"
+                        f"Un representante se pondrá en contacto contigo lo antes posible. 😊"
+                    )
+                else:
+                    reply = (
+                        f"Claro{', ' + nome_cliente if nome_cliente else ''}! "
+                        f"Estou encaminhando voce para nossa equipe.\n\n"
+                        f"Um atendente entrara em contato o mais breve possivel. 😊"
+                    )
+
+                await send_whatsapp_message(phone, reply)
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": reply,
+                    "role": "assistant",
+                    "timestamp": datetime.now(),
+                    "canal": "WhatsApp"
+                })
+                return JSONResponse({"status": "transferred_to_human", "etapa": etapa_atual})
 
             # Processar baseado na etapa atual
             if etapa_atual == ETAPAS["AGUARDANDO_NOME"]:
