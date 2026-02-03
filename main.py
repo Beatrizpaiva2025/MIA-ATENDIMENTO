@@ -811,6 +811,7 @@ Seja especifico e util. Baseie-se na pergunta do cliente."""
 # (Z-API pode reenviar se o webhook demorar)
 mensagens_processadas = {}
 imagens_processadas = {}  # Cache para dedup de imagens por URL
+pos_pagamento_respondido = {}  # Cache para dedup de respostas pos-pagamento por phone
 DEDUP_TIMEOUT_SEGUNDOS = 60  # Manter messageId por 60 segundos
 
 
@@ -1643,13 +1644,17 @@ async def processar_etapa_pos_pagamento(phone: str, mensagem: str, is_image: boo
     estado = await get_cliente_estado(phone)
     idioma = estado.get("idioma", "pt")
     nome = estado.get("nome", "")
+    # Usar nome condicional para evitar mostrar nomes invalidos
+    nome_display_en = f" {nome}" if nome else ""
+    nome_display_es = f" {nome}" if nome else ""
+    nome_display_pt = f" {nome}" if nome else ""
 
     # Se recebeu imagem após pagamento confirmado
     if is_image:
         # Perguntar se é novo documento ou só complemento/dúvida
         if idioma == "en":
             return (
-                f"Hi {nome}! I received an image. 📷\n\n"
+                f"Hi{nome_display_en}! I received an image. 📷\n\n"
                 f"Your translation order is already being processed! ✅\n\n"
                 f"Is this:\n"
                 f"• A NEW DOCUMENT - for a new quote?\n"
@@ -1658,7 +1663,7 @@ async def processar_etapa_pos_pagamento(phone: str, mensagem: str, is_image: boo
             )
         elif idioma == "es":
             return (
-                f"¡Hola {nome}! Recibí una imagen. 📷\n\n"
+                f"¡Hola{nome_display_es}! Recibí una imagen. 📷\n\n"
                 f"¡Tu pedido de traducción ya está siendo procesado! ✅\n\n"
                 f"¿Es esto:\n"
                 f"• NUEVO DOCUMENTO - para nueva cotización?\n"
@@ -1667,7 +1672,7 @@ async def processar_etapa_pos_pagamento(phone: str, mensagem: str, is_image: boo
             )
         else:
             return (
-                f"Oi {nome}! Recebi uma imagem. 📷\n\n"
+                f"Oi{nome_display_pt}! Recebi uma imagem. 📷\n\n"
                 f"Seu pedido de traducao ja esta sendo processado! ✅\n\n"
                 f"Isso e:\n"
                 f"• NOVO DOCUMENTO - para novo orcamento?\n"
@@ -1805,14 +1810,24 @@ Enviar: "Aproveite para nos seguir no Instagram: https://www.instagram.com/legac
 **CLIENTE CONFUSO OU PEDE MAIS DESCONTO:**
 Transferir educadamente para um atendente humano.
 
+**FLUXO OBRIGATÓRIO DE ATENDIMENTO:**
+1. Cumprimentar e perguntar o nome do cliente
+2. Perguntar qual idioma de tradução (de qual para qual)
+3. Perguntar quantas páginas tem o documento
+4. PEDIR PARA O CLIENTE ENVIAR O DOCUMENTO (foto ou arquivo) - OBRIGATÓRIO antes de dar orçamento
+5. SOMENTE APÓS RECEBER O DOCUMENTO, apresentar o orçamento com base no número de páginas e idioma
+6. Informar formas de pagamento (VENMO/ZELLE)
+
 **REGRAS:**
-- Sempre peça confirmação do número de páginas antes do orçamento
+- NUNCA dê orçamento ou valor ANTES de receber o documento do cliente
+- Sempre peça para o cliente enviar o documento primeiro, depois confirme o orçamento
 - Todas as traduções são certificadas e aceitas por USCIS, universidades, escolas, bancos
 - Seja educada, profissional e use um toque humano nas respostas
 - NUNCA pergunte "tem mais paginas?", "pode mandar mais?" ou "so isso?" - apenas confirme o total recebido
 - NUNCA diga "estou a disposicao se tiver alguma duvida" ou frases genéricas de encerramento
 - NUNCA repita o link do portal mais de uma vez na mesma conversa
-- Apos o cliente confirmar o total de paginas, siga direto para o proximo passo sem insistir
+- Apos o cliente confirmar o total de paginas, peça para enviar o documento
+- NUNCA diga o preço antes de receber o documento. Primeiro peça o documento, depois dê o orçamento
 """
 
 async def get_bot_training() -> str:
@@ -3171,6 +3186,15 @@ Para urgencias: (contato)"""
             # ============================================
             elif etapa_atual == ETAPAS["PAGAMENTO_RECEBIDO"]:
                 logger.info(f"[ETAPA] {phone}: Recebeu imagem na etapa PAGAMENTO_RECEBIDO - perguntando se e novo documento")
+
+                # DEDUP: Evitar responder multiplas vezes se cliente enviar varias imagens seguidas
+                agora = datetime.now()
+                ultima_resposta = pos_pagamento_respondido.get(phone)
+                if ultima_resposta and (agora - ultima_resposta).total_seconds() < 30:
+                    logger.info(f"[DEDUP-POS-PAG] {phone}: Ja respondeu a imagem pos-pagamento recentemente, ignorando")
+                    return JSONResponse({"status": "ignored", "reason": "post_payment_dedup"})
+
+                pos_pagamento_respondido[phone] = agora
 
                 reply = await processar_etapa_pos_pagamento(phone, "", is_image=True, image_bytes=image_bytes)
 
