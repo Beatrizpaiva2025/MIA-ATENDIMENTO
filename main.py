@@ -2782,23 +2782,6 @@ async def webhook_whatsapp(request: Request):
         if not bot_status["enabled"] or modo_humano:
             logger.info(f"[WEBHOOK] Bot {'DESLIGADO' if not bot_status['enabled'] else 'em MODO HUMANO para ' + phone} - Mensagem nao sera processada pela IA")
 
-            # IMPORTANTE: Verificar comandos * e + mesmo em modo humano
-            # Isso funciona como fallback caso o fromMe nao tenha sido detectado corretamente
-            if modo_humano and message_text == "+":
-                logger.info(f"[FALLBACK] Cliente {phone} enviou + em modo humano - retomando IA")
-                resultado = await retomar_ia_para_cliente(phone)
-                logger.info(f"[FALLBACK] IA RETOMADA para {phone} via comando + do cliente - Resultado: {resultado}")
-                try:
-                    await send_whatsapp_message(ATENDENTE_PHONE, f"IA retomada para {phone} (cliente digitou +)")
-                except Exception:
-                    pass
-                return {"status": "ia_resumed", "client": phone, "source": "client_fallback"}
-
-            if modo_humano and message_text == "*":
-                # Cliente ja esta em modo humano e digitou * de novo - apenas confirmar
-                logger.info(f"[WEBHOOK] Cliente {phone} ja esta em modo humano, * ignorado")
-                return {"status": "already_human", "client": phone}
-
             await db.conversas.insert_one({
                 "phone": phone,
                 "message": message_text or "[MENSAGEM]",
@@ -2814,15 +2797,8 @@ async def webhook_whatsapp(request: Request):
         # ============================================
         # PROCESSAR COMANDOS ESPECIAIS DO CLIENTE
         # ============================================
-        # Comando: * (Transferir para humano)
-        if message_text == "*":
-            await transferir_para_humano(phone, "Cliente digitou *")
-            return {"status": "transferred_to_human"}
-
-        # Comando: + (Retomar IA - fallback para quando fromMe nao e detectado)
-        if message_text == "+":
-            logger.info(f"[CLIENTE] Comando + recebido de {phone} fora do modo humano - IA ja ativa, ignorando")
-            return {"status": "ia_already_active", "client": phone}
+        # Nota: Comandos * e + sao EXCLUSIVOS do operador (ATENDENTE_PHONE)
+        # Clientes NAO usam esses sinais
 
         # Comando: ## (Desligar IA para este usuario)
         if message_text == "##":
