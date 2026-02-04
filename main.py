@@ -2515,11 +2515,17 @@ async def webhook_whatsapp(request: Request):
         # EXTRAIR DADOS BASICOS
         # ============================================
         phone = data.get("phone", "")
-        from_me = data.get("fromMe", False)
+        from_me_raw = data.get("fromMe", False)
         message_id = data.get("messageId", "")
 
+        # Converter fromMe para boolean robusto (Z-API pode enviar string "true"/"false")
+        if isinstance(from_me_raw, str):
+            from_me = from_me_raw.lower() == "true"
+        else:
+            from_me = bool(from_me_raw)
+
         # LOG DETALHADO PARA DEBUG DE COMANDOS
-        logger.info(f"[DEBUG] fromMe={from_me} (type={type(from_me).__name__})")
+        logger.info(f"[DEBUG] fromMe={from_me} (raw={from_me_raw}, type={type(from_me_raw).__name__})")
 
         # ============================================
         # VERIFICAR MENSAGEM DUPLICADA
@@ -2622,6 +2628,17 @@ async def webhook_whatsapp(request: Request):
                     "phone": phone,
                     "resultado": resultado
                 })
+                # Registrar ultimo cliente que o operador interagiu
+                await db.sistema.update_one(
+                    {"key": "ultimo_cliente_operador"},
+                    {"$set": {"phone": phone, "updated_at": datetime.now()}},
+                    upsert=True
+                )
+                # Notificar operador que o comando foi processado
+                try:
+                    await send_whatsapp_message(ATENDENTE_PHONE, f"IA pausada para {phone}")
+                except Exception:
+                    pass
                 return {"status": "ia_paused", "client": phone, "message": "IA pausada com sucesso"}
 
             elif from_me and comando == "+":
@@ -2634,25 +2651,77 @@ async def webhook_whatsapp(request: Request):
                     "phone": phone,
                     "resultado": resultado
                 })
+                # Registrar ultimo cliente que o operador interagiu
+                await db.sistema.update_one(
+                    {"key": "ultimo_cliente_operador"},
+                    {"$set": {"phone": phone, "updated_at": datetime.now()}},
+                    upsert=True
+                )
+                # Notificar operador que o comando foi processado
+                try:
+                    await send_whatsapp_message(ATENDENTE_PHONE, f"IA retomada para {phone}")
+                except Exception:
+                    pass
                 return {"status": "ia_resumed", "client": phone, "message": "IA retomada com sucesso"}
+
+            elif from_me and not e_comando_operador:
+                # Operador enviou mensagem normal na conversa do cliente (nao e comando)
+                # Registrar ultimo cliente para referencia do Metodo 2
+                await db.sistema.update_one(
+                    {"key": "ultimo_cliente_operador"},
+                    {"$set": {"phone": phone, "updated_at": datetime.now()}},
+                    upsert=True
+                )
+                logger.info(f"[OPERADOR] Mensagem normal do operador para {phone} - registrando como ultimo cliente")
+                return {"status": "ignored", "reason": "operator_message"}
 
             elif not from_me and phone_normalizado == ATENDENTE_PHONE:
                 # Atendente enviando do seu numero pessoal - comandos * e +
-                # Buscar o ultimo cliente atendido para aplicar o comando
                 if comando == "*" or comando == "+":
-                    ultimo_cliente = await db.conversas.find_one(
-                        {"role": "user", "phone": {"$nin": [ATENDENTE_PHONE, NOTIFICACAO_PHONE]}},
-                        sort=[("timestamp", -1)]
-                    )
-                    if ultimo_cliente:
-                        cliente_phone = ultimo_cliente["phone"]
+                    # ESTRATEGIA MELHORADA: Buscar o cliente correto
+                    # 1. Primeiro tenta o ultimo cliente que o operador interagiu via fromMe
+                    # 2. Para +: busca o ultimo cliente em modo humano
+                    # 3. Fallback: ultimo cliente que enviou mensagem
+                    cliente_phone = None
+
+                    if comando == "+":
+                        # Para retomar: buscar ultimo cliente em modo humano
+                        ultimo_humano = await db.cliente_estados.find_one(
+                            {
+                                "mode": "human",
+                                "phone": {"$nin": [ATENDENTE_PHONE, NOTIFICACAO_PHONE]}
+                            },
+                            sort=[("updated_at", -1)]
+                        )
+                        if ultimo_humano:
+                            cliente_phone = ultimo_humano["phone"]
+                            logger.info(f"[OPERADOR] + do telefone: encontrou cliente em modo humano: {cliente_phone}")
+
+                    if not cliente_phone:
+                        # Tentar ultimo cliente registrado via interacao do operador
+                        ultimo_operador = await db.sistema.find_one({"key": "ultimo_cliente_operador"})
+                        if ultimo_operador:
+                            cliente_phone = ultimo_operador.get("phone")
+                            logger.info(f"[OPERADOR] Usando ultimo cliente da interacao: {cliente_phone}")
+
+                    if not cliente_phone:
+                        # Fallback: ultimo cliente que enviou mensagem
+                        ultimo_cliente = await db.conversas.find_one(
+                            {"role": "user", "phone": {"$nin": [ATENDENTE_PHONE, NOTIFICACAO_PHONE]}},
+                            sort=[("timestamp", -1)]
+                        )
+                        if ultimo_cliente:
+                            cliente_phone = ultimo_cliente["phone"]
+                            logger.info(f"[OPERADOR] Fallback: ultimo cliente por mensagem: {cliente_phone}")
+
+                    if cliente_phone:
                         if comando == "*":
                             resultado = await pausar_ia_para_cliente(cliente_phone)
-                            logger.info(f"[OPERADOR] IA PAUSADA para ultimo cliente {cliente_phone}")
+                            logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone}")
                             await send_whatsapp_message(phone, f"IA pausada para {cliente_phone}")
                         else:
                             resultado = await retomar_ia_para_cliente(cliente_phone)
-                            logger.info(f"[OPERADOR] IA RETOMADA para ultimo cliente {cliente_phone}")
+                            logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone}")
                             await send_whatsapp_message(phone, f"IA retomada para {cliente_phone}")
                         return {"status": "command_processed", "client": cliente_phone}
                     else:
@@ -2713,6 +2782,23 @@ async def webhook_whatsapp(request: Request):
         if not bot_status["enabled"] or modo_humano:
             logger.info(f"[WEBHOOK] Bot {'DESLIGADO' if not bot_status['enabled'] else 'em MODO HUMANO para ' + phone} - Mensagem nao sera processada pela IA")
 
+            # IMPORTANTE: Verificar comandos * e + mesmo em modo humano
+            # Isso funciona como fallback caso o fromMe nao tenha sido detectado corretamente
+            if modo_humano and message_text == "+":
+                logger.info(f"[FALLBACK] Cliente {phone} enviou + em modo humano - retomando IA")
+                resultado = await retomar_ia_para_cliente(phone)
+                logger.info(f"[FALLBACK] IA RETOMADA para {phone} via comando + do cliente - Resultado: {resultado}")
+                try:
+                    await send_whatsapp_message(ATENDENTE_PHONE, f"IA retomada para {phone} (cliente digitou +)")
+                except Exception:
+                    pass
+                return {"status": "ia_resumed", "client": phone, "source": "client_fallback"}
+
+            if modo_humano and message_text == "*":
+                # Cliente ja esta em modo humano e digitou * de novo - apenas confirmar
+                logger.info(f"[WEBHOOK] Cliente {phone} ja esta em modo humano, * ignorado")
+                return {"status": "already_human", "client": phone}
+
             await db.conversas.insert_one({
                 "phone": phone,
                 "message": message_text or "[MENSAGEM]",
@@ -2732,6 +2818,11 @@ async def webhook_whatsapp(request: Request):
         if message_text == "*":
             await transferir_para_humano(phone, "Cliente digitou *")
             return {"status": "transferred_to_human"}
+
+        # Comando: + (Retomar IA - fallback para quando fromMe nao e detectado)
+        if message_text == "+":
+            logger.info(f"[CLIENTE] Comando + recebido de {phone} fora do modo humano - IA ja ativa, ignorando")
+            return {"status": "ia_already_active", "client": phone}
 
         # Comando: ## (Desligar IA para este usuario)
         if message_text == "##":
