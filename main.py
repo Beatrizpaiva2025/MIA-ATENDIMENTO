@@ -257,6 +257,19 @@ def normalizar_telefone_eua(numero: str) -> str:
         return "1" + numero
     return numero
 
+def is_operator_phone(phone: str) -> bool:
+    """
+    Verifica se o telefone pertence ao operador/atendente.
+    Compara os ultimos 10 digitos para evitar problemas com codigo de pais.
+    """
+    digits = ''.join(c for c in phone if c.isdigit())
+    atendente_digits = ''.join(c for c in ATENDENTE_PHONE if c.isdigit())
+
+    # Comparar ultimos 10 digitos (numero local EUA sem codigo de pais)
+    if len(digits) >= 10 and len(atendente_digits) >= 10:
+        return digits[-10:] == atendente_digits[-10:]
+    return digits == atendente_digits
+
 ATENDENTE_PHONE = normalizar_telefone_eua(_atendente_raw)
 NOTIFICACAO_PHONE = normalizar_telefone_eua(_notificacao_raw)
 
@@ -2582,132 +2595,97 @@ async def webhook_whatsapp(request: Request):
         })
 
         # ============================================
-        # PROCESSAR COMANDOS DO OPERADOR
-        # Metodo 1: fromMe=true (mensagem enviada pelo numero conectado)
-        # Metodo 2: mensagem vem do numero do operador diretamente
+        # PROCESSAR COMANDOS DO OPERADOR (* e +)
+        # Metodo 1: fromMe=true (operador no WhatsApp conectado ao Z-API)
+        # Metodo 2: mensagem do numero do operador (18573167770)
+        # Usa is_operator_phone() para comparacao robusta de telefone
         # ============================================
 
-        # Verificar se e comando do operador (fromMe ou numero do operador)
         comando = message_text.strip()
         e_comando_operador = comando in ["*", "+"]
+        e_telefone_operador = is_operator_phone(phone)
 
-        # Log detalhado para debug
-        logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}', e_comando={e_comando_operador}")
+        # Log detalhado SEMPRE para debug de comandos
+        logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}', e_comando={e_comando_operador}, e_telefone_operador={e_telefone_operador}")
 
-        # Registrar comandos no debug log
         if e_comando_operador:
             add_webhook_debug("COMMAND_DETECTED", {
                 "phone": phone,
                 "fromMe": from_me,
                 "comando": comando,
-                "will_process": from_me  # So processa se fromMe=true
+                "e_telefone_operador": e_telefone_operador
             })
 
-        # Normalizar phone para comparacao com numeros do sistema
-        phone_normalizado = phone.replace("+", "").replace("-", "").replace(" ", "")
+        # Detectar se eh operador: fromMe OU telefone do operador
+        e_operador = from_me or e_telefone_operador
 
-        # Verificar se a mensagem vem do operador/atendente
-        # Somente ATENDENTE_PHONE pode enviar comandos * e +
-        e_operador = from_me or phone_normalizado == ATENDENTE_PHONE
-
-        # METODO 1: fromMe=true (operador enviando na conversa do cliente)
-        # METODO 2: mensagem vem do numero do atendente diretamente
         if e_operador:
             logger.info(f"[OPERADOR] ========================================")
-            logger.info(f"[OPERADOR] Mensagem de operador detectada! (fromMe={from_me}, phone={phone})")
-            logger.info(f"[OPERADOR] Comando recebido: '{comando}'")
+            logger.info(f"[OPERADOR] Mensagem de operador detectada!")
+            logger.info(f"[OPERADOR] fromMe={from_me}, phone={phone}, e_telefone_operador={e_telefone_operador}")
+            logger.info(f"[OPERADOR] Texto: '{comando}'")
             logger.info(f"[OPERADOR] ========================================")
 
-            if from_me and comando == "*":
-                # fromMe: o phone e o cliente na conversa
-                resultado = await pausar_ia_para_cliente(phone)
-                logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone} - Resultado: {resultado}")
-                add_webhook_debug("COMMAND_EXECUTED", {
-                    "comando": "*",
-                    "acao": "PAUSAR_IA",
-                    "phone": phone,
-                    "resultado": resultado
-                })
-                # Registrar ultimo cliente que o operador interagiu
-                await db.sistema.update_one(
-                    {"key": "ultimo_cliente_operador"},
-                    {"$set": {"phone": phone, "updated_at": datetime.now()}},
-                    upsert=True
-                )
-                # Notificar operador que o comando foi processado
-                try:
-                    await send_whatsapp_message(ATENDENTE_PHONE, f"IA pausada para {phone}")
-                except Exception:
-                    pass
-                return {"status": "ia_paused", "client": phone, "message": "IA pausada com sucesso"}
+            if e_comando_operador:
+                # METODO 1: fromMe=true E phone NAO eh o operador → phone eh do CLIENTE
+                if from_me and not e_telefone_operador:
+                    cliente_phone = phone
+                    if comando == "*":
+                        resultado = await pausar_ia_para_cliente(cliente_phone)
+                        logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone} (via fromMe)")
+                    else:
+                        resultado = await retomar_ia_para_cliente(cliente_phone)
+                        logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via fromMe)")
+                    add_webhook_debug("COMMAND_EXECUTED", {
+                        "comando": comando,
+                        "metodo": "fromMe",
+                        "cliente": cliente_phone,
+                        "resultado": resultado
+                    })
+                    # Registrar ultimo cliente que o operador interagiu
+                    await db.sistema.update_one(
+                        {"key": "ultimo_cliente_operador"},
+                        {"$set": {"phone": cliente_phone, "updated_at": datetime.now()}},
+                        upsert=True
+                    )
+                    # Notificar operador
+                    try:
+                        acao = "pausada" if comando == "*" else "retomada"
+                        await send_whatsapp_message(ATENDENTE_PHONE, f"✅ IA {acao} para {cliente_phone}")
+                    except Exception:
+                        pass
+                    return {"status": "command_processed", "client": cliente_phone}
 
-            elif from_me and comando == "+":
-                # fromMe: o phone e o cliente na conversa
-                resultado = await retomar_ia_para_cliente(phone)
-                logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone} - Resultado: {resultado}")
-                add_webhook_debug("COMMAND_EXECUTED", {
-                    "comando": "+",
-                    "acao": "RETOMAR_IA",
-                    "phone": phone,
-                    "resultado": resultado
-                })
-                # Registrar ultimo cliente que o operador interagiu
-                await db.sistema.update_one(
-                    {"key": "ultimo_cliente_operador"},
-                    {"$set": {"phone": phone, "updated_at": datetime.now()}},
-                    upsert=True
-                )
-                # Notificar operador que o comando foi processado
-                try:
-                    await send_whatsapp_message(ATENDENTE_PHONE, f"IA retomada para {phone}")
-                except Exception:
-                    pass
-                return {"status": "ia_resumed", "client": phone, "message": "IA retomada com sucesso"}
-
-            elif from_me and not e_comando_operador:
-                # Operador enviou mensagem normal na conversa do cliente (nao e comando)
-                # Registrar ultimo cliente para referencia do Metodo 2
-                await db.sistema.update_one(
-                    {"key": "ultimo_cliente_operador"},
-                    {"$set": {"phone": phone, "updated_at": datetime.now()}},
-                    upsert=True
-                )
-                logger.info(f"[OPERADOR] Mensagem normal do operador para {phone} - registrando como ultimo cliente")
-                return {"status": "ignored", "reason": "operator_message"}
-
-            elif not from_me and phone_normalizado == ATENDENTE_PHONE:
-                # Atendente enviando do seu numero pessoal - comandos * e +
-                if comando == "*" or comando == "+":
-                    # ESTRATEGIA MELHORADA: Buscar o cliente correto
-                    # 1. Primeiro tenta o ultimo cliente que o operador interagiu via fromMe
-                    # 2. Para +: busca o ultimo cliente em modo humano
-                    # 3. Fallback: ultimo cliente que enviou mensagem
+                # METODO 2: Operador enviou do seu numero pessoal (ou fromMe com phone=operador)
+                # Buscar o cliente correto usando estrategia em camadas
+                else:
+                    logger.info(f"[OPERADOR] Buscando cliente para comando '{comando}' (via telefone operador)...")
                     cliente_phone = None
 
+                    # Para +: primeiro buscar cliente em modo humano
                     if comando == "+":
-                        # Para retomar: buscar ultimo cliente em modo humano
                         ultimo_humano = await db.cliente_estados.find_one(
                             {
                                 "mode": "human",
-                                "phone": {"$nin": [ATENDENTE_PHONE, NOTIFICACAO_PHONE]}
+                                "phone": {"$ne": phone}
                             },
                             sort=[("updated_at", -1)]
                         )
                         if ultimo_humano:
                             cliente_phone = ultimo_humano["phone"]
-                            logger.info(f"[OPERADOR] + do telefone: encontrou cliente em modo humano: {cliente_phone}")
+                            logger.info(f"[OPERADOR] + encontrou cliente em modo humano: {cliente_phone}")
 
+                    # Tentar ultimo cliente registrado via interacao do operador
                     if not cliente_phone:
-                        # Tentar ultimo cliente registrado via interacao do operador
                         ultimo_operador = await db.sistema.find_one({"key": "ultimo_cliente_operador"})
                         if ultimo_operador:
                             cliente_phone = ultimo_operador.get("phone")
                             logger.info(f"[OPERADOR] Usando ultimo cliente da interacao: {cliente_phone}")
 
+                    # Fallback: ultimo cliente que enviou mensagem
                     if not cliente_phone:
-                        # Fallback: ultimo cliente que enviou mensagem
                         ultimo_cliente = await db.conversas.find_one(
-                            {"role": "user", "phone": {"$nin": [ATENDENTE_PHONE, NOTIFICACAO_PHONE]}},
+                            {"role": "user", "phone": {"$ne": phone}},
                             sort=[("timestamp", -1)]
                         )
                         if ultimo_cliente:
@@ -2717,23 +2695,35 @@ async def webhook_whatsapp(request: Request):
                     if cliente_phone:
                         if comando == "*":
                             resultado = await pausar_ia_para_cliente(cliente_phone)
-                            logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone}")
-                            await send_whatsapp_message(phone, f"IA pausada para {cliente_phone}")
+                            logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone} (via telefone operador)")
+                            await send_whatsapp_message(phone, f"✅ IA pausada para {cliente_phone}")
                         else:
                             resultado = await retomar_ia_para_cliente(cliente_phone)
-                            logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone}")
-                            await send_whatsapp_message(phone, f"IA retomada para {cliente_phone}")
+                            logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via telefone operador)")
+                            await send_whatsapp_message(phone, f"✅ IA retomada para {cliente_phone}")
+                        add_webhook_debug("COMMAND_EXECUTED", {
+                            "comando": comando,
+                            "metodo": "telefone_operador",
+                            "cliente": cliente_phone,
+                            "resultado": resultado
+                        })
                         return {"status": "command_processed", "client": cliente_phone}
                     else:
-                        await send_whatsapp_message(phone, "Nenhum cliente recente encontrado.")
+                        logger.warning(f"[OPERADOR] Nenhum cliente encontrado no banco!")
+                        await send_whatsapp_message(phone, "⚠️ Nenhum cliente recente encontrado.")
                         return {"status": "no_recent_client"}
 
-                # Ignorar outras mensagens do operador
-                logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando) - ignorando")
-                return {"status": "ignored", "reason": "operator_message"}
-
-            # Ignorar outras mensagens enviadas pelo operador (fromMe)
-            logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando)")
+            # Mensagem normal do operador (nao eh comando)
+            # Registrar ultimo cliente para referencia se fromMe
+            if from_me and not e_telefone_operador:
+                await db.sistema.update_one(
+                    {"key": "ultimo_cliente_operador"},
+                    {"$set": {"phone": phone, "updated_at": datetime.now()}},
+                    upsert=True
+                )
+                logger.info(f"[OPERADOR] Mensagem normal para {phone} - registrando como ultimo cliente")
+            else:
+                logger.info(f"[OPERADOR] Mensagem normal do operador - ignorando")
             return {"status": "ignored", "reason": "operator_message"}
 
         # ============================================
