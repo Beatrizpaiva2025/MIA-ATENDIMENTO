@@ -310,7 +310,20 @@ PALAVRAS_CONFIRMACAO = [
     "seguimos com a traducao", "vamos fazer", "pode seguir", "confirmar",
     "quero fazer", "vou fazer", "sim, pode", "sim pode", "fechado", "fechar",
     "vamos fechar", "aceito", "aceitar", "concordo", "let's do it", "let's proceed",
-    "yes", "yes please", "go ahead", "proceed", "confirm", "i confirm"
+    "yes", "yes please", "go ahead", "proceed", "confirm", "i confirm",
+    # Confirmacoes coloquiais em portugues
+    "podemo", "podemos", "vamo", "vamos", "bora", "claro", "claro que sim",
+    "com certeza", "pode sim", "sim", "isso", "isso mesmo", "certo", "perfeito",
+    "beleza", "blz", "ok", "okay", "tudo bem", "ta bom", "tá bom", "pode ser",
+    "prosseguir", "continuar", "continuidade", "dar continuidade",
+    "fazendo o pagamento", "vou pagar", "vou enviar", "estou fazendo",
+    # Confirmacoes em espanhol
+    "si", "sí", "dale", "claro que sí", "por supuesto", "de acuerdo",
+    "perfecto", "listo", "va", "vamos", "hagámoslo", "adelante",
+    # Confirmacoes em ingles
+    "sure", "absolutely", "of course", "sounds good", "let's go",
+    "i'll pay", "i will pay", "making the payment", "sending payment",
+    "paying now", "i agree", "deal", "perfect", "great", "alright"
 ]
 
 # Palavras para detectar comprovante de pagamento
@@ -1132,14 +1145,49 @@ IMPORTANTE:
 
     orcamento = response.choices[0].message.content
 
-    # Extrair valor do orcamento (buscar padrao $XX.XX ou R$XX,XX)
+    # Extrair valor TOTAL do orcamento (buscar padrao $XX.XX ou R$XX,XX)
+    # Prioridade: valor perto de "total" > maior valor encontrado > primeiro valor
     import re
-    valor_match = re.search(r'[\$R]\$?\s*(\d+[.,]?\d*)', orcamento)
-    valor_str = valor_match.group(0) if valor_match else "0"
+
+    # Tentar encontrar valor perto de palavras "total" / "totalizando"
+    valor_total_match = re.search(
+        r'(?:total(?:izando)?|total\s*(?:value|price|cost)?)\s*[:\s]*[\$R]\$?\s*(\d+[.,]?\d*)',
+        orcamento, re.IGNORECASE
+    )
+    if not valor_total_match:
+        # Tentar formato inverso: $XX.XX ... total
+        valor_total_match = re.search(
+            r'[\$R]\$?\s*(\d+[.,]?\d*)\s*(?:\(?\s*total\s*\)?)',
+            orcamento, re.IGNORECASE
+        )
+
+    if valor_total_match:
+        valor_str = valor_total_match.group(0).strip()
+        # Limpar prefixo de texto antes do $
+        clean_match = re.search(r'[\$R]\$?\s*\d+[.,]?\d*', valor_str)
+        if clean_match:
+            valor_str = clean_match.group(0)
+    else:
+        # Se nao achou "total", pegar o MAIOR valor (provavelmente o total)
+        todos_valores = re.findall(r'[\$R]\$?\s*(\d+[.,]?\d*)', orcamento)
+        if todos_valores:
+            maior_valor = 0.0
+            maior_str = ""
+            for v in todos_valores:
+                try:
+                    num = float(v.replace(',', '.'))
+                    if num > maior_valor:
+                        maior_valor = num
+                        maior_str = v
+                except:
+                    pass
+            valor_str = f"${maior_str}" if maior_str else "0"
+        else:
+            valor_str = "0"
 
     # Converter valor para float
     try:
-        valor_num = float(valor_str.replace('$', '').replace('R$', '').replace(',', '.').strip())
+        valor_num = float(re.sub(r'[^\d.,]', '', valor_str).replace(',', '.').strip())
     except:
         valor_num = 0.0
 
@@ -1445,8 +1493,22 @@ async def processar_etapa_confirmacao(phone: str, mensagem: str) -> str:
     nome = estado.get("nome", "")
     valor = estado.get("valor_orcamento", "")
 
+    # Verificar se valor eh zero ou invalido de forma robusta
+    valor_invalido = False
+    if not valor:
+        valor_invalido = True
+    else:
+        # Limpar valor e verificar se eh zero
+        try:
+            import re
+            valor_numerico = float(re.sub(r'[^\d.,]', '', str(valor)).replace(',', '.') or '0')
+            if valor_numerico <= 0:
+                valor_invalido = True
+        except (ValueError, TypeError):
+            valor_invalido = True
+
     # Se o valor estiver vazio ou zero, recalcular baseado no documento
-    if not valor or valor in ["0", "$0", "0.0", ""]:
+    if valor_invalido:
         doc_info = estado.get("documento_info", {})
         total_pages = doc_info.get("total_pages", 1)
         if not total_pages or total_pages < 1:
@@ -1455,7 +1517,7 @@ async def processar_etapa_confirmacao(phone: str, mensagem: str) -> str:
         valor_calculado = total_pages * 24.99
         valor = f"${valor_calculado:.2f}"
         await set_cliente_estado(phone, valor_orcamento=valor)
-        logger.warning(f"[ORCAMENTO] Valor era 0 - recalculado para {valor} ({total_pages} paginas)")
+        logger.warning(f"[ORCAMENTO] Valor era invalido - recalculado para {valor} ({total_pages} paginas)")
 
     if detectar_confirmacao_prosseguimento(mensagem):
         # Cliente confirmou - mudar para aguardando pagamento
@@ -1511,6 +1573,21 @@ async def processar_etapa_pagamento(phone: str, mensagem: str, is_image: bool = 
     idioma = estado.get("idioma", "pt")
     nome = estado.get("nome", "")
     valor = estado.get("valor_orcamento", "")
+
+    # Verificar se valor eh zero ou invalido - recalcular se necessario
+    import re as re_pag
+    try:
+        val_check = float(re_pag.sub(r'[^\d.,]', '', str(valor)).replace(',', '.') or '0')
+    except:
+        val_check = 0.0
+    if val_check <= 0:
+        doc_info = estado.get("documento_info", {})
+        total_pages = doc_info.get("total_pages", 1) if doc_info else 1
+        if not total_pages or total_pages < 1:
+            total_pages = 1
+        valor = f"${total_pages * 24.99:.2f}"
+        await set_cliente_estado(phone, valor_orcamento=valor)
+        logger.warning(f"[PAGAMENTO] Valor era invalido - recalculado para {valor}")
 
     # Se recebeu imagem ou PDF, tratar como comprovante
     if is_image and image_bytes:
@@ -2675,6 +2752,26 @@ async def webhook_whatsapp(request: Request):
                             cliente_phone = ultimo_humano["phone"]
                             logger.info(f"[OPERADOR] + encontrou cliente em modo humano: {cliente_phone}")
 
+                    # Para *: buscar cliente mais recente em modo IA (nao pausado)
+                    if comando == "*" and not cliente_phone:
+                        # Buscar o cliente que enviou mensagem mais recentemente e esta em modo IA
+                        clientes_ativos = await db.conversas.find(
+                            {"role": "user", "phone": {"$ne": phone}}
+                        ).sort("timestamp", -1).limit(10).to_list(length=10)
+
+                        phones_vistos = set()
+                        for msg in clientes_ativos:
+                            msg_phone = msg.get("phone", "")
+                            if msg_phone and msg_phone not in phones_vistos and not is_operator_phone(msg_phone):
+                                phones_vistos.add(msg_phone)
+                                # Verificar se este cliente esta em modo IA (nao esta pausado)
+                                estado_cli = await db.cliente_estados.find_one({"phone": msg_phone})
+                                modo_cli = estado_cli.get("mode", "ia") if estado_cli else "ia"
+                                if modo_cli == "ia":
+                                    cliente_phone = msg_phone
+                                    logger.info(f"[OPERADOR] * encontrou cliente ativo em modo IA: {cliente_phone}")
+                                    break
+
                     # Tentar ultimo cliente registrado via interacao do operador
                     if not cliente_phone:
                         ultimo_operador = await db.sistema.find_one({"key": "ultimo_cliente_operador"})
@@ -2701,6 +2798,12 @@ async def webhook_whatsapp(request: Request):
                             resultado = await retomar_ia_para_cliente(cliente_phone)
                             logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via telefone operador)")
                             await send_whatsapp_message(phone, f"✅ IA retomada para {cliente_phone}")
+                        # Atualizar ultimo_cliente_operador para manter tracking correto
+                        await db.sistema.update_one(
+                            {"key": "ultimo_cliente_operador"},
+                            {"$set": {"phone": cliente_phone, "updated_at": datetime.now()}},
+                            upsert=True
+                        )
                         add_webhook_debug("COMMAND_EXECUTED", {
                             "comando": comando,
                             "metodo": "telefone_operador",
@@ -3139,8 +3242,37 @@ Para urgencias: (contato)"""
                 if conversao_detectada:
                     logger.info(f"CONVERSAO REGISTRADA: {phone}")
 
+                # Injetar contexto do orcamento quando estiver em etapas de pagamento
+                # para evitar que a IA gere mensagens com valor "0"
+                extra_context = ""
+                if etapa_atual in [ETAPAS["AGUARDANDO_CONFIRMACAO"], ETAPAS["AGUARDANDO_PAGAMENTO"]]:
+                    valor_ctx = estado.get("valor_orcamento", "")
+                    nome_ctx = estado.get("nome", "")
+                    doc_ctx = estado.get("documento_info", {})
+                    pages_ctx = doc_ctx.get("total_pages", 1) if doc_ctx else 1
+
+                    # Se valor esta zerado, recalcular
+                    import re as re_ctx
+                    try:
+                        val_num = float(re_ctx.sub(r'[^\d.,]', '', str(valor_ctx)).replace(',', '.') or '0')
+                    except:
+                        val_num = 0.0
+                    if val_num <= 0:
+                        val_num = pages_ctx * 24.99
+                        valor_ctx = f"${val_num:.2f}"
+                        await set_cliente_estado(phone, valor_orcamento=valor_ctx)
+
+                    extra_context = (
+                        f"\n\n[CONTEXTO INTERNO - NAO MOSTRAR AO CLIENTE: "
+                        f"Cliente {nome_ctx}, orcamento de {valor_ctx} para {pages_ctx} pagina(s). "
+                        f"Etapa atual: {etapa_atual}. "
+                        f"Use o valor {valor_ctx} nas respostas sobre pagamento. "
+                        f"NUNCA use valor 0 ou vazio. "
+                        f"Formas de pagamento: VENMO @legacytranslations / ZELLE Contact@legacytranslations.com (LEGACY TRANSLATIONS INC)]"
+                    )
+
                 # Processar com IA
-                reply = await process_message_with_ai(phone, text)
+                reply = await process_message_with_ai(phone, text + extra_context if extra_context else text)
 
                 # Analisar e sugerir conhecimento (Hybrid Learning)
                 await analisar_e_sugerir_conhecimento(phone, text, reply)
