@@ -257,6 +257,19 @@ def normalizar_telefone_eua(numero: str) -> str:
         return "1" + numero
     return numero
 
+def is_operator_phone(phone: str) -> bool:
+    """
+    Verifica se o telefone pertence ao operador/atendente.
+    Compara os ultimos 10 digitos para evitar problemas com codigo de pais.
+    """
+    digits = ''.join(c for c in phone if c.isdigit())
+    atendente_digits = ''.join(c for c in ATENDENTE_PHONE if c.isdigit())
+
+    # Comparar ultimos 10 digitos (numero local EUA sem codigo de pais)
+    if len(digits) >= 10 and len(atendente_digits) >= 10:
+        return digits[-10:] == atendente_digits[-10:]
+    return digits == atendente_digits
+
 ATENDENTE_PHONE = normalizar_telefone_eua(_atendente_raw)
 NOTIFICACAO_PHONE = normalizar_telefone_eua(_notificacao_raw)
 
@@ -2515,11 +2528,13 @@ async def webhook_whatsapp(request: Request):
         # EXTRAIR DADOS BASICOS
         # ============================================
         phone = data.get("phone", "")
-        from_me = data.get("fromMe", False)
+        from_me_raw = data.get("fromMe", False)
+        # Z-API pode enviar fromMe como string "true"/"false" em vez de boolean
+        from_me = from_me_raw if isinstance(from_me_raw, bool) else str(from_me_raw).lower() == "true"
         message_id = data.get("messageId", "")
 
         # LOG DETALHADO PARA DEBUG DE COMANDOS
-        logger.info(f"[DEBUG] fromMe={from_me} (type={type(from_me).__name__})")
+        logger.info(f"[DEBUG] fromMe={from_me} (raw={from_me_raw}, type={type(from_me_raw).__name__})")
 
         # ============================================
         # VERIFICAR MENSAGEM DUPLICADA
@@ -2576,95 +2591,96 @@ async def webhook_whatsapp(request: Request):
         })
 
         # ============================================
-        # PROCESSAR COMANDOS DO OPERADOR
-        # Metodo 1: fromMe=true (mensagem enviada pelo numero conectado)
-        # Metodo 2: mensagem vem do numero do operador diretamente
+        # PROCESSAR COMANDOS DO OPERADOR (* e +)
+        # Metodo 1: fromMe=true (operador no WhatsApp conectado ao Z-API)
+        # Metodo 2: mensagem do numero do operador (18573167770)
+        # Usa is_operator_phone() para comparacao robusta de telefone
         # ============================================
 
-        # Verificar se e comando do operador (fromMe ou numero do operador)
         comando = message_text.strip()
         e_comando_operador = comando in ["*", "+"]
+        e_telefone_operador = is_operator_phone(phone)
 
-        # Log detalhado para debug
-        logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}', e_comando={e_comando_operador}")
+        # Log detalhado SEMPRE para debug de comandos
+        logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}', e_comando={e_comando_operador}, e_telefone_operador={e_telefone_operador}")
 
-        # Registrar comandos no debug log
         if e_comando_operador:
             add_webhook_debug("COMMAND_DETECTED", {
                 "phone": phone,
                 "fromMe": from_me,
                 "comando": comando,
-                "will_process": from_me  # So processa se fromMe=true
+                "e_telefone_operador": e_telefone_operador
             })
 
-        # Normalizar phone para comparacao com numeros do sistema
-        phone_normalizado = phone.replace("+", "").replace("-", "").replace(" ", "")
+        # Detectar se eh operador: fromMe OU telefone do operador
+        e_operador = from_me or e_telefone_operador
 
-        # Verificar se a mensagem vem do operador/atendente
-        # Somente ATENDENTE_PHONE pode enviar comandos * e +
-        e_operador = from_me or phone_normalizado == ATENDENTE_PHONE
-
-        # METODO 1: fromMe=true (operador enviando na conversa do cliente)
-        # METODO 2: mensagem vem do numero do atendente diretamente
         if e_operador:
             logger.info(f"[OPERADOR] ========================================")
-            logger.info(f"[OPERADOR] Mensagem de operador detectada! (fromMe={from_me}, phone={phone})")
-            logger.info(f"[OPERADOR] Comando recebido: '{comando}'")
+            logger.info(f"[OPERADOR] Mensagem de operador detectada!")
+            logger.info(f"[OPERADOR] fromMe={from_me}, phone={phone}, e_telefone_operador={e_telefone_operador}")
+            logger.info(f"[OPERADOR] Texto: '{comando}'")
             logger.info(f"[OPERADOR] ========================================")
 
-            if from_me and comando == "*":
-                # fromMe: o phone e o cliente na conversa
-                resultado = await pausar_ia_para_cliente(phone)
-                logger.info(f"[OPERADOR] IA PAUSADA para cliente {phone} - Resultado: {resultado}")
-                add_webhook_debug("COMMAND_EXECUTED", {
-                    "comando": "*",
-                    "acao": "PAUSAR_IA",
-                    "phone": phone,
-                    "resultado": resultado
-                })
-                return {"status": "ia_paused", "client": phone, "message": "IA pausada com sucesso"}
+            if e_comando_operador:
+                # METODO 1: fromMe=true → o phone eh do CLIENTE (operador esta na conversa do cliente)
+                if from_me and not e_telefone_operador:
+                    cliente_phone = phone
+                    if comando == "*":
+                        resultado = await pausar_ia_para_cliente(cliente_phone)
+                        logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone} (via fromMe)")
+                    else:
+                        resultado = await retomar_ia_para_cliente(cliente_phone)
+                        logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via fromMe)")
+                    add_webhook_debug("COMMAND_EXECUTED", {
+                        "comando": comando,
+                        "metodo": "fromMe",
+                        "cliente": cliente_phone,
+                        "resultado": resultado
+                    })
+                    return {"status": "command_processed", "client": cliente_phone}
 
-            elif from_me and comando == "+":
-                # fromMe: o phone e o cliente na conversa
-                resultado = await retomar_ia_para_cliente(phone)
-                logger.info(f"[OPERADOR] IA RETOMADA para cliente {phone} - Resultado: {resultado}")
-                add_webhook_debug("COMMAND_EXECUTED", {
-                    "comando": "+",
-                    "acao": "RETOMAR_IA",
-                    "phone": phone,
-                    "resultado": resultado
-                })
-                return {"status": "ia_resumed", "client": phone, "message": "IA retomada com sucesso"}
-
-            elif not from_me and phone_normalizado == ATENDENTE_PHONE:
-                # Atendente enviando do seu numero pessoal - comandos * e +
-                # Buscar o ultimo cliente atendido para aplicar o comando
-                if comando == "*" or comando == "+":
+                # METODO 2: Operador enviou do seu numero pessoal
+                # Buscar o ULTIMO cliente ativo para aplicar o comando
+                else:
+                    logger.info(f"[OPERADOR] Buscando ultimo cliente ativo para comando '{comando}'...")
                     ultimo_cliente = await db.conversas.find_one(
-                        {"role": "user", "phone": {"$nin": [ATENDENTE_PHONE, NOTIFICACAO_PHONE]}},
+                        {"role": "user", "phone": {"$ne": phone}},
                         sort=[("timestamp", -1)]
                     )
+
+                    if not ultimo_cliente:
+                        # Tentar busca mais ampla - qualquer conversa recente que nao seja do operador
+                        logger.info(f"[OPERADOR] Busca 1 falhou, tentando busca ampla...")
+                        ultimo_cliente = await db.conversas.find_one(
+                            {"phone": {"$ne": phone}},
+                            sort=[("timestamp", -1)]
+                        )
+
                     if ultimo_cliente:
                         cliente_phone = ultimo_cliente["phone"]
                         if comando == "*":
                             resultado = await pausar_ia_para_cliente(cliente_phone)
-                            logger.info(f"[OPERADOR] IA PAUSADA para ultimo cliente {cliente_phone}")
-                            await send_whatsapp_message(phone, f"IA pausada para {cliente_phone}")
+                            logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone} (via telefone operador)")
+                            await send_whatsapp_message(phone, f"✅ IA pausada para {cliente_phone}")
                         else:
                             resultado = await retomar_ia_para_cliente(cliente_phone)
-                            logger.info(f"[OPERADOR] IA RETOMADA para ultimo cliente {cliente_phone}")
-                            await send_whatsapp_message(phone, f"IA retomada para {cliente_phone}")
+                            logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via telefone operador)")
+                            await send_whatsapp_message(phone, f"✅ IA retomada para {cliente_phone}")
+                        add_webhook_debug("COMMAND_EXECUTED", {
+                            "comando": comando,
+                            "metodo": "telefone_operador",
+                            "cliente": cliente_phone,
+                            "resultado": resultado
+                        })
                         return {"status": "command_processed", "client": cliente_phone}
                     else:
-                        await send_whatsapp_message(phone, "Nenhum cliente recente encontrado.")
+                        logger.warning(f"[OPERADOR] Nenhum cliente encontrado no banco!")
+                        await send_whatsapp_message(phone, "⚠️ Nenhum cliente recente encontrado.")
                         return {"status": "no_recent_client"}
 
-                # Ignorar outras mensagens do operador
-                logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando) - ignorando")
-                return {"status": "ignored", "reason": "operator_message"}
-
-            # Ignorar outras mensagens enviadas pelo operador (fromMe)
-            logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando)")
+            # Mensagem normal do operador (nao eh comando) - ignorar
+            logger.info(f"[OPERADOR] Mensagem normal do operador (nao e comando) - ignorando")
             return {"status": "ignored", "reason": "operator_message"}
 
         # ============================================
