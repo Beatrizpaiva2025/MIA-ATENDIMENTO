@@ -2679,11 +2679,19 @@ async def webhook_whatsapp(request: Request):
         # ============================================
 
         comando = message_text.strip()
-        e_comando_operador = comando in ["*", "+"]
+        # Comandos aceitos: * ou + (e alternativas 8/* e 9/+ para teclados problematicos)
+        COMANDOS_PAUSA = ["*", "8", "**", "88"]  # Pausa IA
+        COMANDOS_RETOMA = ["+", "9", "++", "99"]  # Retoma IA
+        e_comando_pausa = comando in COMANDOS_PAUSA
+        e_comando_retoma = comando in COMANDOS_RETOMA
+        e_comando_operador = e_comando_pausa or e_comando_retoma
         e_telefone_operador = is_operator_phone(phone)
 
-        # Log detalhado SEMPRE para debug de comandos
-        logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}', e_comando={e_comando_operador}, e_telefone_operador={e_telefone_operador}")
+        # Log detalhado SEMPRE para debug de comandos - incluir bytes para ver caracteres invisiveis
+        comando_bytes = comando.encode('utf-8').hex() if comando else "vazio"
+        logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}' (bytes={comando_bytes})")
+        logger.info(f"[DEBUG-CMD] e_comando_pausa={e_comando_pausa}, e_comando_retoma={e_comando_retoma}, e_telefone_operador={e_telefone_operador}")
+        logger.info(f"[DEBUG-CMD] ATENDENTE_PHONE configurado: {ATENDENTE_PHONE}")
 
         if e_comando_operador:
             add_webhook_debug("COMMAND_DETECTED", {
@@ -2696,23 +2704,36 @@ async def webhook_whatsapp(request: Request):
         # Detectar se eh operador: fromMe OU telefone do operador
         e_operador = from_me or e_telefone_operador
 
+        # Log CRITICO para debug de operador - sempre mostra
+        logger.info(f"[DEBUG-OPERADOR] ====== VERIFICACAO DE OPERADOR ======")
+        logger.info(f"[DEBUG-OPERADOR] phone recebido: '{phone}'")
+        logger.info(f"[DEBUG-OPERADOR] ATENDENTE_PHONE: '{ATENDENTE_PHONE}'")
+        logger.info(f"[DEBUG-OPERADOR] fromMe: {from_me}")
+        logger.info(f"[DEBUG-OPERADOR] e_telefone_operador: {e_telefone_operador}")
+        logger.info(f"[DEBUG-OPERADOR] e_operador (final): {e_operador}")
+        logger.info(f"[DEBUG-OPERADOR] e_comando_pausa: {e_comando_pausa}, e_comando_retoma: {e_comando_retoma}")
+        if not e_operador:
+            logger.info(f"[DEBUG-OPERADOR] NAO eh operador - sera processado como CLIENTE")
+        logger.info(f"[DEBUG-OPERADOR] =====================================")
+
         if e_operador:
             logger.info(f"[OPERADOR] ========================================")
-            logger.info(f"[OPERADOR] Mensagem de operador detectada!")
+            logger.info(f"[OPERADOR] Mensagem de OPERADOR detectada!")
             logger.info(f"[OPERADOR] fromMe={from_me}, phone={phone}, e_telefone_operador={e_telefone_operador}")
-            logger.info(f"[OPERADOR] Texto: '{comando}'")
+            logger.info(f"[OPERADOR] Texto/Comando: '{comando}'")
+            logger.info(f"[OPERADOR] e_comando_pausa={e_comando_pausa}, e_comando_retoma={e_comando_retoma}")
             logger.info(f"[OPERADOR] ========================================")
 
             if e_comando_operador:
                 # METODO 1: fromMe=true E phone NAO eh o operador → phone eh do CLIENTE
                 if from_me and not e_telefone_operador:
                     cliente_phone = phone
-                    if comando == "*":
+                    if e_comando_pausa:
                         resultado = await pausar_ia_para_cliente(cliente_phone)
-                        logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone} (via fromMe)")
+                        logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone} (via fromMe, comando='{comando}')")
                     else:
                         resultado = await retomar_ia_para_cliente(cliente_phone)
-                        logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via fromMe)")
+                        logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via fromMe, comando='{comando}')")
                     add_webhook_debug("COMMAND_EXECUTED", {
                         "comando": comando,
                         "metodo": "fromMe",
@@ -2727,7 +2748,7 @@ async def webhook_whatsapp(request: Request):
                     )
                     # Notificar operador
                     try:
-                        acao = "pausada" if comando == "*" else "retomada"
+                        acao = "pausada" if e_comando_pausa else "retomada"
                         await send_whatsapp_message(ATENDENTE_PHONE, f"✅ IA {acao} para {cliente_phone}")
                     except Exception:
                         pass
@@ -2739,8 +2760,8 @@ async def webhook_whatsapp(request: Request):
                     logger.info(f"[OPERADOR] Buscando cliente para comando '{comando}' (via telefone operador)...")
                     cliente_phone = None
 
-                    # Para +: primeiro buscar cliente em modo humano
-                    if comando == "+":
+                    # Para comandos de retomar (+/9): primeiro buscar cliente em modo humano
+                    if e_comando_retoma:
                         ultimo_humano = await db.cliente_estados.find_one(
                             {
                                 "mode": "human",
@@ -2750,10 +2771,10 @@ async def webhook_whatsapp(request: Request):
                         )
                         if ultimo_humano:
                             cliente_phone = ultimo_humano["phone"]
-                            logger.info(f"[OPERADOR] + encontrou cliente em modo humano: {cliente_phone}")
+                            logger.info(f"[OPERADOR] Comando retomar encontrou cliente em modo humano: {cliente_phone}")
 
-                    # Para *: buscar cliente mais recente em modo IA (nao pausado)
-                    if comando == "*" and not cliente_phone:
+                    # Para comandos de pausa (*/8): buscar cliente mais recente em modo IA (nao pausado)
+                    if e_comando_pausa and not cliente_phone:
                         # Buscar o cliente que enviou mensagem mais recentemente e esta em modo IA
                         clientes_ativos = await db.conversas.find(
                             {"role": "user", "phone": {"$ne": phone}}
@@ -2790,13 +2811,13 @@ async def webhook_whatsapp(request: Request):
                             logger.info(f"[OPERADOR] Fallback: ultimo cliente por mensagem: {cliente_phone}")
 
                     if cliente_phone:
-                        if comando == "*":
+                        if e_comando_pausa:
                             resultado = await pausar_ia_para_cliente(cliente_phone)
-                            logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone} (via telefone operador)")
+                            logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone} (via telefone operador, comando='{comando}')")
                             await send_whatsapp_message(phone, f"✅ IA pausada para {cliente_phone}")
                         else:
                             resultado = await retomar_ia_para_cliente(cliente_phone)
-                            logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via telefone operador)")
+                            logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via telefone operador, comando='{comando}')")
                             await send_whatsapp_message(phone, f"✅ IA retomada para {cliente_phone}")
                         # Atualizar ultimo_cliente_operador para manter tracking correto
                         await db.sistema.update_one(
