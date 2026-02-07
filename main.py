@@ -63,24 +63,10 @@ EST_TIMEZONE = pytz.timezone('US/Eastern')
 def is_business_hours() -> bool:
     """
     Verifica se está dentro do horário comercial.
-    Horário comercial: 8:30am - 5:00pm EST (Segunda a Sexta)
-    Fora do horário: 5pm EST - 8:30am EST e fins de semana
+    ATUALIZADO: Atendimento normal 24/7 - sempre retorna True
     """
-    now_est = datetime.now(EST_TIMEZONE)
-    weekday = now_est.weekday()  # 0=Monday, 6=Sunday
-    hour = now_est.hour
-    minute = now_est.minute
-
-    # Fim de semana
-    if weekday >= 5:  # Saturday=5, Sunday=6
-        return False
-
-    # Converter para minutos para facilitar comparação
-    current_minutes = hour * 60 + minute
-    start_minutes = 8 * 60 + 30   # 8:30am = 510 minutos
-    end_minutes = 17 * 60         # 5:00pm = 1020 minutos
-
-    return start_minutes <= current_minutes < end_minutes
+    # Atendimento 24/7 - sem restricao de horario
+    return True
 
 def get_after_hours_message(idioma: str = "pt") -> str:
     """Retorna mensagem para horário fora do expediente"""
@@ -261,14 +247,23 @@ def is_operator_phone(phone: str) -> bool:
     """
     Verifica se o telefone pertence ao operador/atendente.
     Compara os ultimos 10 digitos para evitar problemas com codigo de pais.
+    Aceita ATENDENTE_PHONE e NOTIFICACAO_PHONE como operadores.
     """
     digits = ''.join(c for c in phone if c.isdigit())
-    atendente_digits = ''.join(c for c in ATENDENTE_PHONE if c.isdigit())
 
-    # Comparar ultimos 10 digitos (numero local EUA sem codigo de pais)
-    if len(digits) >= 10 and len(atendente_digits) >= 10:
-        return digits[-10:] == atendente_digits[-10:]
-    return digits == atendente_digits
+    # Lista de telefones de operadores
+    operator_phones = [ATENDENTE_PHONE, NOTIFICACAO_PHONE]
+
+    for op_phone in operator_phones:
+        op_digits = ''.join(c for c in op_phone if c.isdigit())
+        # Comparar ultimos 10 digitos (numero local EUA sem codigo de pais)
+        if len(digits) >= 10 and len(op_digits) >= 10:
+            if digits[-10:] == op_digits[-10:]:
+                return True
+        elif digits == op_digits:
+            return True
+
+    return False
 
 ATENDENTE_PHONE = normalizar_telefone_eua(_atendente_raw)
 NOTIFICACAO_PHONE = normalizar_telefone_eua(_notificacao_raw)
