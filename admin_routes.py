@@ -164,6 +164,70 @@ async def check_ads_credentials():
         "credentials": check_credentials()
     }
 
+@router.get("/api/ads/debug")
+async def debug_ads_api():
+    """Endpoint de diagnostico para verificar problemas com as APIs de ads"""
+    import os
+    from ads_integration import (
+        GOOGLE_ADS_DEV_TOKEN, GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET,
+        GOOGLE_ADS_REFRESH_TOKEN, GOOGLE_ADS_CUSTOMER_ID, GOOGLE_ADS_LOGIN_CUSTOMER_ID,
+        META_APP_ID, META_ACCESS_TOKEN, META_AD_ACCOUNT_ID, META_APP_SECRET,
+        google_ads_api, meta_ads_api
+    )
+
+    debug_info = {
+        "credentials_loaded": {
+            "google_ads": {
+                "dev_token": bool(GOOGLE_ADS_DEV_TOKEN) and len(GOOGLE_ADS_DEV_TOKEN) > 5,
+                "client_id": bool(GOOGLE_ADS_CLIENT_ID) and "apps.googleusercontent.com" in GOOGLE_ADS_CLIENT_ID,
+                "client_secret": bool(GOOGLE_ADS_CLIENT_SECRET) and len(GOOGLE_ADS_CLIENT_SECRET) > 10,
+                "refresh_token": bool(GOOGLE_ADS_REFRESH_TOKEN) and len(GOOGLE_ADS_REFRESH_TOKEN) > 20,
+                "customer_id": GOOGLE_ADS_CUSTOMER_ID,
+                "login_customer_id": GOOGLE_ADS_LOGIN_CUSTOMER_ID
+            },
+            "meta_ads": {
+                "app_id": bool(META_APP_ID) and len(META_APP_ID) > 5,
+                "app_secret": bool(META_APP_SECRET) and len(META_APP_SECRET) > 10,
+                "access_token": bool(META_ACCESS_TOKEN) and len(META_ACCESS_TOKEN) > 20,
+                "ad_account_id": META_AD_ACCOUNT_ID
+            }
+        },
+        "api_tests": {
+            "google_ads": None,
+            "meta_ads": None
+        }
+    }
+
+    # Testar Google Ads API
+    try:
+        google_campaigns = await google_ads_api.get_campaigns(days=7)
+        debug_info["api_tests"]["google_ads"] = {
+            "success": True,
+            "campaigns_found": len(google_campaigns),
+            "campaigns": google_campaigns[:3] if google_campaigns else []
+        }
+    except Exception as e:
+        debug_info["api_tests"]["google_ads"] = {
+            "success": False,
+            "error": str(e)
+        }
+
+    # Testar Meta Ads API
+    try:
+        meta_campaigns = await meta_ads_api.get_campaigns(days=7)
+        debug_info["api_tests"]["meta_ads"] = {
+            "success": True,
+            "campaigns_found": len(meta_campaigns),
+            "campaigns": meta_campaigns[:3] if meta_campaigns else []
+        }
+    except Exception as e:
+        debug_info["api_tests"]["meta_ads"] = {
+            "success": False,
+            "error": str(e)
+        }
+
+    return debug_info
+
 @router.get("/api/dashboard-data")
 async def get_dashboard_data(days: int = 30):
     """Get complete dashboard data"""
