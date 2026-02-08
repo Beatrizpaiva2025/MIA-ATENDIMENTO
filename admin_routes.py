@@ -110,6 +110,60 @@ async def get_marketing_stats(days: int = 30):
         logger.error(f"Error in get_marketing_stats: {e}")
         return {"success": False, "error": str(e)}
 
+# ==================== ADS INTEGRATION API (Google Ads + Meta Ads) ====================
+
+from ads_integration import get_all_campaigns, check_credentials, google_ads_api
+
+@router.get("/api/ads/campaigns")
+async def get_ads_campaigns(days: int = 30):
+    """Busca campanhas reais do Google Ads e Meta Ads"""
+    try:
+        data = await get_all_campaigns(days)
+        return {
+            "success": True,
+            "campaigns": data.get("campaigns", []),
+            "totals": data.get("totals", {}),
+            "by_platform": data.get("by_platform", {})
+        }
+    except Exception as e:
+        logger.error(f"[ADS API] Error fetching campaigns: {e}")
+        return {"success": False, "error": str(e), "campaigns": [], "totals": {}}
+
+@router.get("/api/ads/google/campaigns")
+async def get_google_campaigns(days: int = 30):
+    """Busca campanhas apenas do Google Ads"""
+    try:
+        campaigns = await google_ads_api.get_campaigns(days)
+
+        total_impressions = sum(c.get("impressions", 0) for c in campaigns)
+        total_clicks = sum(c.get("clicks", 0) for c in campaigns)
+        total_cost = sum(c.get("cost", 0) for c in campaigns)
+        total_conversions = sum(c.get("conversions", 0) for c in campaigns)
+
+        return {
+            "success": True,
+            "campaigns": campaigns,
+            "totals": {
+                "impressions": total_impressions,
+                "clicks": total_clicks,
+                "cost": round(total_cost, 2),
+                "conversions": total_conversions,
+                "ctr": round((total_clicks / total_impressions * 100) if total_impressions > 0 else 0, 2),
+                "avg_cpc": round((total_cost / total_clicks) if total_clicks > 0 else 0, 2)
+            }
+        }
+    except Exception as e:
+        logger.error(f"[GOOGLE ADS API] Error: {e}")
+        return {"success": False, "error": str(e), "campaigns": [], "totals": {}}
+
+@router.get("/api/ads/credentials")
+async def check_ads_credentials():
+    """Verifica se as credenciais do Google Ads e Meta Ads estao configuradas"""
+    return {
+        "success": True,
+        "credentials": check_credentials()
+    }
+
 @router.get("/api/dashboard-data")
 async def get_dashboard_data(days: int = 30):
     """Get complete dashboard data"""
