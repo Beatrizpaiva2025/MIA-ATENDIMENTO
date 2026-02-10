@@ -1331,8 +1331,19 @@ async def processar_etapa_origem(phone: str, mensagem: str) -> str:
     else:
         origem = mensagem.strip()[:50]
 
-    # Salvar origem
+    # Salvar origem no estado do cliente
     await set_cliente_estado(phone, origem=origem)
+
+    # Salvar origem no CRM (aba MIA)
+    try:
+        await criar_ou_atualizar_contato(phone, {
+            "nome": nome,
+            "origem": origem,
+            "idioma": idioma
+        })
+        logger.info(f"[CRM] Origem '{origem}' salva para cliente {phone}")
+    except Exception as e:
+        logger.error(f"[CRM] Erro ao salvar origem: {e}")
 
     # Agradecer baseado no idioma
     if idioma == "en":
@@ -1884,6 +1895,11 @@ Membro da American Translators Association (ATA)
 - Urgência Urgente (12h): +50%
 - Envio físico Priority Mail: $18.99
 - Desconto: Acima de 7 páginas = 10% de desconto automático
+
+**IMPORTANTE - DESCONTOS DE PARCEIROS (George Law, Geovanna, Gdreams, etc.):**
+NÃO oferecemos mais descontos para parceiros ou indicações.
+Se o cliente perguntar sobre desconto de George Law, Geovanna, Gdreams, ou qualquer outro parceiro/escritório, responda:
+"Nosso preço por página era $35.00 e agora trabalhamos com o valor mínimo de $24.99 por página. Por isso, não temos mais descontos de parceiros, pois o preço já está reduzido."
 
 **OPÇÃO DE ENVIO POR EMAIL:**
 Se o cliente preferir enviar o documento por e-mail:
