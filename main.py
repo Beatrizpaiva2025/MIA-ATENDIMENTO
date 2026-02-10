@@ -1222,8 +1222,13 @@ IMPORTANTE:
 
 async def processar_etapa_nome(phone: str, mensagem: str) -> str:
     """Processa resposta do cliente com o nome e pede a origem"""
-    # Detectar e atualizar idioma
-    idioma = detectar_idioma(mensagem)
+    # Buscar idioma ja salvo no estado (detectado na mensagem inicial)
+    estado = await get_cliente_estado(phone)
+    idioma = estado.get("idioma")
+
+    # Se nao tiver idioma salvo, detectar do nome (fallback)
+    if not idioma:
+        idioma = detectar_idioma(mensagem)
 
     # PRIMEIRO: verificar se o cliente esta pedindo atendente humano
     # ao inves de informar o nome
