@@ -115,6 +115,7 @@ class GoogleAdsAPI:
 
                 if response.status_code == 200:
                     data = response.json()
+                    logger.info(f"[GOOGLE ADS] Raw API response: {data}")
                     campaigns = []
 
                     for result in data:
