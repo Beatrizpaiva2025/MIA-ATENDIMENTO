@@ -228,6 +228,116 @@ async def debug_ads_api():
 
     return debug_info
 
+@router.get("/api/ads/raw-test")
+async def test_google_ads_raw():
+    """Testa Google Ads API e retorna resposta bruta para diagnostico"""
+    import httpx
+    from datetime import datetime, timedelta
+    from ads_integration import (
+        GOOGLE_ADS_DEV_TOKEN, GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET,
+        GOOGLE_ADS_REFRESH_TOKEN, GOOGLE_ADS_CUSTOMER_ID, GOOGLE_ADS_LOGIN_CUSTOMER_ID
+    )
+
+    result = {
+        "step": "init",
+        "credentials_present": {
+            "dev_token": bool(GOOGLE_ADS_DEV_TOKEN),
+            "client_id": bool(GOOGLE_ADS_CLIENT_ID),
+            "client_secret": bool(GOOGLE_ADS_CLIENT_SECRET),
+            "refresh_token": bool(GOOGLE_ADS_REFRESH_TOKEN),
+            "customer_id": GOOGLE_ADS_CUSTOMER_ID,
+            "login_customer_id": GOOGLE_ADS_LOGIN_CUSTOMER_ID
+        }
+    }
+
+    try:
+        # Step 1: Get access token
+        result["step"] = "getting_access_token"
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": GOOGLE_ADS_CLIENT_ID,
+                    "client_secret": GOOGLE_ADS_CLIENT_SECRET,
+                    "refresh_token": GOOGLE_ADS_REFRESH_TOKEN,
+                    "grant_type": "refresh_token"
+                }
+            )
+            result["token_status"] = token_response.status_code
+            result["token_response"] = token_response.json() if token_response.status_code == 200 else token_response.text
+
+            if token_response.status_code != 200:
+                result["error"] = "Failed to get access token"
+                return result
+
+            access_token = token_response.json()["access_token"]
+            result["step"] = "got_access_token"
+
+            # Step 2: Query campaigns
+            customer_id = GOOGLE_ADS_CUSTOMER_ID.replace("-", "")
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=30)
+
+            # Query simples primeiro
+            query = """
+                SELECT
+                    campaign.id,
+                    campaign.name,
+                    campaign.status
+                FROM campaign
+                LIMIT 10
+            """
+
+            url = f"https://googleads.googleapis.com/v18/customers/{customer_id}/googleAds:searchStream"
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "developer-token": GOOGLE_ADS_DEV_TOKEN,
+                "login-customer-id": GOOGLE_ADS_LOGIN_CUSTOMER_ID.replace("-", ""),
+                "Content-Type": "application/json"
+            }
+
+            result["step"] = "querying_campaigns_simple"
+            campaign_response = await client.post(url, headers=headers, json={"query": query})
+            result["campaign_status"] = campaign_response.status_code
+            result["campaign_raw_response"] = campaign_response.text[:2000]  # Primeiros 2000 chars
+
+            if campaign_response.status_code == 200:
+                result["campaign_json"] = campaign_response.json()
+                result["step"] = "success_simple_query"
+
+                # Agora tentar com metricas
+                query_with_metrics = f"""
+                    SELECT
+                        campaign.id,
+                        campaign.name,
+                        campaign.status,
+                        metrics.impressions,
+                        metrics.clicks,
+                        metrics.cost_micros
+                    FROM campaign
+                    WHERE segments.date BETWEEN '{start_date.strftime('%Y-%m-%d')}' AND '{end_date.strftime('%Y-%m-%d')}'
+                """
+
+                result["step"] = "querying_with_metrics"
+                metrics_response = await client.post(url, headers=headers, json={"query": query_with_metrics})
+                result["metrics_status"] = metrics_response.status_code
+                result["metrics_raw_response"] = metrics_response.text[:2000]
+
+                if metrics_response.status_code == 200:
+                    result["metrics_json"] = metrics_response.json()
+                    result["step"] = "success_with_metrics"
+                else:
+                    result["metrics_error"] = metrics_response.text
+            else:
+                result["error"] = campaign_response.text
+
+    except Exception as e:
+        result["exception"] = str(e)
+        import traceback
+        result["traceback"] = traceback.format_exc()
+
+    return result
+
 @router.get("/api/dashboard-data")
 async def get_dashboard_data(days: int = 30):
     """Get complete dashboard data"""
