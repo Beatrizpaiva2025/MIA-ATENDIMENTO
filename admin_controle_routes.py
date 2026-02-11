@@ -381,3 +381,29 @@ async def api_set_operator(request: Request):
     except Exception as e:
         logger.error(f"Erro ao configurar operador: {e}")
         return {"success": False, "error": str(e)}
+
+
+@router.get("/api/config/operator")
+async def api_get_operator():
+    """Retorna a configuração atual do operador"""
+    try:
+        config = await db.bot_config.find_one({"_id": "operator_config"})
+
+        if config:
+            return {
+                "success": True,
+                "operator_number": config.get("operator_number", ""),
+                "alerts_number": config.get("alerts_number", "")
+            }
+        else:
+            # Retorna valores padrão das variáveis de ambiente
+            import os
+            return {
+                "success": True,
+                "operator_number": os.getenv("ATENDENTE_PHONE", "18573167770"),
+                "alerts_number": os.getenv("NOTIFICACAO_PHONE", "18572081139")
+            }
+
+    except Exception as e:
+        logger.error(f"Erro ao obter config operador: {e}")
+        return {"success": False, "error": str(e)}

@@ -239,6 +239,7 @@ async def api_get_conversoes(periodo: str = "30"):
                 })
 
                 result.append({
+                    "id": str(c.get("_id", "")),
                     "phone": phone,
                     "valor": extrair_valor(c),
                     "timestamp": c.get("timestamp").strftime("%m/%d/%Y %H:%M") if c.get("timestamp") else "N/A",
@@ -378,6 +379,23 @@ async def api_delete_lead(lead_id: str):
         return {"success": True, "message": "Lead deleted"}
     except Exception as e:
         logger.error(f"❌ Erro delete lead: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/admin/conversas/api/delete-conversao/{conversao_id}")
+async def api_delete_conversao(conversao_id: str):
+    """Deleta conversão"""
+    try:
+        result = await db.conversoes.delete_one({"_id": ObjectId(conversao_id)})
+
+        if result.deleted_count == 0:
+            return {"success": False, "error": "Conversion not found"}
+
+        logger.info(f"✅ Conversão deletada: {conversao_id}")
+
+        return {"success": True, "message": "Conversion deleted"}
+    except Exception as e:
+        logger.error(f"❌ Erro delete conversão: {e}")
         return {"success": False, "error": str(e)}
 
 

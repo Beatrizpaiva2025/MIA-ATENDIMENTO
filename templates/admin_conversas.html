@@ -501,10 +501,11 @@
                     <th>Time</th>
                     <th>Type</th>
                     <th>Detection</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="conversoes-body">
-                <tr><td colspan="6" class="empty-state">Loading...</td></tr>
+                <tr><td colspan="7" class="empty-state">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -692,12 +693,12 @@
             .then(function(data) {
                 var tbody = document.getElementById('conversoes-body');
                 if (!data.conversoes || data.conversoes.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No conversions</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No conversions</td></tr>';
                     return;
                 }
                 var html = '';
                 data.conversoes.forEach(function(c) {
-                    html += '<tr><td><strong>' + c.phone + '</strong></td><td style="color:#27ae60;font-weight:bold;">$' + c.valor + '</td><td>' + c.timestamp + '</td><td>' + c.tempo_atendimento + '</td><td><span class="badge badge-ia">' + c.tipo_atendimento + '</span></td><td><span class="badge badge-info">' + c.metodo + '</span></td></tr>';
+                    html += '<tr><td><strong>' + c.phone + '</strong></td><td style="color:#27ae60;font-weight:bold;">$' + c.valor + '</td><td>' + c.timestamp + '</td><td>' + c.tempo_atendimento + '</td><td><span class="badge badge-ia">' + c.tipo_atendimento + '</span></td><td><span class="badge badge-info">' + c.metodo + '</span></td><td><button class="btn-action btn-delete" onclick="deletarConversao(\'' + c.id + '\')">🗑️</button></td></tr>';
                 });
                 tbody.innerHTML = html;
             }).catch(function(e) { console.error(e); });
@@ -772,6 +773,20 @@
         fetch('/admin/conversas/api/delete-lead/' + id, { method: 'POST' })
             .then(function(r) { return r.json(); })
             .then(function(data) { if (data.success) carregarDados(); });
+    }
+
+    function deletarConversao(id) {
+        if (!confirm('Delete this conversion?')) return;
+        fetch('/admin/conversas/api/delete-conversao/' + id, { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    carregarDados();
+                    alert('Conversion deleted!');
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            }).catch(function(e) { alert('Error deleting'); });
     }
 </script>
 {% endblock %}
