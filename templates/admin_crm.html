@@ -379,31 +379,31 @@
 
 <!-- STATS -->
 <div class="stats-grid">
-    <div class="stat-card">
+    <div class="stat-card" style="cursor: pointer;" onclick="filtrarPorStatus('all')">
         <div class="stat-value" id="stat-total">0</div>
         <div class="stat-label">Total</div>
     </div>
-    <div class="stat-card novo">
+    <div class="stat-card novo" style="cursor: pointer;" onclick="filtrarPorStatus('novo')">
         <div class="stat-value" id="stat-novos">0</div>
         <div class="stat-label">New</div>
     </div>
-    <div class="stat-card contato">
+    <div class="stat-card contato" style="cursor: pointer;" onclick="filtrarPorStatus('em_contato')">
         <div class="stat-value" id="stat-contato">0</div>
         <div class="stat-label">In Contact</div>
     </div>
-    <div class="stat-card qualificado">
+    <div class="stat-card qualificado" style="cursor: pointer;" onclick="filtrarPorStatus('qualificado')">
         <div class="stat-value" id="stat-qualificados">0</div>
         <div class="stat-label">Qualified</div>
     </div>
-    <div class="stat-card convertido">
+    <div class="stat-card convertido" style="cursor: pointer;" onclick="filtrarPorStatus('convertido')">
         <div class="stat-value" id="stat-convertidos">0</div>
         <div class="stat-label">Converted</div>
     </div>
-    <div class="stat-card perdido">
+    <div class="stat-card perdido" style="cursor: pointer;" onclick="filtrarPorStatus('perdido')">
         <div class="stat-value" id="stat-perdidos">0</div>
         <div class="stat-label">Lost</div>
     </div>
-    <div class="stat-card email">
+    <div class="stat-card email" style="cursor: pointer;" onclick="filtrarPorEmail()">
         <div class="stat-value" id="stat-email">0</div>
         <div class="stat-label">With Email</div>
     </div>
@@ -419,8 +419,11 @@
         <option value="qualificado">Qualified</option>
         <option value="convertido">Converted</option>
         <option value="perdido">Lost</option>
+        <option value="with_email">With Email</option>
     </select>
     <button class="btn btn-secondary" onclick="carregarContatos()">Refresh</button>
+    <button class="btn btn-success" onclick="abrirModalBulkMessage()" title="Send bulk message">Bulk WhatsApp</button>
+    <button class="btn btn-primary" onclick="abrirModalBulkEmail()" title="Send bulk email">Bulk Email</button>
 </div>
 
 <!-- CONTACTS TABLE -->
@@ -804,6 +807,221 @@
                 alert('Error: ' + data.error);
             }
         } catch (error) {
+            alert('Connection error');
+        }
+    }
+
+    // Filtrar por status (clicando nos cards)
+    function filtrarPorStatus(status) {
+        document.getElementById('status-filter').value = status;
+        carregarContatos();
+    }
+
+    // Filtrar apenas contatos com email
+    function filtrarPorEmail() {
+        document.getElementById('status-filter').value = 'with_email';
+        carregarContatos();
+    }
+
+    // Modal de mensagem em massa (Bulk WhatsApp)
+    function abrirModalBulkMessage() {
+        const modal = document.createElement('div');
+        modal.id = 'modal-bulk-whatsapp';
+        modal.className = 'modal active';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <span class="modal-title">Bulk WhatsApp Message</span>
+                    <button class="modal-close" onclick="fecharModal('modal-bulk-whatsapp')">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Send to:</label>
+                    <select class="form-select" id="bulk-target">
+                        <option value="all">All Contacts</option>
+                        <option value="novo">New Contacts</option>
+                        <option value="em_contato">In Contact</option>
+                        <option value="qualificado">Qualified</option>
+                        <option value="with_email">With Email</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Message Template:</label>
+                    <textarea class="form-textarea" id="bulk-message" rows="5" placeholder="Hello {nome}! We have a special offer for you...
+
+Use {nome} to personalize with contact name."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Preview recipients:</label>
+                    <div id="bulk-preview" style="max-height: 150px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 0.85em;">
+                        Select target group to see recipients
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button class="btn btn-secondary" onclick="fecharModal('modal-bulk-whatsapp')">Cancel</button>
+                    <button class="btn btn-success" onclick="enviarBulkWhatsApp()">Send Messages</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('bulk-target').addEventListener('change', previewBulkRecipients);
+        previewBulkRecipients();
+    }
+
+    async function previewBulkRecipients() {
+        const target = document.getElementById('bulk-target').value;
+        let url = '/admin/crm/api/contacts?limit=500';
+        if (target !== 'all') url += '&status=' + target;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            const preview = document.getElementById('bulk-preview');
+
+            if (data.contacts && data.contacts.length > 0) {
+                preview.innerHTML = `<strong>${data.contacts.length} contacts will receive the message:</strong><br>` +
+                    data.contacts.slice(0, 20).map(c => `${c.phone} (${c.nome || 'No name'})`).join('<br>') +
+                    (data.contacts.length > 20 ? `<br>... and ${data.contacts.length - 20} more` : '');
+            } else {
+                preview.innerHTML = 'No contacts found for this filter';
+            }
+        } catch (e) {
+            document.getElementById('bulk-preview').innerHTML = 'Error loading contacts';
+        }
+    }
+
+    async function enviarBulkWhatsApp() {
+        const target = document.getElementById('bulk-target').value;
+        const message = document.getElementById('bulk-message').value.trim();
+
+        if (!message) {
+            alert('Please enter a message');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to send this message to all selected contacts?')) return;
+
+        try {
+            const response = await fetch('/admin/crm/api/bulk-whatsapp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target, message })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert(`Messages sent: ${data.sent}\nFailed: ${data.failed}`);
+                fecharModal('modal-bulk-whatsapp');
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (e) {
+            alert('Connection error');
+        }
+    }
+
+    // Modal de email em massa
+    function abrirModalBulkEmail() {
+        const modal = document.createElement('div');
+        modal.id = 'modal-bulk-email';
+        modal.className = 'modal active';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <span class="modal-title">Bulk Email</span>
+                    <button class="modal-close" onclick="fecharModal('modal-bulk-email')">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Send to:</label>
+                    <select class="form-select" id="email-target">
+                        <option value="with_email">All contacts with email</option>
+                        <option value="novo">New contacts with email</option>
+                        <option value="em_contato">In Contact with email</option>
+                        <option value="qualificado">Qualified with email</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Subject:</label>
+                    <input type="text" class="form-input" id="email-subject" placeholder="Special offer from Legacy Translations">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email Body:</label>
+                    <textarea class="form-textarea" id="email-body" rows="6" placeholder="Hello {nome},
+
+We wanted to reach out about our translation services...
+
+Use {nome} to personalize with contact name."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Preview recipients:</label>
+                    <div id="email-preview" style="max-height: 150px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 0.85em;">
+                        Loading...
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button class="btn btn-secondary" onclick="fecharModal('modal-bulk-email')">Cancel</button>
+                    <button class="btn btn-primary" onclick="enviarBulkEmail()">Send Emails</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('email-target').addEventListener('change', previewEmailRecipients);
+        previewEmailRecipients();
+    }
+
+    async function previewEmailRecipients() {
+        const target = document.getElementById('email-target').value;
+        let url = '/admin/crm/api/contacts?limit=500&status=' + target;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            const preview = document.getElementById('email-preview');
+
+            const withEmail = data.contacts ? data.contacts.filter(c => c.email) : [];
+
+            if (withEmail.length > 0) {
+                preview.innerHTML = `<strong>${withEmail.length} contacts will receive the email:</strong><br>` +
+                    withEmail.slice(0, 20).map(c => `${c.email} (${c.nome || 'No name'})`).join('<br>') +
+                    (withEmail.length > 20 ? `<br>... and ${withEmail.length - 20} more` : '');
+            } else {
+                preview.innerHTML = 'No contacts with email found for this filter';
+            }
+        } catch (e) {
+            document.getElementById('email-preview').innerHTML = 'Error loading contacts';
+        }
+    }
+
+    async function enviarBulkEmail() {
+        const target = document.getElementById('email-target').value;
+        const subject = document.getElementById('email-subject').value.trim();
+        const body = document.getElementById('email-body').value.trim();
+
+        if (!subject || !body) {
+            alert('Please enter subject and body');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to send this email to all selected contacts?')) return;
+
+        try {
+            const response = await fetch('/admin/crm/api/bulk-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target, subject, body })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert(`Emails sent: ${data.sent}\nFailed: ${data.failed}`);
+                fecharModal('modal-bulk-email');
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (e) {
             alert('Connection error');
         }
     }

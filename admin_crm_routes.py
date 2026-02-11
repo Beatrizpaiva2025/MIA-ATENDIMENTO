@@ -151,7 +151,11 @@ async def api_list_contacts(
         query = {}
 
         if status and status != "all":
-            query["status"] = status
+            if status == "with_email":
+                # Filtro especial para contatos com email
+                query["email"] = {"$ne": None, "$ne": "", "$exists": True}
+            else:
+                query["status"] = status
 
         if search:
             query["$or"] = [
@@ -525,4 +529,144 @@ async def api_remove_tag(contact_id: str, tag: str):
 
     except Exception as e:
         logger.error(f"Erro ao remover tag: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================
+# API - BULK WHATSAPP MESSAGE
+# ============================================================
+
+@router.post("/api/bulk-whatsapp")
+async def api_bulk_whatsapp(request: Request):
+    """Envia mensagem em massa via WhatsApp usando Z-API"""
+    import httpx
+    import os
+    import asyncio
+
+    try:
+        data = await request.json()
+        target = data.get("target", "all")
+        message_template = data.get("message", "")
+
+        if not message_template:
+            return {"success": False, "error": "Message is required"}
+
+        # Build query based on target
+        query = {}
+        if target == "with_email":
+            query["email"] = {"$ne": None, "$ne": "", "$exists": True}
+        elif target != "all":
+            query["status"] = target
+
+        contacts = await db.crm_contacts.find(query).to_list(1000)
+
+        if not contacts:
+            return {"success": False, "error": "No contacts found"}
+
+        # Z-API config
+        ZAPI_BASE_URL = os.getenv("ZAPI_BASE_URL", "")
+        ZAPI_INSTANCE_ID = os.getenv("ZAPI_INSTANCE_ID", "")
+        ZAPI_TOKEN = os.getenv("ZAPI_TOKEN", "")
+        ZAPI_CLIENT_TOKEN = os.getenv("ZAPI_CLIENT_TOKEN", "")
+
+        if not all([ZAPI_BASE_URL, ZAPI_INSTANCE_ID, ZAPI_TOKEN]):
+            return {"success": False, "error": "Z-API not configured"}
+
+        sent = 0
+        failed = 0
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for contact in contacts:
+                phone = contact.get("phone", "")
+                nome = contact.get("nome", "Customer")
+
+                if not phone:
+                    failed += 1
+                    continue
+
+                # Personalize message
+                personalized_msg = message_template.replace("{nome}", nome)
+
+                try:
+                    url = f"{ZAPI_BASE_URL}/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text"
+                    headers = {"Client-Token": ZAPI_CLIENT_TOKEN} if ZAPI_CLIENT_TOKEN else {}
+
+                    response = await client.post(
+                        url,
+                        headers=headers,
+                        json={"phone": phone, "message": personalized_msg}
+                    )
+
+                    if response.status_code == 200:
+                        sent += 1
+                    else:
+                        failed += 1
+                        logger.error(f"[BULK] Failed to send to {phone}: {response.text}")
+
+                    # Small delay to avoid rate limiting
+                    await asyncio.sleep(1)
+
+                except Exception as e:
+                    failed += 1
+                    logger.error(f"[BULK] Error sending to {phone}: {e}")
+
+        return {"success": True, "sent": sent, "failed": failed, "total": len(contacts)}
+
+    except Exception as e:
+        logger.error(f"Erro em bulk WhatsApp: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================
+# API - BULK EMAIL
+# ============================================================
+
+@router.post("/api/bulk-email")
+async def api_bulk_email(request: Request):
+    """Envia email em massa (placeholder - precisa configurar SMTP)"""
+    try:
+        data = await request.json()
+        target = data.get("target", "with_email")
+        subject = data.get("subject", "")
+        body = data.get("body", "")
+
+        if not subject or not body:
+            return {"success": False, "error": "Subject and body are required"}
+
+        # Build query - must have email
+        query = {"email": {"$ne": None, "$ne": "", "$exists": True}}
+        if target != "with_email" and target != "all":
+            query["status"] = target
+
+        contacts = await db.crm_contacts.find(query).to_list(1000)
+        contacts_with_email = [c for c in contacts if c.get("email")]
+
+        if not contacts_with_email:
+            return {"success": False, "error": "No contacts with email found"}
+
+        # Note: This is a placeholder. You need to configure SMTP to actually send emails.
+        # For now, we just log the intent and return a message.
+
+        logger.info(f"[BULK EMAIL] Would send to {len(contacts_with_email)} contacts")
+        logger.info(f"[BULK EMAIL] Subject: {subject}")
+
+        # TODO: Implement actual email sending with SMTP
+        # Example with smtplib:
+        # import smtplib
+        # from email.mime.text import MIMEText
+        # smtp_server = os.getenv("SMTP_SERVER")
+        # smtp_port = int(os.getenv("SMTP_PORT", 587))
+        # smtp_user = os.getenv("SMTP_USER")
+        # smtp_pass = os.getenv("SMTP_PASS")
+
+        return {
+            "success": True,
+            "sent": 0,
+            "failed": 0,
+            "total": len(contacts_with_email),
+            "message": "Email feature requires SMTP configuration. Configure SMTP_SERVER, SMTP_PORT, SMTP_USER, SMTP_PASS environment variables."
+        }
+
+    except Exception as e:
+        logger.error(f"Erro em bulk email: {e}")
         return {"success": False, "error": str(e)}
