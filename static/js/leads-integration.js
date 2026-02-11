@@ -263,7 +263,7 @@ function setCard(id, value) {
 function updateSummary() {
     const summaryElements = {
         'totalImpressions': CAMPAIGN_DATA.totalImpressions.toLocaleString('pt-BR'),
-        'totalClicksSummary': CAMPAIGN_DATA.totalClicks.toLocaleString('pt-BR'),
+        'totalClicks': CAMPAIGN_DATA.totalClicks.toLocaleString('pt-BR'),
         'activeCampaigns': CAMPAIGN_DATA.campaigns.filter(c => c.status === 'ACTIVE').length,
         'conversionRate': `${((CAMPAIGN_DATA.totalConversions / CAMPAIGN_DATA.totalClicks) * 100 || 0).toFixed(1)}%`
     };

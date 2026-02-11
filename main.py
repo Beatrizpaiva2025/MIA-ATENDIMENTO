@@ -229,7 +229,7 @@ async def set_bot_status(enabled: bool):
 # ============================================================
 # TRANSFERENCIA PARA ATENDENTE HUMANO
 # ============================================================
-# Numeros do sistema (configuravel por ambiente)
+# Numeros do sistema (configuravel por ambiente OU por MongoDB/UI)
 # IMPORTANTE: Numeros devem incluir codigo do pais (1 para EUA, 55 para Brasil)
 _atendente_raw = os.getenv("ATENDENTE_PHONE", "18573167770")
 _notificacao_raw = os.getenv("NOTIFICACAO_PHONE", "18572081139")
@@ -243,20 +243,86 @@ def normalizar_telefone_eua(numero: str) -> str:
         return "1" + numero
     return numero
 
+# Cache para configuracao do operador (evita consultar MongoDB a cada mensagem)
+_operator_config_cache = {"operator": None, "alerts": None, "last_check": None}
+
+async def get_operator_phones():
+    """
+    Busca telefones do operador do MongoDB (salvo via UI).
+    Usa cache de 60 segundos para performance.
+    Fallback para variaveis de ambiente.
+    """
+    global _operator_config_cache
+    from datetime import datetime, timedelta
+
+    # Verificar cache (valido por 60 segundos)
+    if _operator_config_cache["last_check"]:
+        if datetime.now() - _operator_config_cache["last_check"] < timedelta(seconds=60):
+            return _operator_config_cache["operator"], _operator_config_cache["alerts"]
+
+    try:
+        config = await db.bot_config.find_one({"_id": "operator_config"})
+        if config:
+            operator = config.get("operator_number", "")
+            alerts = config.get("alerts_number", "")
+            if operator:
+                _operator_config_cache["operator"] = normalizar_telefone_eua(operator)
+            if alerts:
+                _operator_config_cache["alerts"] = normalizar_telefone_eua(alerts)
+            _operator_config_cache["last_check"] = datetime.now()
+            logger.info(f"[CONFIG] Loaded from MongoDB - Operator: {_operator_config_cache['operator']}, Alerts: {_operator_config_cache['alerts']}")
+    except Exception as e:
+        logger.error(f"[CONFIG] Error loading from MongoDB: {e}")
+
+    # Fallback para variaveis de ambiente se nao tiver no cache
+    if not _operator_config_cache["operator"]:
+        _operator_config_cache["operator"] = ATENDENTE_PHONE
+    if not _operator_config_cache["alerts"]:
+        _operator_config_cache["alerts"] = NOTIFICACAO_PHONE
+
+    return _operator_config_cache["operator"], _operator_config_cache["alerts"]
+
 def is_operator_phone(phone: str) -> bool:
     """
     Verifica se o telefone pertence ao operador/atendente.
     Compara os ultimos 10 digitos para evitar problemas com codigo de pais.
     Aceita ATENDENTE_PHONE e NOTIFICACAO_PHONE como operadores.
+    NOTA: Esta funcao usa os valores padroes. Para valores dinamicos do MongoDB,
+    use is_operator_phone_async() em contexto async.
     """
     digits = ''.join(c for c in phone if c.isdigit())
 
-    # Lista de telefones de operadores
+    # Lista de telefones de operadores (valores padroes + cache se disponivel)
     operator_phones = [ATENDENTE_PHONE, NOTIFICACAO_PHONE]
+    if _operator_config_cache["operator"] and _operator_config_cache["operator"] not in operator_phones:
+        operator_phones.append(_operator_config_cache["operator"])
+    if _operator_config_cache["alerts"] and _operator_config_cache["alerts"] not in operator_phones:
+        operator_phones.append(_operator_config_cache["alerts"])
 
     for op_phone in operator_phones:
         op_digits = ''.join(c for c in op_phone if c.isdigit())
         # Comparar ultimos 10 digitos (numero local EUA sem codigo de pais)
+        if len(digits) >= 10 and len(op_digits) >= 10:
+            if digits[-10:] == op_digits[-10:]:
+                return True
+        elif digits == op_digits:
+            return True
+
+    return False
+
+async def is_operator_phone_async(phone: str) -> bool:
+    """
+    Versao async de is_operator_phone que busca config do MongoDB.
+    Use esta versao em contextos async para garantir valores atualizados.
+    """
+    operator, alerts = await get_operator_phones()
+    digits = ''.join(c for c in phone if c.isdigit())
+
+    operator_phones = [operator, alerts, ATENDENTE_PHONE, NOTIFICACAO_PHONE]
+    operator_phones = list(set(filter(None, operator_phones)))  # Remove duplicatas e vazios
+
+    for op_phone in operator_phones:
+        op_digits = ''.join(c for c in op_phone if c.isdigit())
         if len(digits) >= 10 and len(op_digits) >= 10:
             if digits[-10:] == op_digits[-10:]:
                 return True
@@ -2701,13 +2767,18 @@ async def webhook_whatsapp(request: Request):
         e_comando_pausa = comando in COMANDOS_PAUSA
         e_comando_retoma = comando in COMANDOS_RETOMA
         e_comando_operador = e_comando_pausa or e_comando_retoma
-        e_telefone_operador = is_operator_phone(phone)
+
+        # Usar versao async para pegar config atualizada do MongoDB
+        e_telefone_operador = await is_operator_phone_async(phone)
+
+        # Pegar config atual para logs
+        operator_phone, alerts_phone = await get_operator_phones()
 
         # Log detalhado SEMPRE para debug de comandos - incluir bytes para ver caracteres invisiveis
         comando_bytes = comando.encode('utf-8').hex() if comando else "vazio"
         logger.info(f"[DEBUG-CMD] fromMe={from_me}, phone={phone}, comando='{comando}' (bytes={comando_bytes})")
         logger.info(f"[DEBUG-CMD] e_comando_pausa={e_comando_pausa}, e_comando_retoma={e_comando_retoma}, e_telefone_operador={e_telefone_operador}")
-        logger.info(f"[DEBUG-CMD] ATENDENTE_PHONE configurado: {ATENDENTE_PHONE}")
+        logger.info(f"[DEBUG-CMD] OPERATOR_PHONE (MongoDB): {operator_phone}, ALERTS_PHONE: {alerts_phone}")
 
         if e_comando_operador:
             add_webhook_debug("COMMAND_DETECTED", {
@@ -2723,7 +2794,8 @@ async def webhook_whatsapp(request: Request):
         # Log CRITICO para debug de operador - sempre mostra
         logger.info(f"[DEBUG-OPERADOR] ====== VERIFICACAO DE OPERADOR ======")
         logger.info(f"[DEBUG-OPERADOR] phone recebido: '{phone}'")
-        logger.info(f"[DEBUG-OPERADOR] ATENDENTE_PHONE: '{ATENDENTE_PHONE}'")
+        logger.info(f"[DEBUG-OPERADOR] OPERATOR_PHONE (MongoDB/config): '{operator_phone}'")
+        logger.info(f"[DEBUG-OPERADOR] ALERTS_PHONE (MongoDB/config): '{alerts_phone}'")
         logger.info(f"[DEBUG-OPERADOR] fromMe: {from_me}")
         logger.info(f"[DEBUG-OPERADOR] e_telefone_operador: {e_telefone_operador}")
         logger.info(f"[DEBUG-OPERADOR] e_operador (final): {e_operador}")
