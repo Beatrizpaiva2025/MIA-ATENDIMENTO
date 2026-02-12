@@ -246,7 +246,8 @@ async def api_get_conversoes(periodo: str = "30"):
                     "tempo_atendimento": tempo_atendimento,
                     "tipo_atendimento": "Human + AI" if teve_humano else "AI Only",
                     "metodo": c.get("detection_method", "manual"),
-                    "mensagem": c.get("message", "")[:50]
+                    "mensagem": c.get("message", "")[:50],
+                    "message": c.get("message", "")
                 })
             except Exception as item_error:
                 logger.error(f"Erro conversão: {item_error}")
@@ -396,6 +397,47 @@ async def api_delete_conversao(conversao_id: str):
         return {"success": True, "message": "Conversion deleted"}
     except Exception as e:
         logger.error(f"❌ Erro delete conversão: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/admin/conversas/api/edit-conversao/{conversao_id}")
+async def api_edit_conversao(conversao_id: str, request: Request):
+    """Edita conversão existente"""
+    try:
+        data = await request.json()
+
+        phone = data.get("phone", "").strip()
+        if not phone:
+            return {"success": False, "error": "Phone required"}
+
+        try:
+            valor = float(data.get("valor", 0))
+        except:
+            return {"success": False, "error": "Invalid value"}
+
+        if valor <= 0:
+            return {"success": False, "error": "Value must be > 0"}
+
+        update_fields = {
+            "phone": phone,
+            "valor": valor,
+            "value": valor,
+            "message": data.get("observacao", ""),
+        }
+
+        result = await db.conversoes.update_one(
+            {"_id": ObjectId(conversao_id)},
+            {"$set": update_fields}
+        )
+
+        if result.matched_count == 0:
+            return {"success": False, "error": "Conversion not found"}
+
+        logger.info(f"✅ Conversão editada: {conversao_id} - {phone} - ${valor}")
+
+        return {"success": True, "message": "Conversion updated"}
+    except Exception as e:
+        logger.error(f"❌ Erro edit conversão: {e}")
         return {"success": False, "error": str(e)}
 
 
