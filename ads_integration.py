@@ -70,32 +70,11 @@ class GoogleAdsAPI:
                 raise Exception(f"Failed to refresh Google Ads token: {response.text}")
 
     async def get_campaigns(self, days: int = 30) -> List[Dict]:
-        """Busca campanhas e metricas do Google Ads"""
+        """Busca campanhas e metricas do Google Ads (2 etapas: campanhas + metricas)"""
         try:
             access_token = await self._refresh_access_token()
 
             customer_id = GOOGLE_ADS_CUSTOMER_ID.replace("-", "")
-
-            # Query GAQL para buscar campanhas com metricas
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days)
-
-            query = f"""
-                SELECT
-                    campaign.id,
-                    campaign.name,
-                    campaign.status,
-                    campaign.advertising_channel_type,
-                    metrics.impressions,
-                    metrics.clicks,
-                    metrics.cost_micros,
-                    metrics.conversions,
-                    metrics.ctr,
-                    metrics.average_cpc
-                FROM campaign
-                WHERE segments.date BETWEEN '{start_date.strftime('%Y-%m-%d')}' AND '{end_date.strftime('%Y-%m-%d')}'
-                ORDER BY metrics.impressions DESC
-            """
 
             url = f"{self.BASE_URL}/customers/{customer_id}/googleAds:searchStream"
 
@@ -106,51 +85,113 @@ class GoogleAdsAPI:
                 "Content-Type": "application/json"
             }
 
+            # Etapa 1: Buscar TODAS as campanhas (sem filtro de data/metricas)
+            campaign_query = """
+                SELECT
+                    campaign.id,
+                    campaign.name,
+                    campaign.status,
+                    campaign.advertising_channel_type
+                FROM campaign
+                WHERE campaign.status != 'REMOVED'
+                ORDER BY campaign.name
+            """
+
+            campaigns_map = {}
+
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     url,
                     headers=headers,
-                    json={"query": query}
+                    json={"query": campaign_query}
                 )
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"[GOOGLE ADS] Raw API response: {data}")
-                    campaigns = []
+                    logger.info(f"[GOOGLE ADS] Campaigns query response: {data}")
 
                     for result in data:
                         if "results" in result:
                             for row in result["results"]:
                                 campaign = row.get("campaign", {})
-                                metrics = row.get("metrics", {})
-
-                                # Converter cost de micros para dolares
-                                cost_micros = metrics.get("costMicros", 0)
-                                cost = int(cost_micros) / 1_000_000 if cost_micros else 0
-
-                                # Converter CPC de micros para dolares
-                                avg_cpc_micros = metrics.get("averageCpc", 0)
-                                avg_cpc = int(avg_cpc_micros) / 1_000_000 if avg_cpc_micros else 0
-
-                                campaigns.append({
-                                    "id": campaign.get("id", ""),
+                                camp_id = campaign.get("id", "")
+                                campaigns_map[camp_id] = {
+                                    "id": camp_id,
                                     "name": campaign.get("name", ""),
                                     "status": campaign.get("status", "UNKNOWN"),
                                     "type": campaign.get("advertisingChannelType", ""),
-                                    "impressions": int(metrics.get("impressions", 0)),
-                                    "clicks": int(metrics.get("clicks", 0)),
-                                    "cost": round(cost, 2),
-                                    "conversions": float(metrics.get("conversions", 0)),
-                                    "ctr": round(float(metrics.get("ctr", 0)) * 100, 2),
-                                    "avg_cpc": round(avg_cpc, 2),
+                                    "impressions": 0,
+                                    "clicks": 0,
+                                    "cost": 0.0,
+                                    "conversions": 0.0,
+                                    "ctr": 0.0,
+                                    "avg_cpc": 0.0,
                                     "platform": "Google Ads"
-                                })
+                                }
 
-                    logger.info(f"[GOOGLE ADS] Fetched {len(campaigns)} campaigns")
-                    return campaigns
+                    logger.info(f"[GOOGLE ADS] Found {len(campaigns_map)} campaigns in step 1")
                 else:
-                    logger.error(f"[GOOGLE ADS] API Error: {response.status_code} - {response.text}")
+                    logger.error(f"[GOOGLE ADS] Campaign query error: {response.status_code} - {response.text}")
                     return []
+
+                # Etapa 2: Buscar metricas com filtro de data (campanhas sem dados nao aparecem, mas ja temos a lista)
+                if campaigns_map:
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=days)
+
+                    metrics_query = f"""
+                        SELECT
+                            campaign.id,
+                            metrics.impressions,
+                            metrics.clicks,
+                            metrics.cost_micros,
+                            metrics.conversions,
+                            metrics.ctr,
+                            metrics.average_cpc
+                        FROM campaign
+                        WHERE segments.date BETWEEN '{start_date.strftime('%Y-%m-%d')}' AND '{end_date.strftime('%Y-%m-%d')}'
+                    """
+
+                    metrics_response = await client.post(
+                        url,
+                        headers=headers,
+                        json={"query": metrics_query}
+                    )
+
+                    if metrics_response.status_code == 200:
+                        metrics_data = metrics_response.json()
+                        logger.info(f"[GOOGLE ADS] Metrics query response received")
+
+                        for result in metrics_data:
+                            if "results" in result:
+                                for row in result["results"]:
+                                    campaign = row.get("campaign", {})
+                                    metrics = row.get("metrics", {})
+                                    camp_id = campaign.get("id", "")
+
+                                    if camp_id in campaigns_map:
+                                        cost_micros = metrics.get("costMicros", 0)
+                                        cost = int(cost_micros) / 1_000_000 if cost_micros else 0
+
+                                        # Agregar metricas (soma por segmento de data)
+                                        campaigns_map[camp_id]["impressions"] += int(metrics.get("impressions", 0))
+                                        campaigns_map[camp_id]["clicks"] += int(metrics.get("clicks", 0))
+                                        campaigns_map[camp_id]["cost"] += cost
+                                        campaigns_map[camp_id]["conversions"] += float(metrics.get("conversions", 0))
+
+                        # Calcular CTR e CPC medio apos agregacao
+                        for camp in campaigns_map.values():
+                            if camp["impressions"] > 0:
+                                camp["ctr"] = round((camp["clicks"] / camp["impressions"]) * 100, 2)
+                            if camp["clicks"] > 0:
+                                camp["avg_cpc"] = round(camp["cost"] / camp["clicks"], 2)
+                            camp["cost"] = round(camp["cost"], 2)
+                    else:
+                        logger.warning(f"[GOOGLE ADS] Metrics query error: {metrics_response.status_code} - campaigns will show 0 metrics")
+
+            campaigns = list(campaigns_map.values())
+            logger.info(f"[GOOGLE ADS] Fetched {len(campaigns)} campaigns total")
+            return campaigns
 
         except Exception as e:
             logger.error(f"[GOOGLE ADS] Exception: {str(e)}")
