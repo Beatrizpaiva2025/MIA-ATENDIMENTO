@@ -3664,6 +3664,22 @@ Para urgencias: (contato)"""
 
 
 # ============================================================
+# ROTA: LOGIN
+# ============================================================
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Pagina de login"""
+    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+
+@app.post("/login", response_class=HTMLResponse)
+async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
+    """Processar login"""
+    if username == "admin" and password == "admin123":
+        return RedirectResponse(url="/admin", status_code=303)
+    return templates.TemplateResponse("login.html", {"request": request, "error": "Usuário ou senha inválidos"})
+
+
+# ============================================================
 # ROTA: PAGINA INICIAL
 # ============================================================
 @app.get("/", response_class=HTMLResponse)

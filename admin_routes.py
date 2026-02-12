@@ -381,13 +381,7 @@ async def get_dashboard_data(days: int = 30):
 # DASHBOARD PRINCIPAL
 # ============================================
 
-@router.get("/")
-async def root():
-    """Redireciona para a página de login"""
-    return RedirectResponse(url="/login", status_code=307)
-
-
-@router.get("/admin", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     """Dashboard principal com estatísticas gerais"""
     try:
