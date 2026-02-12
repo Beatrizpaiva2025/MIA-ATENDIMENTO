@@ -278,14 +278,16 @@ async def test_google_ads_raw():
             end_date = datetime.now()
             start_date = end_date - timedelta(days=30)
 
-            # Query simples primeiro
+            # Query simples primeiro (sem filtro de data - retorna TODAS as campanhas)
             query = """
                 SELECT
                     campaign.id,
                     campaign.name,
-                    campaign.status
+                    campaign.status,
+                    campaign.advertising_channel_type
                 FROM campaign
-                LIMIT 10
+                WHERE campaign.status != 'REMOVED'
+                ORDER BY campaign.name
             """
 
             url = f"https://googleads.googleapis.com/v18/customers/{customer_id}/googleAds:searchStream"
@@ -381,13 +383,7 @@ async def get_dashboard_data(days: int = 30):
 # DASHBOARD PRINCIPAL
 # ============================================
 
-@router.get("/")
-async def root():
-    """Redireciona para a página de login"""
-    return RedirectResponse(url="/login", status_code=307)
-
-
-@router.get("/admin", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     """Dashboard principal com estatísticas gerais"""
     try:
