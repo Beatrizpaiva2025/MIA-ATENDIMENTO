@@ -1,0 +1,161 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Transferencias - MIA Admin{% endblock %}
+
+{% block extra_style %}
+<style>
+    .page-header h1 { font-size: 1.4em; color: #1e3a5f; margin-bottom: 5px; }
+    .page-header p { font-size: 0.85em; color: #666; }
+
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-top: 3px solid #5dade2;
+    }
+
+    .stat-card.warning { border-top-color: #e74c3c; }
+    .stat-card.active { border-top-color: #f39c12; }
+    .stat-card.success { border-top-color: #27ae60; }
+
+    .stat-card .number { font-size: 1.8em; font-weight: 700; color: #1e3a5f; }
+    .stat-card .label { font-size: 0.8em; color: #666; margin-top: 5px; }
+
+    .filter-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .filter-btn {
+        padding: 8px 18px;
+        border: 2px solid #ddd;
+        border-radius: 20px;
+        background: white;
+        cursor: pointer;
+        font-size: 0.85em;
+        font-weight: 600;
+        transition: all 0.3s;
+        text-decoration: none;
+        color: #333;
+    }
+
+    .filter-btn:hover, .filter-btn.active { border-color: #5dade2; color: #5dade2; background: #e3f2fd; }
+
+    .transfers-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85em;
+    }
+
+    .transfers-table th {
+        background: #1e3a5f;
+        color: white;
+        padding: 10px 12px;
+        text-align: left;
+    }
+
+    .transfers-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .transfers-table tr:hover { background: #f8f9fa; }
+
+    .status-badge {
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 600;
+    }
+
+    .status-pendente { background: #fff3cd; color: #856404; }
+    .status-atendimento { background: #cce5ff; color: #004085; }
+    .status-concluido { background: #d4edda; color: #155724; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Transferencias para Humano</h1>
+    <p>Gerencie as solicitacoes de atendimento humano</p>
+</div>
+
+{% if error %}
+<div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+    {{ error }}
+</div>
+{% else %}
+
+<!-- Stats -->
+<div class="stats-row">
+    <div class="stat-card warning">
+        <div class="number">{{ total_pendentes if total_pendentes is defined else 0 }}</div>
+        <div class="label">Pendentes</div>
+    </div>
+    <div class="stat-card active">
+        <div class="number">{{ total_em_atendimento if total_em_atendimento is defined else 0 }}</div>
+        <div class="label">Em Atendimento</div>
+    </div>
+    <div class="stat-card success">
+        <div class="number">{{ total_concluidas if total_concluidas is defined else 0 }}</div>
+        <div class="label">Concluidas</div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="filter-bar">
+    <a href="/admin/transfers?status=PENDENTE" class="filter-btn {% if filtro_status == 'PENDENTE' %}active{% endif %}">Pendentes</a>
+    <a href="/admin/transfers?status=EM_ATENDIMENTO" class="filter-btn {% if filtro_status == 'EM_ATENDIMENTO' %}active{% endif %}">Em Atendimento</a>
+    <a href="/admin/transfers?status=CONCLUIDO" class="filter-btn {% if filtro_status == 'CONCLUIDO' %}active{% endif %}">Concluidas</a>
+    <a href="/admin/transfers" class="filter-btn {% if not filtro_status %}active{% endif %}">Todas</a>
+</div>
+
+<!-- Tabela -->
+<div style="overflow-x: auto;">
+    <table class="transfers-table">
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Cliente</th>
+                <th>Motivo</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if transferencias %}
+                {% for trans in transferencias %}
+                <tr>
+                    <td>{{ trans.timestamp_formatted }}</td>
+                    <td>{{ trans.get('cliente_nome', trans.get('phone', 'N/A')) }}</td>
+                    <td>{{ trans.get('motivo', 'N/A') }}</td>
+                    <td>
+                        {% if trans.get('status') == 'PENDENTE' %}
+                            <span class="status-badge status-pendente">Pendente</span>
+                        {% elif trans.get('status') == 'EM_ATENDIMENTO' %}
+                            <span class="status-badge status-atendimento">Em Atendimento</span>
+                        {% else %}
+                            <span class="status-badge status-concluido">Concluido</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="4" style="text-align: center; color: #999;">Nenhuma transferencia encontrada</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{% endif %}
+{% endblock %}

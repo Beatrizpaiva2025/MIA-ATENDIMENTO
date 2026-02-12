@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 import os
-from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 import logging
 
@@ -22,10 +22,10 @@ templates = Jinja2Templates(directory="templates")
 # Criar router
 router = APIRouter(prefix="/admin", tags=["Admin Panel"])
 
-# Conectar MongoDB
+# Conectar MongoDB (async Motor - mesmo database que os outros modulos)
 MONGODB_URI = os.getenv("MONGODB_URI")
-mongo_client = MongoClient(MONGODB_URI) if MONGODB_URI else None
-db = mongo_client["mia_production"] if mongo_client else None
+motor_client = AsyncIOMotorClient(MONGODB_URI) if MONGODB_URI else None
+db = motor_client["mia_database"] if motor_client else None
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -47,9 +47,9 @@ async def get_leads_stats(days: int = 30):
         start_date = datetime.utcnow() - timedelta(days=days)
         
         # Get leads from MongoDB
-        leads = list(db['leads'].find({
+        leads = await db['leads'].find({
             'created_at': {'$gte': start_date.isoformat()}
-        }))
+        }).to_list(length=None)
         
         # Calculate statistics
         total = len(leads)
@@ -86,9 +86,9 @@ async def get_marketing_stats(days: int = 30):
             
         start_date = datetime.utcnow() - timedelta(days=days)
         
-        stats = list(db['marketing_stats'].find({
+        stats = await db['marketing_stats'].find({
             'date': {'$gte': start_date.isoformat()}
-        }).sort('date', 1))
+        }).sort('date', 1).to_list(length=None)
         
         # Serialize
         stats = [serialize_doc(stat) for stat in stats]
@@ -394,28 +394,28 @@ async def admin_dashboard(request: Request):
             })
         
         # Buscar estatísticas
-        total_conversas = db.conversas.count_documents({})
-        total_leads = db.leads.count_documents({})
-        total_documentos = db.documentos.count_documents({})
-        total_transferencias = db.transferencias.count_documents({"status": "PENDENTE"})
-        
+        total_conversas = await db.conversas.count_documents({})
+        total_leads = await db.leads.count_documents({})
+        total_documentos = await db.documentos.count_documents({})
+        total_transferencias = await db.transferencias.count_documents({"status": "PENDENTE"})
+
         # Conversas por canal (últimos 7 dias)
         date_limit = datetime.now() - timedelta(days=7)
-        conversas_whatsapp = db.conversas.count_documents({
+        conversas_whatsapp = await db.conversas.count_documents({
             "canal": "WhatsApp",
             "timestamp": {"$gte": date_limit}
         })
-        conversas_instagram = db.conversas.count_documents({
+        conversas_instagram = await db.conversas.count_documents({
             "canal": "Instagram",
             "timestamp": {"$gte": date_limit}
         })
-        conversas_webchat = db.conversas.count_documents({
+        conversas_webchat = await db.conversas.count_documents({
             "canal": "WebChat",
             "timestamp": {"$gte": date_limit}
         })
-        
+
         # Últimas conversas
-        ultimas_conversas = list(db.conversas.find().sort("timestamp", -1).limit(10))
+        ultimas_conversas = await db.conversas.find().sort("timestamp", -1).limit(10).to_list(length=10)
         
         # Formatar datas
         for conv in ultimas_conversas:
@@ -460,24 +460,24 @@ async def admin_pipeline(request: Request):
         
         # Leads por estágio do funil
         pipeline_data = {
-            "novo": db.leads.count_documents({"estagio": "NOVO"}),
-            "contato_inicial": db.leads.count_documents({"estagio": "CONTATO_INICIAL"}),
-            "qualificado": db.leads.count_documents({"estagio": "QUALIFICADO"}),
-            "proposta": db.leads.count_documents({"estagio": "PROPOSTA"}),
-            "negociacao": db.leads.count_documents({"estagio": "NEGOCIACAO"}),
-            "fechado": db.leads.count_documents({"estagio": "FECHADO"}),
-            "perdido": db.leads.count_documents({"estagio": "PERDIDO"})
+            "novo": await db.leads.count_documents({"estagio": "NOVO"}),
+            "contato_inicial": await db.leads.count_documents({"estagio": "CONTATO_INICIAL"}),
+            "qualificado": await db.leads.count_documents({"estagio": "QUALIFICADO"}),
+            "proposta": await db.leads.count_documents({"estagio": "PROPOSTA"}),
+            "negociacao": await db.leads.count_documents({"estagio": "NEGOCIACAO"}),
+            "fechado": await db.leads.count_documents({"estagio": "FECHADO"}),
+            "perdido": await db.leads.count_documents({"estagio": "PERDIDO"})
         }
-        
+
         # Leads por canal
         leads_por_canal = {
-            "WhatsApp": db.leads.count_documents({"canal": "WhatsApp"}),
-            "Instagram": db.leads.count_documents({"canal": "Instagram"}),
-            "WebChat": db.leads.count_documents({"canal": "WebChat"})
+            "WhatsApp": await db.leads.count_documents({"canal": "WhatsApp"}),
+            "Instagram": await db.leads.count_documents({"canal": "Instagram"}),
+            "WebChat": await db.leads.count_documents({"canal": "WebChat"})
         }
-        
+
         # Leads recentes
-        leads_recentes = list(db.leads.find().sort("timestamp", -1).limit(20))
+        leads_recentes = await db.leads.find().sort("timestamp", -1).limit(20).to_list(length=20)
         
         for lead in leads_recentes:
             lead["timestamp_formatted"] = lead["timestamp"].strftime("%d/%m/%Y %H:%M")
@@ -518,18 +518,18 @@ async def admin_leads(request: Request, canal: Optional[str] = None, estagio: Op
             filtro["estagio"] = estagio
         
         # Buscar leads
-        leads = list(db.leads.find(filtro).sort("timestamp", -1).limit(100))
-        
+        leads = await db.leads.find(filtro).sort("timestamp", -1).limit(100).to_list(length=100)
+
         # Formatar dados
         for lead in leads:
             lead["timestamp_formatted"] = lead["timestamp"].strftime("%d/%m/%Y %H:%M")
             lead["_id"] = str(lead["_id"])
-        
+
         # Estatísticas
         total_leads = len(leads)
-        leads_quentes = db.leads.count_documents({**filtro, "temperatura": "QUENTE"})
-        leads_mornos = db.leads.count_documents({**filtro, "temperatura": "MORNO"})
-        leads_frios = db.leads.count_documents({**filtro, "temperatura": "FRIO"})
+        leads_quentes = await db.leads.count_documents({**filtro, "temperatura": "QUENTE"})
+        leads_mornos = await db.leads.count_documents({**filtro, "temperatura": "MORNO"})
+        leads_frios = await db.leads.count_documents({**filtro, "temperatura": "FRIO"})
         
         return templates.TemplateResponse("admin_leads.html", {
             "request": request,
@@ -565,17 +565,17 @@ async def admin_transfers(request: Request, status: Optional[str] = "PENDENTE"):
         
         # Buscar transferências
         filtro = {"status": status} if status else {}
-        transferencias = list(db.transferencias.find(filtro).sort("timestamp", -1).limit(50))
-        
+        transferencias = await db.transferencias.find(filtro).sort("timestamp", -1).limit(50).to_list(length=50)
+
         # Formatar dados
         for trans in transferencias:
             trans["timestamp_formatted"] = trans["timestamp"].strftime("%d/%m/%Y %H:%M")
             trans["_id"] = str(trans["_id"])
-        
+
         # Estatísticas
-        total_pendentes = db.transferencias.count_documents({"status": "PENDENTE"})
-        total_em_atendimento = db.transferencias.count_documents({"status": "EM_ATENDIMENTO"})
-        total_concluidas = db.transferencias.count_documents({"status": "CONCLUIDO"})
+        total_pendentes = await db.transferencias.count_documents({"status": "PENDENTE"})
+        total_em_atendimento = await db.transferencias.count_documents({"status": "EM_ATENDIMENTO"})
+        total_concluidas = await db.transferencias.count_documents({"status": "CONCLUIDO"})
         
         return templates.TemplateResponse("admin_transfers.html", {
             "request": request,
@@ -609,18 +609,18 @@ async def admin_documents(request: Request, status: Optional[str] = None):
         
         # Buscar documentos
         filtro = {"status": status} if status else {}
-        documentos = list(db.documentos.find(filtro).sort("timestamp", -1).limit(50))
-        
+        documentos = await db.documentos.find(filtro).sort("timestamp", -1).limit(50).to_list(length=50)
+
         # Formatar dados
         for doc in documentos:
             doc["timestamp_formatted"] = doc["timestamp"].strftime("%d/%m/%Y %H:%M")
             doc["_id"] = str(doc["_id"])
-        
+
         # Estatísticas
         total_documentos = len(documentos)
-        docs_aprovados = db.documentos.count_documents({"status": "APROVADO"})
-        docs_pendentes = db.documentos.count_documents({"status": "PENDENTE"})
-        docs_rejeitados = db.documentos.count_documents({"status": "REJEITADO"})
+        docs_aprovados = await db.documentos.count_documents({"status": "APROVADO"})
+        docs_pendentes = await db.documentos.count_documents({"status": "PENDENTE"})
+        docs_rejeitados = await db.documentos.count_documents({"status": "REJEITADO"})
         
         return templates.TemplateResponse("admin_documents.html", {
             "request": request,
@@ -688,10 +688,10 @@ async def api_stats():
             raise HTTPException(status_code=503, detail="MongoDB não disponível")
         
         stats = {
-            "total_conversas": db.conversas.count_documents({}),
-            "total_leads": db.leads.count_documents({}),
-            "total_documentos": db.documentos.count_documents({}),
-            "transferencias_pendentes": db.transferencias.count_documents({"status": "PENDENTE"}),
+            "total_conversas": await db.conversas.count_documents({}),
+            "total_leads": await db.leads.count_documents({}),
+            "total_documentos": await db.documentos.count_documents({}),
+            "transferencias_pendentes": await db.transferencias.count_documents({"status": "PENDENTE"}),
             "timestamp": datetime.now().isoformat()
         }
         
