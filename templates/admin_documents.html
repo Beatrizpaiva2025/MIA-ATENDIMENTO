@@ -1,0 +1,165 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Documentos - MIA Admin{% endblock %}
+
+{% block extra_style %}
+<style>
+    .page-header h1 { font-size: 1.4em; color: #1e3a5f; margin-bottom: 5px; }
+    .page-header p { font-size: 0.85em; color: #666; }
+
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-top: 3px solid #5dade2;
+    }
+
+    .stat-card.approved { border-top-color: #27ae60; }
+    .stat-card.pending { border-top-color: #f39c12; }
+    .stat-card.rejected { border-top-color: #e74c3c; }
+
+    .stat-card .number { font-size: 1.8em; font-weight: 700; color: #1e3a5f; }
+    .stat-card .label { font-size: 0.8em; color: #666; margin-top: 5px; }
+
+    .filter-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .filter-btn {
+        padding: 8px 18px;
+        border: 2px solid #ddd;
+        border-radius: 20px;
+        background: white;
+        cursor: pointer;
+        font-size: 0.85em;
+        font-weight: 600;
+        transition: all 0.3s;
+        text-decoration: none;
+        color: #333;
+    }
+
+    .filter-btn:hover, .filter-btn.active { border-color: #5dade2; color: #5dade2; background: #e3f2fd; }
+
+    .docs-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85em;
+    }
+
+    .docs-table th {
+        background: #1e3a5f;
+        color: white;
+        padding: 10px 12px;
+        text-align: left;
+    }
+
+    .docs-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .docs-table tr:hover { background: #f8f9fa; }
+
+    .status-badge {
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 600;
+    }
+
+    .status-aprovado { background: #d4edda; color: #155724; }
+    .status-pendente { background: #fff3cd; color: #856404; }
+    .status-rejeitado { background: #f8d7da; color: #721c24; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Analise de Documentos</h1>
+    <p>Documentos analisados pelo GPT-4 Vision</p>
+</div>
+
+{% if error %}
+<div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+    {{ error }}
+</div>
+{% else %}
+
+<!-- Stats -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="number">{{ total_documentos if total_documentos is defined else 0 }}</div>
+        <div class="label">Total</div>
+    </div>
+    <div class="stat-card approved">
+        <div class="number">{{ docs_aprovados if docs_aprovados is defined else 0 }}</div>
+        <div class="label">Aprovados</div>
+    </div>
+    <div class="stat-card pending">
+        <div class="number">{{ docs_pendentes if docs_pendentes is defined else 0 }}</div>
+        <div class="label">Pendentes</div>
+    </div>
+    <div class="stat-card rejected">
+        <div class="number">{{ docs_rejeitados if docs_rejeitados is defined else 0 }}</div>
+        <div class="label">Rejeitados</div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="filter-bar">
+    <a href="/admin/documents" class="filter-btn {% if not filtro_status %}active{% endif %}">Todos</a>
+    <a href="/admin/documents?status=APROVADO" class="filter-btn {% if filtro_status == 'APROVADO' %}active{% endif %}">Aprovados</a>
+    <a href="/admin/documents?status=PENDENTE" class="filter-btn {% if filtro_status == 'PENDENTE' %}active{% endif %}">Pendentes</a>
+    <a href="/admin/documents?status=REJEITADO" class="filter-btn {% if filtro_status == 'REJEITADO' %}active{% endif %}">Rejeitados</a>
+</div>
+
+<!-- Tabela -->
+<div style="overflow-x: auto;">
+    <table class="docs-table">
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Cliente</th>
+                <th>Tipo</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if documentos %}
+                {% for doc in documentos %}
+                <tr>
+                    <td>{{ doc.timestamp_formatted }}</td>
+                    <td>{{ doc.get('cliente_nome', doc.get('phone', 'N/A')) }}</td>
+                    <td>{{ doc.get('tipo', doc.get('type', 'N/A')) }}</td>
+                    <td>
+                        {% if doc.get('status') == 'APROVADO' %}
+                            <span class="status-badge status-aprovado">Aprovado</span>
+                        {% elif doc.get('status') == 'PENDENTE' %}
+                            <span class="status-badge status-pendente">Pendente</span>
+                        {% else %}
+                            <span class="status-badge status-rejeitado">Rejeitado</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="4" style="text-align: center; color: #999;">Nenhum documento encontrado</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{% endif %}
+{% endblock %}

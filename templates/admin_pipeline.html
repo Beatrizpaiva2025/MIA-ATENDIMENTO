@@ -1,0 +1,190 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Pipeline de Vendas - MIA Admin{% endblock %}
+
+{% block extra_style %}
+<style>
+    .page-header h1 { font-size: 1.4em; color: #1e3a5f; margin-bottom: 5px; }
+    .page-header p { font-size: 0.85em; color: #666; }
+
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-top: 3px solid #5dade2;
+    }
+
+    .stat-card .number { font-size: 1.8em; font-weight: 700; color: #1e3a5f; }
+    .stat-card .label { font-size: 0.8em; color: #666; margin-top: 5px; }
+
+    .pipeline-funnel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 25px;
+    }
+
+    .funnel-stage {
+        display: flex;
+        align-items: center;
+        padding: 12px 18px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        transition: transform 0.2s;
+    }
+
+    .funnel-stage:hover { transform: translateX(5px); }
+    .funnel-stage .count { margin-left: auto; font-size: 1.3em; }
+
+    .stage-novo { background: linear-gradient(135deg, #3498db, #2980b9); }
+    .stage-contato { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+    .stage-qualificado { background: linear-gradient(135deg, #f39c12, #e67e22); }
+    .stage-proposta { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+    .stage-negociacao { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+    .stage-fechado { background: linear-gradient(135deg, #1abc9c, #16a085); }
+    .stage-perdido { background: linear-gradient(135deg, #95a5a6, #7f8c8d); }
+
+    .section-title {
+        font-size: 1.1em;
+        color: #1e3a5f;
+        margin-bottom: 15px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #5dade2;
+    }
+
+    .leads-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85em;
+    }
+
+    .leads-table th {
+        background: #1e3a5f;
+        color: white;
+        padding: 10px 12px;
+        text-align: left;
+    }
+
+    .leads-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .leads-table tr:hover { background: #f8f9fa; }
+
+    .badge {
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 600;
+    }
+
+    .badge-whatsapp { background: #dcf8c6; color: #25d366; }
+    .badge-instagram { background: #fce4ec; color: #e1306c; }
+    .badge-webchat { background: #e3f2fd; color: #1976d2; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Pipeline de Vendas</h1>
+    <p>Visualize o funil de vendas e acompanhe seus leads</p>
+</div>
+
+{% if error %}
+<div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+    {{ error }}
+</div>
+{% else %}
+
+<!-- Leads por Canal -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="number">{{ leads_por_canal.get('WhatsApp', 0) if leads_por_canal else 0 }}</div>
+        <div class="label">WhatsApp</div>
+    </div>
+    <div class="stat-card">
+        <div class="number">{{ leads_por_canal.get('Instagram', 0) if leads_por_canal else 0 }}</div>
+        <div class="label">Instagram</div>
+    </div>
+    <div class="stat-card">
+        <div class="number">{{ leads_por_canal.get('WebChat', 0) if leads_por_canal else 0 }}</div>
+        <div class="label">WebChat</div>
+    </div>
+</div>
+
+<!-- Funil -->
+<h3 class="section-title">Funil de Vendas</h3>
+<div class="pipeline-funnel">
+    <div class="funnel-stage stage-novo">
+        Novo <span class="count">{{ pipeline.get('novo', 0) if pipeline else 0 }}</span>
+    </div>
+    <div class="funnel-stage stage-contato">
+        Contato Inicial <span class="count">{{ pipeline.get('contato_inicial', 0) if pipeline else 0 }}</span>
+    </div>
+    <div class="funnel-stage stage-qualificado">
+        Qualificado <span class="count">{{ pipeline.get('qualificado', 0) if pipeline else 0 }}</span>
+    </div>
+    <div class="funnel-stage stage-proposta">
+        Proposta <span class="count">{{ pipeline.get('proposta', 0) if pipeline else 0 }}</span>
+    </div>
+    <div class="funnel-stage stage-negociacao">
+        Negociacao <span class="count">{{ pipeline.get('negociacao', 0) if pipeline else 0 }}</span>
+    </div>
+    <div class="funnel-stage stage-fechado">
+        Fechado <span class="count">{{ pipeline.get('fechado', 0) if pipeline else 0 }}</span>
+    </div>
+    <div class="funnel-stage stage-perdido">
+        Perdido <span class="count">{{ pipeline.get('perdido', 0) if pipeline else 0 }}</span>
+    </div>
+</div>
+
+<!-- Leads Recentes -->
+<h3 class="section-title">Leads Recentes</h3>
+<div style="overflow-x: auto;">
+    <table class="leads-table">
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Nome</th>
+                <th>Canal</th>
+                <th>Estagio</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if leads_recentes %}
+                {% for lead in leads_recentes %}
+                <tr>
+                    <td>{{ lead.timestamp_formatted }}</td>
+                    <td>{{ lead.get('nome', lead.get('name', 'N/A')) }}</td>
+                    <td>
+                        {% if lead.get('canal') == 'WhatsApp' %}
+                            <span class="badge badge-whatsapp">WhatsApp</span>
+                        {% elif lead.get('canal') == 'Instagram' %}
+                            <span class="badge badge-instagram">Instagram</span>
+                        {% else %}
+                            <span class="badge badge-webchat">{{ lead.get('canal', 'N/A') }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ lead.get('estagio', 'N/A') }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="4" style="text-align: center; color: #999;">Nenhum lead encontrado</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{% endif %}
+{% endblock %}
