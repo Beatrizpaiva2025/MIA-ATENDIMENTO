@@ -1107,31 +1107,56 @@ async def processar_sessao_imagem(phone: str):
     idioma_origem = analise.get("idioma_origem", "")
     idioma_destino = analise.get("idioma_destino_sugerido", "ingles")
 
-    # Mensagens em diferentes idiomas
-    if idioma == "en":
-        mensagem = (
-            f"Hello! I'm MIA, Legacy Translations' virtual assistant! 🌎\n\n"
-            f"I see you sent {total_pages} page{'s' if total_pages > 1 else ''} of a {tipo_doc} "
-            f"in {idioma_origem}.\n\n"
-            f"Can you confirm if you'd like to translate {'them' if total_pages > 1 else 'it'} to {idioma_destino}?\n\n"
-            f"Also, may I have your name please?"
-        )
-    elif idioma == "es":
-        mensagem = (
-            f"¡Hola! Soy MIA, asistente virtual de Legacy Translations! 🌎\n\n"
-            f"Veo que enviaste {total_pages} página{'s' if total_pages > 1 else ''} de un {tipo_doc} "
-            f"en {idioma_origem}.\n\n"
-            f"¿Puedes confirmar si deseas traducir{'las' if total_pages > 1 else 'lo'} al {idioma_destino}?\n\n"
-            f"Además, ¿me puedes decir tu nombre por favor?"
-        )
-    else:  # Portugues (padrao)
-        mensagem = (
-            f"Ola! Sou a MIA, assistente virtual da Legacy Translations! 🌎\n\n"
-            f"Vi que voce enviou {total_pages} pagina{'s' if total_pages > 1 else ''} de um {tipo_doc} "
-            f"em {idioma_origem}.\n\n"
-            f"Pode confirmar se deseja traduzi-lo{'s' if total_pages > 1 else ''} para o {idioma_destino}?\n\n"
-            f"E tambem, qual e o seu nome?"
-        )
+    # Mensagens diferentes para 1 imagem vs multiplas imagens
+    if total_pages == 1:
+        # 1 imagem: identificar documento e pedir nome (orcamento direto apos nome)
+        if idioma == "en":
+            mensagem = (
+                f"Hello! I'm MIA, Legacy Translations' virtual assistant! 🌎\n\n"
+                f"I see you sent a {tipo_doc} in {idioma_origem}.\n\n"
+                f"Can you confirm if you'd like to translate it to {idioma_destino}?\n\n"
+                f"Also, may I have your name please?"
+            )
+        elif idioma == "es":
+            mensagem = (
+                f"¡Hola! Soy MIA, asistente virtual de Legacy Translations! 🌎\n\n"
+                f"Veo que enviaste un {tipo_doc} en {idioma_origem}.\n\n"
+                f"¿Puedes confirmar si deseas traducirlo al {idioma_destino}?\n\n"
+                f"Además, ¿me puedes decir tu nombre por favor?"
+            )
+        else:
+            mensagem = (
+                f"Ola! Sou a MIA, assistente virtual da Legacy Translations! 🌎\n\n"
+                f"Vi que voce enviou um {tipo_doc} em {idioma_origem}.\n\n"
+                f"Pode confirmar se deseja traduzi-lo para o {idioma_destino}?\n\n"
+                f"E tambem, qual e o seu nome?"
+            )
+    else:
+        # Multiplas imagens: identificar documento, pedir nome E confirmar numero de paginas
+        if idioma == "en":
+            mensagem = (
+                f"Hello! I'm MIA, Legacy Translations' virtual assistant! 🌎\n\n"
+                f"I see you sent {total_pages} pages of a {tipo_doc} in {idioma_origem}.\n\n"
+                f"Can you confirm if you'd like to translate them to {idioma_destino}?\n\n"
+                f"May I have your name please?\n\n"
+                f"And could you confirm the number of pages you'd like to translate?"
+            )
+        elif idioma == "es":
+            mensagem = (
+                f"¡Hola! Soy MIA, asistente virtual de Legacy Translations! 🌎\n\n"
+                f"Veo que enviaste {total_pages} páginas de un {tipo_doc} en {idioma_origem}.\n\n"
+                f"¿Puedes confirmar si deseas traducirlas al {idioma_destino}?\n\n"
+                f"¿Me puedes decir tu nombre por favor?\n\n"
+                f"Y ¿puedes confirmar el número de páginas que deseas traducir?"
+            )
+        else:
+            mensagem = (
+                f"Ola! Sou a MIA, assistente virtual da Legacy Translations! 🌎\n\n"
+                f"Vi que voce enviou {total_pages} paginas de um {tipo_doc} em {idioma_origem}.\n\n"
+                f"Pode confirmar se deseja traduzi-los para o {idioma_destino}?\n\n"
+                f"Qual e o seu nome?\n\n"
+                f"E pode confirmar o numero de paginas que deseja traduzir?"
+            )
 
     # Salvar no banco
     await db.conversas.insert_one({
@@ -1320,6 +1345,16 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
     if nome_limpo:
         nome = nome_limpo
 
+    # Remover parte de confirmacao de paginas do nome (ex: "Rafaela, 3 paginas" -> "Rafaela")
+    nome = re.sub(
+        r'[,.]?\s*\d+\s*(?:paginas?|páginas?|pages?|págs?)\b.*$',
+        '', nome, flags=re.IGNORECASE
+    ).strip()
+    nome = re.sub(
+        r'[,.]?\s*(?:sao|são|are|son)\s+\d+\s*(?:paginas?|páginas?|pages?|págs?)\b.*$',
+        '', nome, flags=re.IGNORECASE
+    ).strip()
+
     # Capitalizar corretamente
     nome = nome.strip().title()
 
@@ -1346,6 +1381,17 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
             return "¿Podrías decirme solo tu nombre? 😊"
         else:
             return "Poderia me dizer apenas o seu nome? 😊"
+
+    # Verificar se o cliente informou numero de paginas na mesma mensagem
+    # Ex: "Rafaela, sao 3 paginas" ou "5 pages, my name is John"
+    paginas_match = re.search(r'(\d+)\s*(?:paginas?|páginas?|pages?|págs?)', mensagem, re.IGNORECASE)
+    if paginas_match:
+        paginas_confirmadas = int(paginas_match.group(1))
+        doc_info = estado.get("documento_info", {})
+        if doc_info and paginas_confirmadas > 0:
+            doc_info["total_pages"] = paginas_confirmadas
+            await set_cliente_estado(phone, documento_info=doc_info)
+            logger.info(f"[PAGES] Cliente {phone} confirmou {paginas_confirmadas} paginas")
 
     # Salvar nome e idioma (pular etapa de origem, ir direto para orcamento)
     await set_cliente_estado(
