@@ -1307,10 +1307,22 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
         else:
             return "Claro! Estou encaminhando voce para nossa equipe. Um atendente entrara em contato o mais breve possivel. 😊"
 
-    # Extrair nome (geralmente e a primeira palavra ou frase curta)
+    # Extrair nome da mensagem (remover frases como "meu nome e", "my name is", etc)
     nome = mensagem.strip().split('\n')[0].strip()
     # Limpar pontuacao
     nome = nome.rstrip('.,!?')
+
+    # Remover padroes comuns onde o cliente diz o nome com uma frase
+    nome_limpo = re.sub(
+        r'^(meu nome [eé]|me chamo|eu sou a?|sou a?|my name is|i[\'']?m|me llamo|mi nombre es|yo soy)\s+',
+        '', nome, flags=re.IGNORECASE
+    ).strip()
+    if nome_limpo:
+        nome = nome_limpo
+
+    # Capitalizar corretamente
+    nome = nome.strip().title()
+
     # Se for muito longo, pegar primeiras palavras
     if len(nome.split()) > 4:
         nome = ' '.join(nome.split()[:3])
@@ -1335,47 +1347,67 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
         else:
             return "Poderia me dizer apenas o seu nome? 😊"
 
-    # Salvar nome e idioma
+    # Salvar nome e idioma (pular etapa de origem, ir direto para orcamento)
     await set_cliente_estado(
         phone,
         nome=nome,
-        idioma=idioma,
-        etapa=ETAPAS["AGUARDANDO_ORIGEM"]
+        idioma=idioma
     )
 
-    # Perguntar origem baseado no idioma
-    if idioma == "en":
-        resposta = (
-            f"Nice to meet you, {nome}! 😊\n\n"
-            f"Before I give you the quote, could you tell me how you heard about Legacy Translations?\n\n"
-            f"1️⃣ Google Search\n"
-            f"2️⃣ Instagram\n"
-            f"3️⃣ Facebook\n"
-            f"4️⃣ Friend's referral\n\n"
-            f"Just reply with the number or the option!"
-        )
-    elif idioma == "es":
-        resposta = (
-            f"¡Mucho gusto, {nome}! 😊\n\n"
-            f"Antes de darte el presupuesto, ¿podrías decirme cómo conociste Legacy Translations?\n\n"
-            f"1️⃣ Búsqueda en Google\n"
-            f"2️⃣ Instagram\n"
-            f"3️⃣ Facebook\n"
-            f"4️⃣ Referencia de amigo\n\n"
-            f"¡Solo responde con el número o la opción!"
-        )
-    else:
-        resposta = (
-            f"Prazer em conhece-lo(a), {nome}! 😊\n\n"
-            f"Antes de passar o orcamento, poderia me dizer como conheceu a Legacy Translations?\n\n"
-            f"1️⃣ Pesquisa no Google\n"
-            f"2️⃣ Instagram\n"
-            f"3️⃣ Facebook\n"
-            f"4️⃣ Referencia de amigo\n\n"
-            f"Responda com o numero ou a opcao!"
-        )
+    # Salvar no CRM
+    try:
+        await criar_ou_atualizar_contato(phone, {
+            "nome": nome,
+            "idioma": idioma
+        })
+    except Exception as e:
+        logger.error(f"[CRM] Erro ao salvar contato: {e}")
 
-    return resposta
+    # Saudacao baseada no idioma
+    if idioma == "en":
+        saudacao = f"Nice to meet you, {nome}! 😊\n\n"
+    elif idioma == "es":
+        saudacao = f"¡Mucho gusto, {nome}! 😊\n\n"
+    else:
+        saudacao = f"Prazer em conhece-lo(a), {nome}! 😊\n\n"
+
+    # Se fora do horario e sem documento, mostrar opcoes
+    doc_info = estado.get("documento_info")
+    if not is_business_hours() and not doc_info:
+        await set_cliente_estado(phone, etapa=ETAPAS["AGUARDANDO_OPCAO_ATENDIMENTO"])
+
+        if idioma == "en":
+            opcoes = (
+                f"{saudacao}"
+                f"How would you like to proceed?\n\n"
+                f"1️⃣ Continue the service right here\n"
+                f"2️⃣ Place my order through the website\n"
+                f"3️⃣ I'd like to speak with a representative\n\n"
+                f"Just reply with the number!"
+            )
+        elif idioma == "es":
+            opcoes = (
+                f"{saudacao}"
+                f"¿Cómo prefieres continuar?\n\n"
+                f"1️⃣ Continuar la atención aquí\n"
+                f"2️⃣ Hacer mi pedido por el sitio web\n"
+                f"3️⃣ Quiero hablar con un representante\n\n"
+                f"¡Solo responde con el número!"
+            )
+        else:
+            opcoes = (
+                f"{saudacao}"
+                f"Como voce prefere prosseguir?\n\n"
+                f"1️⃣ Continuar o atendimento aqui\n"
+                f"2️⃣ Fazer meu pedido pelo website\n"
+                f"3️⃣ Quero falar com um atendente\n\n"
+                f"Responda com o numero!"
+            )
+        return opcoes
+
+    # Fluxo normal: gerar orcamento direto
+    orcamento = await gerar_orcamento_final(phone)
+    return saudacao + orcamento
 
 
 async def processar_etapa_origem(phone: str, mensagem: str) -> str:
@@ -3312,11 +3344,13 @@ Para urgencias: (contato)"""
             # Processar baseado na etapa atual
             if etapa_atual == ETAPAS["AGUARDANDO_NOME"]:
                 reply = await processar_etapa_nome(phone, text)
-                logger.info(f"[ETAPA] {phone}: AGUARDANDO_NOME -> AGUARDANDO_ORIGEM")
+                estado_atualizado = await get_cliente_estado(phone)
+                nova_etapa = estado_atualizado.get("etapa", "")
+                logger.info(f"[ETAPA] {phone}: AGUARDANDO_NOME -> {nova_etapa}")
 
             elif etapa_atual == ETAPAS["AGUARDANDO_ORIGEM"]:
+                # Etapa legada - tratar como se fosse nome (caso cliente esteja preso nessa etapa)
                 reply = await processar_etapa_origem(phone, text)
-                # Pode ir para AGUARDANDO_OPCAO_ATENDIMENTO (fora do horario) ou AGUARDANDO_CONFIRMACAO
                 estado_atualizado = await get_cliente_estado(phone)
                 nova_etapa = estado_atualizado.get("etapa", "")
                 logger.info(f"[ETAPA] {phone}: AGUARDANDO_ORIGEM -> {nova_etapa}")
