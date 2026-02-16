@@ -1339,7 +1339,7 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
 
     # Remover padroes comuns onde o cliente diz o nome com uma frase
     nome_limpo = re.sub(
-        r'^(meu nome [eé]|me chamo|eu sou a?|sou a?|my name is|i[\'']?m|me llamo|mi nombre es|yo soy)\s+',
+        r"^(meu nome [eé]|me chamo|eu sou a?|sou a?|my name is|i['\u2019]?m|me llamo|mi nombre es|yo soy)\s+",
         '', nome, flags=re.IGNORECASE
     ).strip()
     if nome_limpo:
