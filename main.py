@@ -1368,10 +1368,27 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
         "pagina", "página", "documento", "comprovante", "pagamento",
         "transferir", "operador", "pessoa", "ajuda", "help",
         "human", "agent", "translate", "translation", "page", "document",
-        "beatriz", "eduarda"
+        "beatriz", "eduarda",
+        # Perguntas e frases comuns que nao sao nomes
+        "valor", "preco", "preço", "price", "quanto", "custa", "custo",
+        "como", "qual", "onde", "quando", "quero", "preciso", "gostaria",
+        "vocês", "voces", "fazem", "podem", "conseguem",
+        "what", "how", "where", "when", "much", "cost",
+        "need", "want", "would", "could", "please",
+        "orcamento", "orçamento", "quote", "budget",
+        "prazo", "demora", "tempo", "urgente", "urgencia",
+        "enviar", "mandar", "email", "site", "website", "portal",
+        "bom dia", "boa tarde", "boa noite", "ola", "olá", "hello", "hi",
+        "obrigado", "obrigada", "thanks", "thank",
+        "sim", "nao", "yes", "no", "si",
+        "certified", "sworn", "juramentada", "certificada"
     ]
     nome_lower = nome.lower()
     nome_parece_invalido = any(p in nome_lower for p in palavras_invalidas_nome)
+
+    # Rejeitar tambem se contem "?" (e uma pergunta, nao um nome)
+    if "?" in mensagem:
+        nome_parece_invalido = True
 
     if nome_parece_invalido or len(nome) < 2:
         # Nome parece invalido - pedir novamente
@@ -2519,22 +2536,8 @@ async def process_message_with_ai(phone: str, message: str) -> str:
 
         reply = response.choices[0].message.content
 
-        # Salvar no banco
-        await db.conversas.insert_one({
-            "phone": phone,
-            "message": message,
-            "role": "user",
-            "timestamp": datetime.now(),
-            "canal": "WhatsApp"
-        })
-
-        await db.conversas.insert_one({
-            "phone": phone,
-            "message": reply,
-            "role": "assistant",
-            "timestamp": datetime.now(),
-            "canal": "WhatsApp"
-        })
+        # NOTA: Nao salvar no banco aqui - os callers (webhook handler) ja salvam
+        # para evitar duplicacao de mensagens no contexto da conversa
 
         return reply
 
@@ -3693,11 +3696,30 @@ Para urgencias: (contato)"""
 
             logger.info(f"Transcricao: {transcription}")
 
+            # Salvar mensagem do usuario (transcricao do audio)
+            await db.conversas.insert_one({
+                "phone": phone,
+                "message": f"[AUDIO] {transcription}",
+                "role": "user",
+                "timestamp": datetime.now(),
+                "canal": "WhatsApp",
+                "type": "audio"
+            })
+
             # Processar transcricao com IA
             reply = await process_message_with_ai(phone, transcription)
 
             # Enviar resposta
             await send_whatsapp_message(phone, reply)
+
+            # Salvar resposta do bot
+            await db.conversas.insert_one({
+                "phone": phone,
+                "message": reply,
+                "role": "assistant",
+                "timestamp": datetime.now(),
+                "canal": "WhatsApp"
+            })
 
             return JSONResponse({"status": "processed", "type": "audio"})
 
