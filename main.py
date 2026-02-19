@@ -1393,11 +1393,11 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
     if nome_parece_invalido or len(nome) < 2:
         # Nome parece invalido - pedir novamente
         if idioma == "en":
-            return "Could you please tell me just your first name? 😊"
+            return "Could you tell me your name so we can continue? 😊"
         elif idioma == "es":
-            return "¿Podrías decirme solo tu nombre? 😊"
+            return "¿Podría decirme su nombre para continuar la atención? 😊"
         else:
-            return "Poderia me dizer apenas o seu nome? 😊"
+            return "Poderia dizer seu nome para continuar o atendimento? 😊"
 
     # Verificar se o cliente informou numero de paginas na mesma mensagem
     # Ex: "Rafaela, sao 3 paginas" ou "5 pages, my name is John"
