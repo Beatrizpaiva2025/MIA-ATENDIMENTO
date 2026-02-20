@@ -163,6 +163,26 @@ openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 from admin_training_routes import get_database
 db = get_database()
 
+
+# Limpeza: remover kb_origem do treinamento no MongoDB (pergunta de origem removida)
+async def cleanup_kb_origem():
+    """Remove o item kb_origem da base de conhecimento do bot Mia"""
+    try:
+        result = await db.bots.update_one(
+            {"name": "Mia"},
+            {"$pull": {"knowledge_base": {"_id": "kb_origem"}}}
+        )
+        if result.modified_count > 0:
+            logger.info("[CLEANUP] kb_origem removido do treinamento do bot Mia")
+    except Exception as e:
+        logger.error(f"[CLEANUP] Erro ao remover kb_origem: {e}")
+
+
+@app.on_event("startup")
+async def startup_cleanup():
+    await cleanup_kb_origem()
+
+
 # ============================================================
 # CONTROLE DO BOT - LIGAR/DESLIGAR
 # ============================================================
@@ -2095,6 +2115,8 @@ Transferir educadamente para um atendente humano.
 - NUNCA repita o link do portal mais de uma vez na mesma conversa
 - Apos o cliente confirmar o total de paginas, peça para enviar o documento
 - NUNCA diga o preço antes de receber o documento. Primeiro peça o documento, depois dê o orçamento
+- NUNCA pergunte como o cliente conheceu ou ficou sabendo da Legacy Translations. NÃO faça pesquisa de origem (Google, Instagram, Facebook, indicação). Essa pergunta foi REMOVIDA do fluxo
+- SEMPRE responda no mesmo idioma que o cliente usar. Se o cliente escreveu em inglês, responda em inglês. Se escreveu em português, responda em português. Se escreveu em espanhol, responda em espanhol. Na dúvida, pergunte em que idioma o cliente prefere continuar
 """
 
 async def get_bot_training() -> str:
@@ -2128,8 +2150,14 @@ async def get_bot_training() -> str:
             restrictions_text = "\n".join(personality["restrictions"]) if isinstance(personality["restrictions"], list) else personality["restrictions"]
             prompt_parts.append(f"**RESTRICOES:**\n{restrictions_text}")
 
-        # Base de conhecimento
+        # Base de conhecimento (filtrar kb_origem - pergunta de origem removida)
         if knowledge_base:
+            knowledge_base = [
+                item for item in knowledge_base
+                if item.get("_id") != "kb_origem" and "como conheceu" not in item.get("content", "").lower()
+                and "como ficou sabendo" not in item.get("content", "").lower()
+                and "how you heard" not in item.get("content", "").lower()
+            ]
             kb_text = "\n\n".join([
                 f"**{item.get('title', 'Info')}:**\n{item.get('content', '')}"
                 for item in knowledge_base
@@ -2515,6 +2543,13 @@ async def process_message_with_ai(phone: str, message: str) -> str:
 
         # Buscar treinamento dinamico do MongoDB
         system_prompt = await get_bot_training()
+
+        # Detectar idioma do cliente e injetar instrucao explicita
+        estado = await get_cliente_estado(phone)
+        idioma_cliente = estado.get("idioma", detectar_idioma(message))
+        idioma_map = {"en": "English", "es": "Spanish", "pt": "Portuguese"}
+        idioma_nome = idioma_map.get(idioma_cliente, "Portuguese")
+        system_prompt += f"\n\n**IDIOMA OBRIGATÓRIO:** O cliente está se comunicando em {idioma_nome}. Você DEVE responder EXCLUSIVAMENTE em {idioma_nome}. NÃO responda em outro idioma."
 
         # Buscar contexto
         context = await get_conversation_context(phone)
