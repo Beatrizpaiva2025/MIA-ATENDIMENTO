@@ -114,31 +114,6 @@ INGLÊS:
 ESPANHOL:
 "¡Hola! Soy Mia, asistente virtual de Legacy Translations. ¿Cómo puedo ayudarte? ¿Cuál es tu nombre?"
 """
-        },
-        {
-            "_id": "kb_origem",
-            "title": "PERGUNTA DE ORIGEM",
-            "content": """
-Após o cliente informar o nome, perguntar como conheceu a Legacy:
-
-PORTUGUÊS:
-"Obrigada, [NOME]! 😊
-Para te atender melhor, pode me dizer como ficou sabendo da Legacy Translations?
-1️⃣ Google
-2️⃣ Instagram
-3️⃣ Facebook
-4️⃣ Indicação de amigo(a)
-5️⃣ Empresa de imigração / advogado(a)"
-
-INGLÊS:
-"Thank you, [NAME]! 😊
-To better assist you, could you tell me how you heard about Legacy Translations?
-1️⃣ Google
-2️⃣ Instagram
-3️⃣ Facebook
-4️⃣ Friend referral
-5️⃣ Immigration company / attorney"
-"""
         }
     ],
     "faqs": [
