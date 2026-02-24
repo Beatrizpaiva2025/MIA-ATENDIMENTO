@@ -1401,7 +1401,10 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
         "bom dia", "boa tarde", "boa noite", "ola", "olá", "hello", "hi",
         "obrigado", "obrigada", "thanks", "thank",
         "sim", "nao", "yes", "no", "si",
-        "certified", "sworn", "juramentada", "certificada"
+        "certified", "sworn", "juramentada", "certificada",
+        # Erros e correcoes
+        "errado", "errei", "desculpa", "desculpe", "sorry", "wrong", "mistake",
+        "mandei", "enviei", "ignore", "ignora", "cancel", "cancela"
     ]
     nome_lower = nome.lower()
     nome_parece_invalido = any(p in nome_lower for p in palavras_invalidas_nome)
@@ -1446,13 +1449,13 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
     except Exception as e:
         logger.error(f"[CRM] Erro ao salvar contato: {e}")
 
-    # Saudacao baseada no idioma
+    # Saudacao baseada no idioma (sem usar nome para evitar erros)
     if idioma == "en":
-        saudacao = f"Nice to meet you, {nome}! 😊\n\n"
+        saudacao = f"Nice to meet you! 😊\n\n"
     elif idioma == "es":
-        saudacao = f"¡Mucho gusto, {nome}! 😊\n\n"
+        saudacao = f"¡Mucho gusto! 😊\n\n"
     else:
-        saudacao = f"Prazer em conhece-lo(a), {nome}! 😊\n\n"
+        saudacao = f"Prazer em conhece-lo(a)! 😊\n\n"
 
     # Se fora do horario e sem documento, mostrar opcoes
     doc_info = estado.get("documento_info")
@@ -1528,11 +1531,11 @@ async def processar_etapa_origem(phone: str, mensagem: str) -> str:
 
     # Agradecer baseado no idioma
     if idioma == "en":
-        agradecimento = f"Thank you, {nome}! Great to know you found us through {origem}. 🙏\n\n"
+        agradecimento = f"Thank you! Great to know you found us through {origem}. 🙏\n\n"
     elif idioma == "es":
-        agradecimento = f"¡Gracias, {nome}! Que bueno saber que nos encontraste por {origem}. 🙏\n\n"
+        agradecimento = f"¡Gracias! Que bueno saber que nos encontraste por {origem}. 🙏\n\n"
     else:
-        agradecimento = f"Obrigada, {nome}! Que bom saber que nos conheceu pelo {origem}. 🙏\n\n"
+        agradecimento = f"Obrigada! Que bom saber que nos conheceu pelo {origem}. 🙏\n\n"
 
     # Se fora do horario comercial E cliente nao tem documento ainda, apresentar opcoes
     doc_info = estado.get("documento_info")
@@ -1589,19 +1592,19 @@ async def processar_etapa_opcao_atendimento(phone: str, mensagem: str) -> str:
 
         if idioma == "en":
             return (
-                f"Great, {nome}! 😊\n\n"
+                f"Great! 😊\n\n"
                 f"You can send the document you'd like to have translated right here.\n\n"
                 f"Just send a photo or PDF of each page and I'll take care of everything!"
             )
         elif idioma == "es":
             return (
-                f"¡Perfecto, {nome}! 😊\n\n"
+                f"¡Perfecto! 😊\n\n"
                 f"Puedes enviar el documento que deseas traducir aquí mismo.\n\n"
                 f"¡Solo envía una foto o PDF de cada página y yo me encargo de todo!"
             )
         else:
             return (
-                f"Perfeito, {nome}! 😊\n\n"
+                f"Perfeito! 😊\n\n"
                 f"Pode enviar o documento que deseja traduzir aqui mesmo.\n\n"
                 f"E so mandar uma foto ou PDF de cada pagina que eu cuido de tudo!"
             )
@@ -1612,19 +1615,19 @@ async def processar_etapa_opcao_atendimento(phone: str, mensagem: str) -> str:
 
         if idioma == "en":
             return (
-                f"Sure, {nome}! You can place your order directly on our website:\n\n"
+                f"Sure! You can place your order directly on our website:\n\n"
                 f"👉 https://portal.legacytranslations.com\n\n"
                 f"If you need any help, just send a message here. 😊"
             )
         elif idioma == "es":
             return (
-                f"¡Claro, {nome}! Puedes hacer tu pedido directamente en nuestro sitio web:\n\n"
+                f"¡Claro! Puedes hacer tu pedido directamente en nuestro sitio web:\n\n"
                 f"👉 https://portal.legacytranslations.com\n\n"
                 f"Si necesitas ayuda, solo envía un mensaje aquí. 😊"
             )
         else:
             return (
-                f"Claro, {nome}! Voce pode fazer seu pedido diretamente pelo nosso site:\n\n"
+                f"Claro! Voce pode fazer seu pedido diretamente pelo nosso site:\n\n"
                 f"👉 https://portal.legacytranslations.com\n\n"
                 f"Se precisar de ajuda, e so mandar uma mensagem aqui. 😊"
             )
@@ -1632,21 +1635,21 @@ async def processar_etapa_opcao_atendimento(phone: str, mensagem: str) -> str:
     # Opcao 3: Falar com atendente
     elif "3" in mensagem or "atendente" in msg_lower or "humano" in msg_lower or "representante" in msg_lower or "speak" in msg_lower or "hablar" in msg_lower or "agent" in msg_lower or "person" in msg_lower:
         # Transferir para humano
-        await transferir_para_humano(phone, f"Cliente {nome} solicitou atendente (fora do horario)")
+        await transferir_para_humano(phone, f"Cliente solicitou atendente (fora do horario)")
 
         if idioma == "en":
             return (
-                f"Of course, {nome}! I'm forwarding you to our team right now.\n\n"
+                f"Of course! I'm forwarding you to our team right now.\n\n"
                 f"A representative will get in touch with you as soon as possible. 😊"
             )
         elif idioma == "es":
             return (
-                f"¡Por supuesto, {nome}! Te estoy transfiriendo a nuestro equipo.\n\n"
+                f"¡Por supuesto! Te estoy transfiriendo a nuestro equipo.\n\n"
                 f"Un representante se pondrá en contacto contigo lo antes posible. 😊"
             )
         else:
             return (
-                f"Claro, {nome}! Estou encaminhando voce para nossa equipe.\n\n"
+                f"Claro! Estou encaminhando voce para nossa equipe.\n\n"
                 f"Um atendente entrara em contato o mais breve possivel. 😊"
             )
 
@@ -1654,7 +1657,7 @@ async def processar_etapa_opcao_atendimento(phone: str, mensagem: str) -> str:
     else:
         if idioma == "en":
             return (
-                f"{nome}, could you please choose one of the options?\n\n"
+                f"Could you please choose one of the options?\n\n"
                 f"1️⃣ Continue the service right here\n"
                 f"2️⃣ Place my order through the website\n"
                 f"3️⃣ I'd like to speak with a representative\n\n"
@@ -1662,7 +1665,7 @@ async def processar_etapa_opcao_atendimento(phone: str, mensagem: str) -> str:
             )
         elif idioma == "es":
             return (
-                f"{nome}, ¿podrías elegir una de las opciones?\n\n"
+                f"¿Podrías elegir una de las opciones?\n\n"
                 f"1️⃣ Continuar la atención aquí\n"
                 f"2️⃣ Hacer mi pedido por el sitio web\n"
                 f"3️⃣ Quiero hablar con un representante\n\n"
@@ -1670,7 +1673,7 @@ async def processar_etapa_opcao_atendimento(phone: str, mensagem: str) -> str:
             )
         else:
             return (
-                f"{nome}, poderia escolher uma das opcoes?\n\n"
+                f"Poderia escolher uma das opcoes?\n\n"
                 f"1️⃣ Continuar o atendimento aqui\n"
                 f"2️⃣ Fazer meu pedido pelo website\n"
                 f"3️⃣ Quero falar com um atendente\n\n"
@@ -1868,11 +1871,10 @@ Responda APENAS: SIM ou NAO"""
         # Notificar atendente sobre pagamento
         await notificar_atendente(phone, f"PAGAMENTO RECEBIDO - {nome} - {valor}")
 
-        nome_display = f", {nome}" if nome else ""
         if idioma == "en":
             return (
                 f"Payment confirmed! 🎉✅\n\n"
-                f"Thank you{nome_display}! We'll start working on your translation right away.\n\n"
+                f"Thank you! We'll start working on your translation right away.\n\n"
                 f"📋 Order details:\n"
                 f"• {doc_info.get('total_pages', 1)} page(s) of {doc_info.get('tipo', 'document')}\n"
                 f"• From {doc_info.get('idioma_origem', '')} to {doc_info.get('idioma_destino', 'English')}\n\n"
@@ -1883,7 +1885,7 @@ Responda APENAS: SIM ou NAO"""
         elif idioma == "es":
             return (
                 f"¡Pago confirmado! 🎉✅\n\n"
-                f"¡Gracias{nome_display}! Comenzaremos tu traducción de inmediato.\n\n"
+                f"¡Gracias! Comenzaremos tu traducción de inmediato.\n\n"
                 f"📋 Detalles del pedido:\n"
                 f"• {doc_info.get('total_pages', 1)} página(s) de {doc_info.get('tipo', 'documento')}\n"
                 f"• De {doc_info.get('idioma_origem', '')} a {doc_info.get('idioma_destino', 'inglés')}\n\n"
@@ -1894,7 +1896,7 @@ Responda APENAS: SIM ou NAO"""
         else:
             return (
                 f"Pagamento confirmado! 🎉✅\n\n"
-                f"Obrigada{nome_display}! Ja vamos iniciar sua traducao.\n\n"
+                f"Obrigada! Ja vamos iniciar sua traducao.\n\n"
                 f"📋 Detalhes do pedido:\n"
                 f"• {doc_info.get('total_pages', 1)} pagina(s) de {doc_info.get('tipo', 'documento')}\n"
                 f"• De {doc_info.get('idioma_origem', '')} para {doc_info.get('idioma_destino', 'ingles')}\n\n"
@@ -1926,17 +1928,12 @@ async def processar_etapa_pos_pagamento(phone: str, mensagem: str, is_image: boo
     estado = await get_cliente_estado(phone)
     idioma = estado.get("idioma", "pt")
     nome = estado.get("nome", "")
-    # Usar nome condicional para evitar mostrar nomes invalidos
-    nome_display_en = f" {nome}" if nome else ""
-    nome_display_es = f" {nome}" if nome else ""
-    nome_display_pt = f" {nome}" if nome else ""
-
     # Se recebeu imagem após pagamento confirmado
     if is_image:
         # Perguntar se é novo documento ou só complemento/dúvida
         if idioma == "en":
             return (
-                f"Hi{nome_display_en}! I received an image. 📷\n\n"
+                f"Hi! I received an image. 📷\n\n"
                 f"Your translation order is already being processed! ✅\n\n"
                 f"Is this:\n"
                 f"• A NEW DOCUMENT - for a new quote?\n"
@@ -1945,7 +1942,7 @@ async def processar_etapa_pos_pagamento(phone: str, mensagem: str, is_image: boo
             )
         elif idioma == "es":
             return (
-                f"¡Hola{nome_display_es}! Recibí una imagen. 📷\n\n"
+                f"¡Hola! Recibí una imagen. 📷\n\n"
                 f"¡Tu pedido de traducción ya está siendo procesado! ✅\n\n"
                 f"¿Es esto:\n"
                 f"• NUEVO DOCUMENTO - para nueva cotización?\n"
@@ -1954,7 +1951,7 @@ async def processar_etapa_pos_pagamento(phone: str, mensagem: str, is_image: boo
             )
         else:
             return (
-                f"Oi{nome_display_pt}! Recebi uma imagem. 📷\n\n"
+                f"Oi! Recebi uma imagem. 📷\n\n"
                 f"Seu pedido de traducao ja esta sendo processado! ✅\n\n"
                 f"Isso e:\n"
                 f"• NOVO DOCUMENTO - para novo orcamento?\n"
@@ -2065,8 +2062,8 @@ Membro da American Translators Association (ATA)
 
 **REGRAS DE IDIOMA:**
 - Responda SEMPRE no idioma utilizado pelo cliente
-- No início, pergunte: "Olá! Eu sou a Mia, assistente virtual da Legacy Translations. Como posso ajudar? Qual é o seu nome?"
-- Após saber o nome, trate o cliente pelo nome em TODAS as mensagens
+- No início, pergunte: "Olá! Eu sou a Mia, assistente virtual da Legacy Translations. Como posso ajudar?"
+- NUNCA use o nome do cliente nas respostas. NÃO pergunte o nome do cliente. NÃO tente chamar o cliente pelo nome
 
 **TABELA DE PREÇOS:**
 - Português → Inglês (Certificada): $24.99/página | 3 dias úteis
@@ -2098,7 +2095,7 @@ Enviar: "Aproveite para nos seguir no Instagram: https://www.instagram.com/legac
 Transferir educadamente para um atendente humano.
 
 **FLUXO OBRIGATÓRIO DE ATENDIMENTO:**
-1. Cumprimentar e perguntar o nome do cliente
+1. Cumprimentar o cliente (NÃO perguntar o nome)
 2. Perguntar qual idioma de tradução (de qual para qual)
 3. Perguntar quantas páginas tem o documento
 4. PEDIR PARA O CLIENTE ENVIAR O DOCUMENTO (foto ou arquivo) - OBRIGATÓRIO antes de dar orçamento
@@ -3395,23 +3392,19 @@ Para urgencias: (contato)"""
                 logger.info(f"[HUMANO] Cliente {phone} solicitou atendente na etapa {etapa_atual}")
                 await transferir_para_humano(phone, f"Cliente solicitou atendente (etapa: {etapa_atual})")
                 idioma_cliente = estado.get("idioma", "pt")
-                nome_cliente = estado.get("nome", "")
                 if idioma_cliente == "en":
                     reply = (
-                        f"Of course{', ' + nome_cliente if nome_cliente else ''}! "
-                        f"I'm forwarding you to our team right now.\n\n"
+                        f"Of course! I'm forwarding you to our team right now.\n\n"
                         f"A representative will get in touch with you as soon as possible. 😊"
                     )
                 elif idioma_cliente == "es":
                     reply = (
-                        f"¡Por supuesto{', ' + nome_cliente if nome_cliente else ''}! "
-                        f"Te estoy transfiriendo a nuestro equipo.\n\n"
+                        f"¡Por supuesto! Te estoy transfiriendo a nuestro equipo.\n\n"
                         f"Un representante se pondrá en contacto contigo lo antes posible. 😊"
                     )
                 else:
                     reply = (
-                        f"Claro{', ' + nome_cliente if nome_cliente else ''}! "
-                        f"Estou encaminhando voce para nossa equipe.\n\n"
+                        f"Claro! Estou encaminhando voce para nossa equipe.\n\n"
                         f"Um atendente entrara em contato o mais breve possivel. 😊"
                     )
 
