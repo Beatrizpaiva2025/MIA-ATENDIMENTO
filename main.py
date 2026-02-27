@@ -1443,41 +1443,7 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
     else:
         saudacao = f"Prazer em conhece-lo(a)! 😊\n\n"
 
-    # Se fora do horario e sem documento, mostrar opcoes
-    doc_info = estado.get("documento_info")
-    if not is_business_hours() and not doc_info:
-        await set_cliente_estado(phone, etapa=ETAPAS["AGUARDANDO_OPCAO_ATENDIMENTO"])
-
-        if idioma == "en":
-            opcoes = (
-                f"{saudacao}"
-                f"How would you like to proceed?\n\n"
-                f"1️⃣ Continue the service right here\n"
-                f"2️⃣ Place my order through the website\n"
-                f"3️⃣ I'd like to speak with a representative\n\n"
-                f"Just reply with the number!"
-            )
-        elif idioma == "es":
-            opcoes = (
-                f"{saudacao}"
-                f"¿Cómo prefieres continuar?\n\n"
-                f"1️⃣ Continuar la atención aquí\n"
-                f"2️⃣ Hacer mi pedido por el sitio web\n"
-                f"3️⃣ Quiero hablar con un representante\n\n"
-                f"¡Solo responde con el número!"
-            )
-        else:
-            opcoes = (
-                f"{saudacao}"
-                f"Como voce prefere prosseguir?\n\n"
-                f"1️⃣ Continuar o atendimento aqui\n"
-                f"2️⃣ Fazer meu pedido pelo website\n"
-                f"3️⃣ Quero falar com um atendente\n\n"
-                f"Responda com o numero!"
-            )
-        return opcoes
-
-    # Fluxo normal: gerar orcamento direto
+    # Gerar orcamento direto (sem fluxo especial fora do horario)
     orcamento = await gerar_orcamento_final(phone)
     return saudacao + orcamento
 
@@ -3184,97 +3150,8 @@ Para urgencias: (contato)"""
             return JSONResponse({"status": "ia_disabled"})
 
         # ============================================
-        # VERIFICAR HORÁRIO COMERCIAL (5pm-8:30am EST)
-        # Fora do horario: iniciar fluxo de apresentacao + opcoes
-        # ao inves de bloquear com mensagem offline
-        # ============================================
-        if not is_business_hours():
-            logger.info(f"[HORÁRIO] Fora do expediente - cliente {phone}")
-
-            estado = await get_cliente_estado(phone)
-            etapa_atual = estado.get("etapa", ETAPAS["INICIAL"])
-            idioma = estado.get("idioma", "pt")
-
-            # Se o cliente ja esta em uma etapa ativa (nome, origem, opcoes, etc.),
-            # deixar o fluxo normal processar (nao bloquear)
-            if etapa_atual not in [ETAPAS["INICIAL"]]:
-                logger.info(f"[HORÁRIO] Cliente {phone} ja em etapa {etapa_atual} - continuando fluxo normal")
-                # Nao bloquear - cai no processamento normal abaixo
-            else:
-                # Cliente em etapa INICIAL fora do horario:
-                # Iniciar fluxo de apresentacao -> pedir nome
-                if message_type == "text":
-                    text_msg = data.get("text", {}).get("message", "")
-                    idioma_detectado = detectar_idioma(text_msg) if text_msg else "pt"
-                else:
-                    idioma_detectado = idioma
-
-                await set_cliente_estado(
-                    phone,
-                    etapa=ETAPAS["AGUARDANDO_OPCAO_ATENDIMENTO"],
-                    idioma=idioma_detectado
-                )
-
-                if idioma_detectado == "en":
-                    intro_msg = (
-                        f"Hello! 👋 I'm Mia, the virtual assistant at Legacy Translations.\n\n"
-                        f"Welcome! We specialize in certified and sworn translations.\n\n"
-                        f"How would you like to proceed?\n\n"
-                        f"1️⃣ Continue the service right here\n"
-                        f"2️⃣ Place my order through the website\n"
-                        f"3️⃣ I'd like to speak with a representative\n\n"
-                        f"Just reply with the number!"
-                    )
-                elif idioma_detectado == "es":
-                    intro_msg = (
-                        f"¡Hola! 👋 Soy Mia, la asistente virtual de Legacy Translations.\n\n"
-                        f"¡Bienvenido(a)! Somos especialistas en traducciones certificadas y juramentadas.\n\n"
-                        f"¿Cómo prefieres continuar?\n\n"
-                        f"1️⃣ Continuar la atención aquí\n"
-                        f"2️⃣ Hacer mi pedido por el sitio web\n"
-                        f"3️⃣ Quiero hablar con un representante\n\n"
-                        f"¡Solo responde con el número!"
-                    )
-                else:
-                    intro_msg = (
-                        f"Ola! 👋 Eu sou a Mia, assistente virtual da Legacy Translations.\n\n"
-                        f"Bem-vindo(a)! Somos especialistas em traducoes certificadas e juramentadas.\n\n"
-                        f"Como voce prefere prosseguir?\n\n"
-                        f"1️⃣ Continuar o atendimento aqui\n"
-                        f"2️⃣ Fazer meu pedido pelo website\n"
-                        f"3️⃣ Quero falar com um atendente\n\n"
-                        f"Responda com o numero!"
-                    )
-
-                # Salvar mensagem do usuario
-                await db.conversas.insert_one({
-                    "phone": phone,
-                    "message": message_text or "[MENSAGEM FORA DO HORÁRIO]",
-                    "role": "user",
-                    "timestamp": datetime.now(),
-                    "canal": "WhatsApp",
-                    "type": message_type,
-                    "after_hours": True
-                })
-
-                await send_whatsapp_message(phone, intro_msg)
-
-                await db.conversas.insert_one({
-                    "phone": phone,
-                    "message": intro_msg,
-                    "role": "assistant",
-                    "timestamp": datetime.now(),
-                    "canal": "WhatsApp",
-                    "after_hours": True
-                })
-
-                return JSONResponse({
-                    "status": "after_hours_intro",
-                    "message": "Fora do horario - iniciando fluxo de apresentacao"
-                })
-
-        # ============================================
         # PROCESSAR MENSAGEM DE TEXTO
+        # Atendimento 24/7 - sem restricao de horario
         # ============================================
         if message_type == "text":
             text = data.get("text", {}).get("message", "")
