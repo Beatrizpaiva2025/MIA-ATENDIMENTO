@@ -1094,7 +1094,7 @@ Retorne APENAS o JSON, sem texto adicional."""
 
 
 async def processar_sessao_imagem(phone: str):
-    """Processa todas as imagens da sessão - FASE 1: Analise e pedir nome"""
+    """Processa todas as imagens da sessão - Analise e gerar orcamento direto"""
     if phone not in image_sessions:
         return None
 
@@ -1109,10 +1109,9 @@ async def processar_sessao_imagem(phone: str):
     # Analisar documento inteligentemente
     analise = await analisar_documento_inteligente(phone, first_image, total_pages)
 
-    # Guardar informacoes do documento no estado
+    # Guardar informacoes do documento no estado (ir direto para orcamento, sem pedir nome)
     await set_cliente_estado(
         phone,
-        etapa=ETAPAS["AGUARDANDO_NOME"],
         documento_info={
             "total_pages": total_pages,
             "tipo": analise.get("tipo_documento", "documento"),
@@ -1127,55 +1126,38 @@ async def processar_sessao_imagem(phone: str):
     idioma_origem = analise.get("idioma_origem", "")
     idioma_destino = analise.get("idioma_destino_sugerido", "ingles")
 
-    # Mensagens diferentes para 1 imagem vs multiplas imagens
+    # Saudacao + info do documento (sem pedir nome)
     if total_pages == 1:
-        # 1 imagem: identificar documento e pedir nome (orcamento direto apos nome)
         if idioma == "en":
-            mensagem = (
+            saudacao = (
                 f"Hello! I'm MIA, Legacy Translations' virtual assistant! 🌎\n\n"
                 f"I see you sent a {tipo_doc} in {idioma_origem}.\n\n"
-                f"Can you confirm if you'd like to translate it to {idioma_destino}?\n\n"
-                f"Also, may I have your name please?"
             )
         elif idioma == "es":
-            mensagem = (
+            saudacao = (
                 f"¡Hola! Soy MIA, asistente virtual de Legacy Translations! 🌎\n\n"
                 f"Veo que enviaste un {tipo_doc} en {idioma_origem}.\n\n"
-                f"¿Puedes confirmar si deseas traducirlo al {idioma_destino}?\n\n"
-                f"Además, ¿me puedes decir tu nombre por favor?"
             )
         else:
-            mensagem = (
+            saudacao = (
                 f"Ola! Sou a MIA, assistente virtual da Legacy Translations! 🌎\n\n"
                 f"Vi que voce enviou um {tipo_doc} em {idioma_origem}.\n\n"
-                f"Pode confirmar se deseja traduzi-lo para o {idioma_destino}?\n\n"
-                f"E tambem, qual e o seu nome?"
             )
     else:
-        # Multiplas imagens: identificar documento, pedir nome E confirmar numero de paginas
         if idioma == "en":
-            mensagem = (
+            saudacao = (
                 f"Hello! I'm MIA, Legacy Translations' virtual assistant! 🌎\n\n"
                 f"I see you sent {total_pages} pages of a {tipo_doc} in {idioma_origem}.\n\n"
-                f"Can you confirm if you'd like to translate them to {idioma_destino}?\n\n"
-                f"May I have your name please?\n\n"
-                f"And could you confirm the number of pages you'd like to translate?"
             )
         elif idioma == "es":
-            mensagem = (
+            saudacao = (
                 f"¡Hola! Soy MIA, asistente virtual de Legacy Translations! 🌎\n\n"
                 f"Veo que enviaste {total_pages} páginas de un {tipo_doc} en {idioma_origem}.\n\n"
-                f"¿Puedes confirmar si deseas traducirlas al {idioma_destino}?\n\n"
-                f"¿Me puedes decir tu nombre por favor?\n\n"
-                f"Y ¿puedes confirmar el número de páginas que deseas traducir?"
             )
         else:
-            mensagem = (
+            saudacao = (
                 f"Ola! Sou a MIA, assistente virtual da Legacy Translations! 🌎\n\n"
                 f"Vi que voce enviou {total_pages} paginas de um {tipo_doc} em {idioma_origem}.\n\n"
-                f"Pode confirmar se deseja traduzi-los para o {idioma_destino}?\n\n"
-                f"Qual e o seu nome?\n\n"
-                f"E pode confirmar o numero de paginas que deseja traduzir?"
             )
 
     # Salvar no banco
@@ -1188,6 +1170,13 @@ async def processar_sessao_imagem(phone: str):
         "type": "image_batch"
     })
 
+    # Limpar sessão de imagens (ja salvamos no estado)
+    del image_sessions[phone]
+
+    # Gerar orcamento direto (sem pedir nome)
+    orcamento = await gerar_orcamento_final(phone)
+    mensagem = saudacao + orcamento
+
     await db.conversas.insert_one({
         "phone": phone,
         "message": mensagem,
@@ -1196,10 +1185,7 @@ async def processar_sessao_imagem(phone: str):
         "canal": "WhatsApp"
     })
 
-    # Limpar sessão de imagens (ja salvamos no estado)
-    del image_sessions[phone]
-
-    logger.info(f"Analise de documento enviada para {phone} ({total_pages} paginas)")
+    logger.info(f"Orcamento gerado direto para {phone} ({total_pages} paginas)")
     return mensagem
 
 
@@ -3225,7 +3211,7 @@ Para urgencias: (contato)"""
 
                 await set_cliente_estado(
                     phone,
-                    etapa=ETAPAS["AGUARDANDO_NOME"],
+                    etapa=ETAPAS["AGUARDANDO_OPCAO_ATENDIMENTO"],
                     idioma=idioma_detectado
                 )
 
@@ -3233,19 +3219,31 @@ Para urgencias: (contato)"""
                     intro_msg = (
                         f"Hello! 👋 I'm Mia, the virtual assistant at Legacy Translations.\n\n"
                         f"Welcome! We specialize in certified and sworn translations.\n\n"
-                        f"May I have your name, please?"
+                        f"How would you like to proceed?\n\n"
+                        f"1️⃣ Continue the service right here\n"
+                        f"2️⃣ Place my order through the website\n"
+                        f"3️⃣ I'd like to speak with a representative\n\n"
+                        f"Just reply with the number!"
                     )
                 elif idioma_detectado == "es":
                     intro_msg = (
                         f"¡Hola! 👋 Soy Mia, la asistente virtual de Legacy Translations.\n\n"
                         f"¡Bienvenido(a)! Somos especialistas en traducciones certificadas y juramentadas.\n\n"
-                        f"¿Me puedes decir tu nombre, por favor?"
+                        f"¿Cómo prefieres continuar?\n\n"
+                        f"1️⃣ Continuar la atención aquí\n"
+                        f"2️⃣ Hacer mi pedido por el sitio web\n"
+                        f"3️⃣ Quiero hablar con un representante\n\n"
+                        f"¡Solo responde con el número!"
                     )
                 else:
                     intro_msg = (
                         f"Ola! 👋 Eu sou a Mia, assistente virtual da Legacy Translations.\n\n"
                         f"Bem-vindo(a)! Somos especialistas em traducoes certificadas e juramentadas.\n\n"
-                        f"Qual e o seu nome?"
+                        f"Como voce prefere prosseguir?\n\n"
+                        f"1️⃣ Continuar o atendimento aqui\n"
+                        f"2️⃣ Fazer meu pedido pelo website\n"
+                        f"3️⃣ Quero falar com um atendente\n\n"
+                        f"Responda com o numero!"
                     )
 
                 # Salvar mensagem do usuario
