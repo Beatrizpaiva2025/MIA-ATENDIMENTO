@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import httpx
 from openai import OpenAI
+import anthropic
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
 import logging
@@ -158,6 +159,17 @@ templates = Jinja2Templates(directory="templates")
 
 # Clientes
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Cliente Anthropic (Claude) para extracao de dados de documentos
+anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+
+# ============================================================
+# CONFIGURACOES DO PORTAL LEGACY
+# ============================================================
+LEGACY_PORTAL_URL = os.getenv("LEGACY_PORTAL_URL", "https://legacy-portal.onrender.com")
+LEGACY_PORTAL_EMAIL = os.getenv("LEGACY_PORTAL_EMAIL", "")
+LEGACY_PORTAL_PASSWORD = os.getenv("LEGACY_PORTAL_PASSWORD", "")
+LEGACY_PORTAL_NOTIFICATION_PHONE = "18572081139"
 
 # Usar mesma conexao do admin
 from admin_training_routes import get_database
@@ -1170,6 +1182,9 @@ async def processar_sessao_imagem(phone: str):
         "type": "image_batch"
     })
 
+    # Guardar referencia da imagem ANTES de limpar sessao (para envio ao Portal)
+    imagem_para_portal = first_image
+
     # Limpar sessão de imagens (ja salvamos no estado)
     del image_sessions[phone]
 
@@ -1184,6 +1199,19 @@ async def processar_sessao_imagem(phone: str):
         "timestamp": datetime.now(),
         "canal": "WhatsApp"
     })
+
+    # ============================================
+    # INTEGRACAO PORTAL: Criar pedido em background
+    # ============================================
+    asyncio.create_task(
+        processar_documento_para_portal(
+            phone=phone,
+            file_bytes=imagem_para_portal,
+            filename=f"documento_{phone}_{int(time.time())}.jpg",
+            mime_type="image/jpeg",
+            is_image=True
+        )
+    )
 
     logger.info(f"Orcamento gerado direto para {phone} ({total_pages} paginas)")
     return mensagem
@@ -1986,6 +2014,34 @@ ZAPI_CONFIG_VALIDA = validar_config_zapi()
 
 
 # ============================================================
+# VALIDACAO DE CONFIGURACAO PORTAL LEGACY + ANTHROPIC
+# ============================================================
+def validar_config_portal():
+    """Valida e loga status das configuracoes do Portal Legacy e Anthropic"""
+    logger.info("=" * 60)
+    logger.info("CONFIGURACAO PORTAL LEGACY + ANTHROPIC:")
+
+    if LEGACY_PORTAL_EMAIL and LEGACY_PORTAL_PASSWORD:
+        logger.info(f"  - Portal URL: {LEGACY_PORTAL_URL}")
+        logger.info(f"  - Portal Email: {LEGACY_PORTAL_EMAIL[:3]}...{LEGACY_PORTAL_EMAIL[-10:]}")
+        logger.info(f"  - Portal Password: {'Configurado' if LEGACY_PORTAL_PASSWORD else 'Nao configurado'}")
+    else:
+        logger.warning("  - Portal Legacy: NAO CONFIGURADO (LEGACY_PORTAL_EMAIL / LEGACY_PORTAL_PASSWORD)")
+        logger.warning("  - Pedidos NAO serao criados automaticamente no Portal")
+
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if anthropic_key:
+        logger.info(f"  - Anthropic API Key: {anthropic_key[:8]}... (configurado)")
+    else:
+        logger.warning("  - Anthropic API Key: NAO CONFIGURADA (usara fallback com dados do estado)")
+
+    logger.info(f"  - Notificacao Portal: {LEGACY_PORTAL_NOTIFICATION_PHONE}")
+    logger.info("=" * 60)
+
+validar_config_portal()
+
+
+# ============================================================
 # MODELOS PYDANTIC
 # ============================================================
 class Message(BaseModel):
@@ -2230,6 +2286,379 @@ async def download_media_from_zapi(media_url: str) -> Optional[bytes]:
     except Exception as e:
         logger.error(f"Erro ao baixar midia: {str(e)}")
         return None
+
+
+# ============================================================
+# INTEGRACAO COM PORTAL LEGACY - PROCESSAMENTO DE DOCUMENTOS
+# ============================================================
+
+# Cache do token JWT do Portal
+_portal_token_cache = {
+    "token": None,
+    "expires_at": None
+}
+
+
+async def portal_login() -> Optional[str]:
+    """Autentica no Portal Legacy e retorna o token JWT"""
+    try:
+        if not LEGACY_PORTAL_EMAIL or not LEGACY_PORTAL_PASSWORD:
+            logger.error("[PORTAL] Credenciais do Portal nao configuradas (LEGACY_PORTAL_EMAIL / LEGACY_PORTAL_PASSWORD)")
+            return None
+
+        # Verificar cache do token (valido por 50 minutos para margem de seguranca)
+        if _portal_token_cache["token"] and _portal_token_cache["expires_at"]:
+            from datetime import timedelta
+            if datetime.now() < _portal_token_cache["expires_at"]:
+                return _portal_token_cache["token"]
+
+        url = f"{LEGACY_PORTAL_URL}/api/auth/login"
+        payload = {
+            "email": LEGACY_PORTAL_EMAIL,
+            "password": LEGACY_PORTAL_PASSWORD
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload)
+
+            if response.status_code == 200:
+                data = response.json()
+                token = data.get("token") or data.get("access_token") or data.get("accessToken")
+                if token:
+                    from datetime import timedelta
+                    _portal_token_cache["token"] = token
+                    _portal_token_cache["expires_at"] = datetime.now() + timedelta(minutes=50)
+                    logger.info("[PORTAL] Login realizado com sucesso")
+                    return token
+                else:
+                    logger.error(f"[PORTAL] Login retornou 200 mas sem token: {response.text[:200]}")
+                    return None
+            else:
+                logger.error(f"[PORTAL] Falha no login: {response.status_code} - {response.text[:200]}")
+                return None
+
+    except Exception as e:
+        logger.error(f"[PORTAL] Erro no login: {str(e)}")
+        return None
+
+
+async def extrair_dados_com_claude(phone: str, image_bytes: Optional[bytes] = None, pdf_bytes: Optional[bytes] = None) -> dict:
+    """Usa Claude (Anthropic) para extrair dados do cliente e documento da conversa"""
+    try:
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            logger.warning("[CLAUDE] ANTHROPIC_API_KEY nao configurada, usando dados do estado do cliente")
+            return await _fallback_extrair_dados(phone)
+
+        # Buscar historico da conversa
+        mensagens = await db.conversas.find(
+            {"phone": phone}
+        ).sort("timestamp", -1).limit(20).to_list(length=20)
+        mensagens.reverse()
+
+        historico = ""
+        for msg in mensagens:
+            role = "Cliente" if msg.get("role") == "user" else "Mia"
+            texto = msg.get("message", "")[:200]
+            historico += f"{role}: {texto}\n"
+
+        # Buscar estado do cliente para complementar
+        estado = await get_cliente_estado(phone)
+
+        # Montar mensagens para Claude
+        claude_messages = []
+
+        # Se tiver imagem, incluir para analise visual
+        content_parts = []
+        if image_bytes:
+            base64_img = base64.b64encode(image_bytes).decode('utf-8')
+            content_parts.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": base64_img
+                }
+            })
+        elif pdf_bytes:
+            # Converter primeira pagina do PDF para imagem
+            try:
+                temp_pdf = f"/tmp/claude_pdf_{phone}_{int(time.time())}.pdf"
+                with open(temp_pdf, "wb") as f:
+                    f.write(pdf_bytes)
+                from pdf2image import convert_from_path
+                pages = convert_from_path(temp_pdf, dpi=150, first_page=1, last_page=1)
+                if pages:
+                    img_buf = BytesIO()
+                    pages[0].save(img_buf, format='PNG')
+                    base64_img = base64.b64encode(img_buf.getvalue()).decode('utf-8')
+                    content_parts.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": base64_img
+                        }
+                    })
+                os.remove(temp_pdf)
+            except Exception as e:
+                logger.warning(f"[CLAUDE] Nao foi possivel converter PDF para imagem: {e}")
+
+        content_parts.append({
+            "type": "text",
+            "text": f"""Analise o historico de conversa e o documento (se anexado) e extraia as seguintes informacoes em formato JSON:
+
+HISTORICO DA CONVERSA:
+{historico}
+
+DADOS JA CONHECIDOS DO CLIENTE:
+- Telefone: {phone}
+- Nome salvo: {estado.get('nome', '')}
+- Idioma: {estado.get('idioma', 'pt')}
+- Info documento: {json.dumps(estado.get('documento_info', {}), ensure_ascii=False)}
+
+Retorne APENAS um JSON valido com estas chaves:
+{{
+    "client_name": "nome do cliente (extrair da conversa ou usar o nome salvo, ou 'Cliente WhatsApp' se desconhecido)",
+    "client_email": "email do cliente (extrair da conversa ou '' se nao mencionado)",
+    "client_phone": "{phone}",
+    "document_type": "tipo do documento (certidao, diploma, contrato, etc)",
+    "source_language": "idioma de origem do documento (Portuguese, English, Spanish, etc)",
+    "target_language": "idioma de destino da traducao (Portuguese, English, Spanish, etc)",
+    "page_count": numero_de_paginas,
+    "notes": "observacoes adicionais relevantes"
+}}
+
+IMPORTANTE: Retorne APENAS o JSON, sem markdown, sem texto adicional."""
+        })
+
+        claude_messages.append({
+            "role": "user",
+            "content": content_parts
+        })
+
+        response = anthropic_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            messages=claude_messages
+        )
+
+        resultado = response.content[0].text.strip()
+
+        # Limpar possivel markdown
+        if resultado.startswith("```"):
+            resultado = resultado.split("```")[1]
+            if resultado.startswith("json"):
+                resultado = resultado[4:]
+            resultado = resultado.strip()
+
+        dados = json.loads(resultado)
+        logger.info(f"[CLAUDE] Dados extraidos com sucesso para {phone}: {json.dumps(dados, ensure_ascii=False)[:200]}")
+        return dados
+
+    except Exception as e:
+        logger.error(f"[CLAUDE] Erro ao extrair dados: {str(e)}")
+        logger.error(traceback.format_exc())
+        return await _fallback_extrair_dados(phone)
+
+
+async def _fallback_extrair_dados(phone: str) -> dict:
+    """Fallback: extrai dados do estado do cliente quando Claude nao esta disponivel"""
+    estado = await get_cliente_estado(phone)
+    doc_info = estado.get("documento_info", {})
+
+    # Mapear idiomas curtos para nomes completos
+    lang_map = {"pt": "Portuguese", "en": "English", "es": "Spanish"}
+
+    return {
+        "client_name": estado.get("nome", "") or "Cliente WhatsApp",
+        "client_email": "",
+        "client_phone": phone,
+        "document_type": doc_info.get("tipo", "documento") if doc_info else "documento",
+        "source_language": doc_info.get("idioma_origem", "Portuguese") if doc_info else "Portuguese",
+        "target_language": doc_info.get("idioma_destino", "English") if doc_info else "English",
+        "page_count": doc_info.get("total_pages", 1) if doc_info else 1,
+        "notes": f"Pedido recebido via WhatsApp ({phone})"
+    }
+
+
+async def criar_pedido_portal(dados_cliente: dict) -> Optional[dict]:
+    """Cria um pedido no Portal Legacy via API"""
+    try:
+        token = await portal_login()
+        if not token:
+            logger.error("[PORTAL] Nao foi possivel autenticar no Portal")
+            return None
+
+        url = f"{LEGACY_PORTAL_URL}/api/admin/orders/manual"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "clientName": dados_cliente.get("client_name", "Cliente WhatsApp"),
+            "clientEmail": dados_cliente.get("client_email", ""),
+            "clientPhone": dados_cliente.get("client_phone", ""),
+            "documentType": dados_cliente.get("document_type", "documento"),
+            "sourceLanguage": dados_cliente.get("source_language", "Portuguese"),
+            "targetLanguage": dados_cliente.get("target_language", "English"),
+            "pageCount": dados_cliente.get("page_count", 1),
+            "notes": dados_cliente.get("notes", "Pedido via WhatsApp MIA Bot"),
+            "source": "whatsapp_mia_bot"
+        }
+
+        logger.info(f"[PORTAL] Criando pedido: {json.dumps(payload, ensure_ascii=False)[:300]}")
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+
+            if response.status_code in (200, 201):
+                result = response.json()
+                order_id = result.get("id") or result.get("_id") or result.get("orderId") or result.get("order_id")
+                order_code = result.get("orderCode") or result.get("order_code") or result.get("code") or str(order_id)[:8] if order_id else "N/A"
+
+                logger.info(f"[PORTAL] Pedido criado com sucesso! ID: {order_id}, Codigo: {order_code}")
+                return {
+                    "order_id": str(order_id),
+                    "order_code": order_code,
+                    "full_response": result
+                }
+            else:
+                logger.error(f"[PORTAL] Falha ao criar pedido: {response.status_code} - {response.text[:300]}")
+                return None
+
+    except Exception as e:
+        logger.error(f"[PORTAL] Erro ao criar pedido: {str(e)}")
+        logger.error(traceback.format_exc())
+        return None
+
+
+async def upload_documento_portal(order_id: str, file_bytes: bytes, filename: str = "documento.pdf", mime_type: str = "application/pdf") -> bool:
+    """Faz upload do documento para o pedido no Portal Legacy"""
+    try:
+        token = await portal_login()
+        if not token:
+            logger.error("[PORTAL] Nao foi possivel autenticar para upload")
+            return False
+
+        url = f"{LEGACY_PORTAL_URL}/api/admin/orders/{order_id}/documents"
+        headers = {
+            "Authorization": f"Bearer {token}"
+        }
+
+        # Enviar como multipart/form-data
+        files = {
+            "file": (filename, file_bytes, mime_type)
+        }
+
+        logger.info(f"[PORTAL] Fazendo upload de {filename} ({len(file_bytes)} bytes) para pedido {order_id}")
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(url, headers=headers, files=files)
+
+            if response.status_code in (200, 201):
+                logger.info(f"[PORTAL] Upload concluido com sucesso para pedido {order_id}")
+                return True
+            else:
+                logger.error(f"[PORTAL] Falha no upload: {response.status_code} - {response.text[:300]}")
+                return False
+
+    except Exception as e:
+        logger.error(f"[PORTAL] Erro no upload: {str(e)}")
+        logger.error(traceback.format_exc())
+        return False
+
+
+async def notificar_operador_novo_pedido(dados_cliente: dict, order_code: str):
+    """Envia notificacao via WhatsApp para o operador sobre novo pedido criado no Portal"""
+    try:
+        nome = dados_cliente.get("client_name", "N/A")
+        tipo_doc = dados_cliente.get("document_type", "N/A")
+        idioma_origem = dados_cliente.get("source_language", "N/A")
+        idioma_destino = dados_cliente.get("target_language", "N/A")
+        paginas = dados_cliente.get("page_count", "N/A")
+        telefone = dados_cliente.get("client_phone", "N/A")
+        email = dados_cliente.get("client_email", "N/A")
+
+        mensagem = f"""*NOVO PEDIDO CRIADO NO PORTAL* 📋
+
+*Codigo do Pedido:* {order_code}
+
+*DADOS DO CLIENTE:*
+Nome: {nome}
+Telefone: {telefone}
+Email: {email or 'Nao informado'}
+
+*DOCUMENTO:*
+Tipo: {tipo_doc}
+Idiomas: {idioma_origem} → {idioma_destino}
+Paginas: {paginas}
+
+*Status:* Pedido criado automaticamente via WhatsApp (MIA Bot)
+*Portal:* {LEGACY_PORTAL_URL}/admin/orders
+
+O documento ja foi enviado para o Portal Legacy."""
+
+        resultado = await send_whatsapp_message(LEGACY_PORTAL_NOTIFICATION_PHONE, mensagem)
+
+        if resultado:
+            logger.info(f"[NOTIFICACAO-PORTAL] Notificacao enviada para {LEGACY_PORTAL_NOTIFICATION_PHONE}")
+        else:
+            logger.error(f"[NOTIFICACAO-PORTAL] Falha ao enviar notificacao para {LEGACY_PORTAL_NOTIFICATION_PHONE}")
+
+        return resultado
+
+    except Exception as e:
+        logger.error(f"[NOTIFICACAO-PORTAL] Erro: {str(e)}")
+        return False
+
+
+async def processar_documento_para_portal(phone: str, file_bytes: bytes, filename: str = "documento.pdf", mime_type: str = "application/pdf", is_image: bool = False):
+    """Pipeline completo: extrair dados -> criar pedido -> upload -> notificar
+    Executa em background sem bloquear o fluxo principal do bot"""
+    try:
+        logger.info(f"[PORTAL-PIPELINE] Iniciando processamento para {phone}")
+
+        # 1. Extrair dados com Claude
+        if is_image:
+            dados = await extrair_dados_com_claude(phone, image_bytes=file_bytes)
+        else:
+            dados = await extrair_dados_com_claude(phone, pdf_bytes=file_bytes)
+
+        # 2. Criar pedido no Portal
+        resultado_pedido = await criar_pedido_portal(dados)
+
+        if not resultado_pedido:
+            logger.error(f"[PORTAL-PIPELINE] Falha ao criar pedido para {phone}")
+            return
+
+        order_id = resultado_pedido["order_id"]
+        order_code = resultado_pedido["order_code"]
+
+        # 3. Upload do documento
+        upload_ok = await upload_documento_portal(order_id, file_bytes, filename, mime_type)
+
+        if not upload_ok:
+            logger.warning(f"[PORTAL-PIPELINE] Upload falhou para pedido {order_code}, mas pedido foi criado")
+
+        # 4. Notificar operador via WhatsApp
+        await notificar_operador_novo_pedido(dados, order_code)
+
+        # 5. Salvar registro no MongoDB
+        await db.portal_orders.insert_one({
+            "phone": phone,
+            "order_id": order_id,
+            "order_code": order_code,
+            "dados_cliente": dados,
+            "upload_ok": upload_ok,
+            "created_at": datetime.now()
+        })
+
+        logger.info(f"[PORTAL-PIPELINE] Pipeline concluido para {phone} - Pedido: {order_code}")
+
+    except Exception as e:
+        logger.error(f"[PORTAL-PIPELINE] Erro no pipeline para {phone}: {str(e)}")
+        logger.error(traceback.format_exc())
 
 
 # ============================================================
@@ -3688,10 +4117,41 @@ Para urgencias: (contato)"""
             if not document_url:
                 return JSONResponse({"status": "ignored", "reason": "no document url"})
 
-            # Verificar se e PDF
-            if "pdf" not in mime_type.lower():
+            # Verificar se e PDF ou outro documento suportado
+            is_pdf = "pdf" in mime_type.lower()
+            is_supported_doc = is_pdf or any(t in mime_type.lower() for t in ["image/", "word", "docx", "doc"])
+
+            if not is_pdf and not is_supported_doc:
                 await send_whatsapp_message(phone, "Desculpe, so consigo analisar arquivos PDF no momento. Pode converter e enviar novamente?")
                 return JSONResponse({"status": "ignored", "reason": "not pdf"})
+
+            # Para documentos nao-PDF mas suportados, enviar direto ao Portal sem analise Vision
+            if not is_pdf and is_supported_doc:
+                logger.info(f"Documento nao-PDF de {phone}: {mime_type} - enviando ao Portal")
+                doc_bytes = await download_media_from_zapi(document_url)
+                if doc_bytes:
+                    doc_filename = data.get("document", {}).get("fileName", f"documento_{phone}_{int(time.time())}")
+                    asyncio.create_task(
+                        processar_documento_para_portal(
+                            phone=phone,
+                            file_bytes=doc_bytes,
+                            filename=doc_filename,
+                            mime_type=mime_type,
+                            is_image=False
+                        )
+                    )
+                    estado = await get_cliente_estado(phone)
+                    idioma = estado.get("idioma", "pt")
+                    if idioma == "en":
+                        await send_whatsapp_message(phone, "I received your document! I'm processing it and will create your order shortly. For a more accurate quote, could you also send it as a PDF or photo?")
+                    elif idioma == "es":
+                        await send_whatsapp_message(phone, "Recibi tu documento! Lo estoy procesando y creare tu pedido pronto. Para un presupuesto mas preciso, podrias enviarlo tambien como PDF o foto?")
+                    else:
+                        await send_whatsapp_message(phone, "Recebi seu documento! Estou processando e vou criar seu pedido em breve. Para um orcamento mais preciso, poderia enviar tambem como PDF ou foto?")
+                    return JSONResponse({"status": "processed", "type": "document_to_portal"})
+                else:
+                    await send_whatsapp_message(phone, "Desculpe, nao consegui baixar o documento. Pode tentar enviar novamente?")
+                    return JSONResponse({"status": "error", "reason": "download failed"})
 
             logger.info(f"PDF de {phone}: {document_url[:50]}")
 
@@ -3707,6 +4167,20 @@ Para urgencias: (contato)"""
 
             # Enviar resposta
             await send_whatsapp_message(phone, analysis)
+
+            # ============================================
+            # INTEGRACAO PORTAL: Criar pedido em background
+            # ============================================
+            doc_filename = data.get("document", {}).get("fileName", f"documento_{phone}_{int(time.time())}.pdf")
+            asyncio.create_task(
+                processar_documento_para_portal(
+                    phone=phone,
+                    file_bytes=pdf_bytes,
+                    filename=doc_filename,
+                    mime_type=mime_type or "application/pdf",
+                    is_image=False
+                )
+            )
 
             return JSONResponse({"status": "processed", "type": "document"})
 
