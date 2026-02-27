@@ -2043,8 +2043,14 @@ ZELLE: Contact@legacytranslations.com — LEGACY TRANSLATIONS INC
 **APÓS PAGAMENTO CONFIRMADO:**
 Enviar: "Aproveite para nos seguir no Instagram: https://www.instagram.com/legacytranslations/"
 
-**CLIENTE CONFUSO OU PEDE MAIS DESCONTO:**
-Transferir educadamente para um atendente humano.
+**REGRA CRÍTICA - TRANSFERÊNCIA PARA ATENDENTE HUMANO:**
+- NUNCA sugira transferir para um atendente humano por conta própria
+- NUNCA diga "vou transferir", "vou encaminhar para um especialista" ou frases similares
+- Você DEVE sempre tentar resolver o atendimento completo seguindo o fluxo abaixo
+- Se o cliente pedir desconto além do automático de 10% (7+ páginas), explique educadamente que o preço já é o mínimo ($24.99/página) e continue o atendimento
+- Se o cliente estiver confuso, explique novamente com paciência e clareza - NÃO transfira
+- A transferência para humano SÓ acontece quando o CLIENTE EXPLICITAMENTE pede para falar com um atendente/pessoa real
+- Seu objetivo é COMPLETAR o atendimento: pedir documento, fazer orçamento, enviar formas de pagamento
 
 **FLUXO OBRIGATÓRIO DE ATENDIMENTO:**
 1. Cumprimentar o cliente (NÃO perguntar o nome)
@@ -2066,6 +2072,7 @@ Transferir educadamente para um atendente humano.
 - NUNCA diga o preço antes de receber o documento. Primeiro peça o documento, depois dê o orçamento
 - NUNCA pergunte como o cliente conheceu ou ficou sabendo da Legacy Translations. NÃO faça pesquisa de origem (Google, Instagram, Facebook, indicação). Essa pergunta foi REMOVIDA do fluxo
 - SEMPRE responda no mesmo idioma que o cliente usar. Se o cliente escreveu em inglês, responda em inglês. Se escreveu em português, responda em português. Se escreveu em espanhol, responda em espanhol. Na dúvida, pergunte em que idioma o cliente prefere continuar
+- NUNCA sugira transferência para atendente humano. Resolva o atendimento você mesma seguindo o fluxo acima
 """
 
 async def get_bot_training() -> str:
@@ -3370,6 +3377,28 @@ Para urgencias: (contato)"""
                 # Processar com IA
                 reply = await process_message_with_ai(phone, text + extra_context if extra_context else text)
 
+                # PROTECAO: Impedir que a IA gere respostas de transferencia por conta propria
+                # A transferencia so deve acontecer quando o CLIENTE pede explicitamente
+                transfer_phrases = [
+                    "vou transferir", "vou te transferir", "vou encaminhar",
+                    "transferindo para", "encaminhando para",
+                    "um especialista vai", "um atendente vai",
+                    "nossa equipe vai entrar", "aguarde um momento",
+                    "i'll transfer", "i will transfer", "transferring you",
+                    "forwarding you to", "a specialist will",
+                    "te transfiero", "transfiriendo"
+                ]
+                reply_lower = reply.lower()
+                if any(phrase in reply_lower for phrase in transfer_phrases):
+                    logger.warning(f"[PROTECAO] IA tentou transferir cliente {phone} sem solicitacao. Substituindo resposta.")
+                    idioma_cliente = estado.get("idioma", "pt")
+                    if idioma_cliente == "en":
+                        reply = "I'm here to help you! Could you please send the document you need translated? You can send a photo or PDF directly here. I'll prepare your quote right away! 😊"
+                    elif idioma_cliente == "es":
+                        reply = "¡Estoy aquí para ayudarte! ¿Podrías enviar el documento que necesitas traducir? Puedes enviar una foto o PDF directamente aquí. ¡Prepararé tu presupuesto enseguida! 😊"
+                    else:
+                        reply = "Estou aqui para te ajudar! Poderia enviar o documento que precisa traduzir? Pode mandar uma foto ou PDF diretamente aqui. Vou preparar seu orçamento na hora! 😊"
+
                 # Analisar e sugerir conhecimento (Hybrid Learning)
                 await analisar_e_sugerir_conhecimento(phone, text, reply)
 
@@ -3612,6 +3641,28 @@ Para urgencias: (contato)"""
 
             # Processar transcricao com IA
             reply = await process_message_with_ai(phone, transcription)
+
+            # PROTECAO: Impedir transferencia nao solicitada em respostas de audio
+            transfer_phrases = [
+                "vou transferir", "vou te transferir", "vou encaminhar",
+                "transferindo para", "encaminhando para",
+                "um especialista vai", "um atendente vai",
+                "nossa equipe vai entrar", "aguarde um momento",
+                "i'll transfer", "i will transfer", "transferring you",
+                "forwarding you to", "a specialist will",
+                "te transfiero", "transfiriendo"
+            ]
+            reply_lower = reply.lower()
+            if any(phrase in reply_lower for phrase in transfer_phrases):
+                logger.warning(f"[PROTECAO] IA tentou transferir cliente {phone} (audio) sem solicitacao. Substituindo resposta.")
+                estado = await get_cliente_estado(phone)
+                idioma_cliente = estado.get("idioma", "pt")
+                if idioma_cliente == "en":
+                    reply = "I'm here to help you! Could you please send the document you need translated? You can send a photo or PDF directly here. I'll prepare your quote right away! 😊"
+                elif idioma_cliente == "es":
+                    reply = "¡Estoy aquí para ayudarte! ¿Podrías enviar el documento que necesitas traducir? Puedes enviar una foto o PDF directamente aquí. ¡Prepararé tu presupuesto enseguida! 😊"
+                else:
+                    reply = "Estou aqui para te ajudar! Poderia enviar o documento que precisa traduzir? Pode mandar uma foto ou PDF diretamente aqui. Vou preparar seu orçamento na hora! 😊"
 
             # Enviar resposta
             await send_whatsapp_message(phone, reply)
