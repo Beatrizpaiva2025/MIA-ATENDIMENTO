@@ -2738,6 +2738,7 @@ async def api_listar_clientes_modo_humano():
 # ============================================================
 # WEBHOOK: WHATSAPP (Z-API) - INTEGRADO
 # ============================================================
+@app.post("/webhook")
 @app.post("/webhook/whatsapp")
 async def webhook_whatsapp(request: Request):
     """
