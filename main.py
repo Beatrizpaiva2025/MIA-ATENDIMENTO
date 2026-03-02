@@ -46,6 +46,8 @@ from admin_conversas_routes import router as conversas_router
 from admin_orcamentos_routes import router as orcamentos_router
 from webchat_routes import router as webchat_router
 from admin_crm_routes import router as crm_router, criar_ou_atualizar_contato
+from google_drive import save_whatsapp_media_to_drive, is_drive_enabled
+from api_routes import router as api_router
 
 # ============================================================
 # CONFIGURACAO DE LOGGING
@@ -1802,11 +1804,21 @@ Responda APENAS: SIM ou NAO"""
         await set_cliente_estado(phone, etapa=ETAPAS["PAGAMENTO_RECEBIDO"])
         doc_info = estado.get("documento_info", {})
 
-        # Atualizar status do orcamento para PAGO
+        # Atualizar status do orcamento para PAGO + vincular Google Drive
         try:
+            update_fields = {"status": "pago", "updated_at": datetime.now()}
+
+            # Vincular pasta do Google Drive se existir
+            if is_drive_enabled():
+                from google_drive import get_client_folder, get_folder_link
+                folder_id = get_client_folder(phone, nome)
+                if folder_id:
+                    update_fields["google_drive_folder"] = get_folder_link(folder_id)
+                    update_fields["google_drive_folder_id"] = folder_id
+
             await db.orcamentos.update_one(
                 {"phone": phone, "status": {"$in": ["pendente", "confirmado"]}},
-                {"$set": {"status": "pago", "updated_at": datetime.now()}},
+                {"$set": update_fields},
             )
             logger.info(f"[ORCAMENTO] Status atualizado para PAGO: {phone}")
         except Exception as e:
@@ -1933,6 +1945,7 @@ app.include_router(conversas_router)
 app.include_router(orcamentos_router)
 app.include_router(webchat_router)
 app.include_router(crm_router)
+app.include_router(api_router)
 
 # ============================================================
 # CONFIGURACOES Z-API
@@ -2610,6 +2623,26 @@ async def processar_documento_para_portal(phone: str, file_bytes: bytes, filenam
         if not upload_ok:
             logger.warning(f"[PORTAL-PIPELINE] Upload falhou para pedido {order_code}, mas pedido foi criado")
 
+        # 3.5. Upload ao Google Drive (em paralelo, nao bloqueia o fluxo)
+        gdrive_result = None
+        if is_drive_enabled():
+            try:
+                nome_cliente = dados.get("nome", "") if dados else ""
+                gdrive_result = await save_whatsapp_media_to_drive(
+                    file_bytes=file_bytes,
+                    phone=phone,
+                    media_type="image" if is_image else "document",
+                    filename=filename,
+                    mime_type=mime_type,
+                    nome=nome_cliente
+                )
+                if gdrive_result:
+                    logger.info(f"[GDRIVE] Documento salvo no Drive para {phone}: {gdrive_result['folder_link']}")
+                else:
+                    logger.warning(f"[GDRIVE] Falha ao salvar documento no Drive para {phone}")
+            except Exception as gdrive_err:
+                logger.error(f"[GDRIVE] Erro no upload para {phone}: {gdrive_err}")
+
         # 4. Notificar operador via WhatsApp
         await notificar_operador_novo_pedido(dados, order_code)
 
@@ -2620,6 +2653,7 @@ async def processar_documento_para_portal(phone: str, file_bytes: bytes, filenam
             "order_code": order_code,
             "dados_cliente": dados,
             "upload_ok": upload_ok,
+            "google_drive": gdrive_result,
             "created_at": datetime.now()
         })
 
@@ -3901,6 +3935,16 @@ Para urgencias: (contato)"""
                 await send_whatsapp_message(phone, msg)
                 return JSONResponse({"status": "error", "reason": "download failed"})
 
+            # Salvar imagem no Google Drive (background, nao bloqueia)
+            if is_drive_enabled():
+                asyncio.create_task(save_whatsapp_media_to_drive(
+                    file_bytes=image_bytes,
+                    phone=phone,
+                    media_type="image",
+                    filename=f"imagem_{phone}_{int(time.time())}.jpg",
+                    mime_type="image/jpeg"
+                ))
+
             # ============================================
             # VERIFICAR SE ESTA NA ETAPA DE PAGAMENTO
             # ============================================
@@ -4061,6 +4105,16 @@ Para urgencias: (contato)"""
                 await send_whatsapp_message(phone, "Desculpe, nao consegui baixar o audio. Pode tentar enviar novamente?")
                 return JSONResponse({"status": "error", "reason": "download failed"})
 
+            # Salvar audio no Google Drive (background)
+            if is_drive_enabled():
+                asyncio.create_task(save_whatsapp_media_to_drive(
+                    file_bytes=audio_bytes,
+                    phone=phone,
+                    media_type="audio",
+                    filename=f"audio_{phone}_{int(time.time())}.ogg",
+                    mime_type="audio/ogg"
+                ))
+
             # Transcrever com Whisper
             transcription = await process_audio_with_whisper(audio_bytes, phone)
 
@@ -4143,6 +4197,15 @@ Para urgencias: (contato)"""
                 doc_bytes = await download_media_from_zapi(document_url)
                 if doc_bytes:
                     doc_filename = data.get("document", {}).get("fileName", f"documento_{phone}_{int(time.time())}")
+                    # Salvar no Google Drive (background)
+                    if is_drive_enabled():
+                        asyncio.create_task(save_whatsapp_media_to_drive(
+                            file_bytes=doc_bytes,
+                            phone=phone,
+                            media_type="document",
+                            filename=doc_filename,
+                            mime_type=mime_type
+                        ))
                     asyncio.create_task(
                         processar_documento_para_portal(
                             phone=phone,
@@ -4173,6 +4236,17 @@ Para urgencias: (contato)"""
             if not pdf_bytes:
                 await send_whatsapp_message(phone, "Desculpe, nao consegui baixar o PDF. Pode tentar enviar novamente?")
                 return JSONResponse({"status": "error", "reason": "download failed"})
+
+            # Salvar PDF no Google Drive (background)
+            if is_drive_enabled():
+                pdf_filename = data.get("document", {}).get("fileName", f"documento_{phone}_{int(time.time())}.pdf")
+                asyncio.create_task(save_whatsapp_media_to_drive(
+                    file_bytes=pdf_bytes,
+                    phone=phone,
+                    media_type="document",
+                    filename=pdf_filename,
+                    mime_type=mime_type or "application/pdf"
+                ))
 
             # Analisar com Vision
             analysis = await process_pdf_with_vision(pdf_bytes, phone)
