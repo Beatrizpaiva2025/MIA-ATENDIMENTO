@@ -271,11 +271,13 @@ _notificacao_raw = os.getenv("NOTIFICACAO_PHONE", "18572081139")
 # Garantir que numeros tenham o codigo do pais (1 para EUA)
 def normalizar_telefone_eua(numero: str) -> str:
     """Garante que numero EUA tenha o codigo de pais 1"""
-    numero = numero.strip().replace("+", "").replace("-", "").replace(" ", "")
-    # Se comeca com 857 (area de Boston) sem o 1, adiciona
-    if numero.startswith("857") and len(numero) == 10:
-        return "1" + numero
-    return numero
+    numero = numero.strip().replace("+", "").replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
+    # Remover tudo que nao e digito
+    apenas_digitos = ''.join(c for c in numero if c.isdigit())
+    # Se tem 10 digitos (numero local EUA), adiciona codigo de pais 1
+    if len(apenas_digitos) == 10:
+        return "1" + apenas_digitos
+    return apenas_digitos
 
 # Cache para configuracao do operador (evita consultar MongoDB a cada mensagem)
 _operator_config_cache = {"operator": None, "alerts": None, "last_check": None}
@@ -342,6 +344,11 @@ def is_operator_phone(phone: str) -> bool:
         elif digits == op_digits:
             return True
 
+    # Fallback: comparar com hardcoded para garantir que 18573167770 sempre funcione
+    hardcoded_operator = "8573167770"
+    if len(digits) >= 10 and digits[-10:] == hardcoded_operator:
+        return True
+
     return False
 
 async def is_operator_phone_async(phone: str) -> bool:
@@ -359,10 +366,19 @@ async def is_operator_phone_async(phone: str) -> bool:
         op_digits = ''.join(c for c in op_phone if c.isdigit())
         if len(digits) >= 10 and len(op_digits) >= 10:
             if digits[-10:] == op_digits[-10:]:
+                logger.info(f"[OPERADOR-MATCH] phone={phone} (ultimos10={digits[-10:]}) == operador {op_phone} (ultimos10={op_digits[-10:]})")
                 return True
         elif digits == op_digits:
+            logger.info(f"[OPERADOR-MATCH] phone={phone} == operador {op_phone} (match exato)")
             return True
 
+    # Fallback: comparar com hardcoded para garantir que 18573167770 sempre funcione
+    hardcoded_operator = "8573167770"
+    if len(digits) >= 10 and digits[-10:] == hardcoded_operator:
+        logger.info(f"[OPERADOR-MATCH] phone={phone} == operador hardcoded 18573167770 (fallback)")
+        return True
+
+    logger.info(f"[OPERADOR-NOMATCH] phone={phone} (digits={digits}) NAO corresponde a nenhum operador: {operator_phones}")
     return False
 
 ATENDENTE_PHONE = normalizar_telefone_eua(_atendente_raw)
@@ -520,6 +536,69 @@ def detectar_possivel_comprovante(texto: str) -> bool:
     """Detecta se texto indica possivel comprovante de pagamento"""
     texto_lower = texto.lower()
     return any(palavra in texto_lower for palavra in PALAVRAS_COMPROVANTE)
+
+
+# Palavras/frases que indicam indecisao ou pesquisa de preco
+PALAVRAS_INDECISAO = [
+    # Portugues
+    "vou pensar", "tá caro", "ta caro", "está caro", "esta caro",
+    "estou pesquisando", "outro orçamento", "outro orcamento",
+    "preço alto", "preco alto", "vou ver", "comparar",
+    "muito caro", "caro demais", "pensar melhor", "vou avaliar",
+    "pesquisar mais", "outros precos", "outros preços",
+    "vou consultar", "deixa eu ver", "preciso pensar",
+    "nao sei se", "não sei se", "achei caro", "valor alto",
+    # English
+    "shopping around", "too expensive", "other quotes",
+    "thinking about it", "let me check", "too much",
+    "a bit expensive", "expensive", "other options",
+    "i'll think", "i will think", "need to think",
+    "comparing prices", "compare prices", "checking other",
+    "let me think", "not sure if", "seems expensive",
+    "high price", "pricey",
+    # Espanhol
+    "voy a pensar", "está caro", "muy caro", "demasiado caro",
+    "estoy buscando", "otros presupuestos", "precio alto",
+    "voy a ver", "comparar precios", "déjame ver",
+    "necesito pensar", "no estoy seguro"
+]
+
+
+def detectar_indecisao(texto: str) -> bool:
+    """Detecta se o cliente esta indeciso ou pesquisando preco"""
+    texto_lower = texto.lower()
+    return any(frase in texto_lower for frase in PALAVRAS_INDECISAO)
+
+
+def get_mensagem_diferencial(idioma: str) -> str:
+    """Retorna a mensagem de diferencial (QR Code) no idioma do cliente"""
+    if idioma == "en":
+        return (
+            "I understand! Just wanted to highlight an important difference: "
+            "every translation we provide includes an EXCLUSIVE verification page "
+            "with a QR Code that allows any institution to instantly confirm the "
+            "authenticity of the translation. We are the only translation company "
+            "that offers this — it's an extra layer of security and credibility "
+            "for your document. 😊"
+        )
+    elif idioma == "es":
+        return (
+            "¡Entiendo! Solo quería destacar un diferencial importante: "
+            "cada traducción nuestra incluye una página de verificación EXCLUSIVA "
+            "con código QR, que permite a cualquier institución confirmar la "
+            "autenticidad de la traducción instantáneamente. Somos la única empresa "
+            "de traducción que ofrece esto — es una capa extra de seguridad y "
+            "credibilidad para tu documento. 😊"
+        )
+    else:
+        return (
+            "Entendo! Só queria destacar um diferencial importante: "
+            "cada tradução nossa inclui uma página de verificação EXCLUSIVA "
+            "com QR Code, que permite a qualquer instituição confirmar a "
+            "autenticidade da tradução instantaneamente. Somos a única empresa "
+            "de tradução que oferece isso — é uma camada extra de segurança "
+            "e credibilidade para o seu documento. 😊"
+        )
 
 
 async def notificar_atendente(phone: str, motivo: str = "Cliente solicitou"):
@@ -3812,6 +3891,15 @@ Para urgencias: (contato)"""
                 if reply:
                     logger.info(f"[ETAPA] {phone}: Processando resposta na etapa PAGAMENTO_RECEBIDO")
                 # Se reply for None, continua para processamento normal com IA
+
+            # ============================================
+            # DETECTAR INDECISAO / PESQUISA DE PRECO
+            # Responder com diferencial do QR Code
+            # ============================================
+            if reply is None and detectar_indecisao(text):
+                idioma_cliente = estado.get("idioma", "pt")
+                reply = get_mensagem_diferencial(idioma_cliente)
+                logger.info(f"[INDECISAO] Cliente {phone} demonstrou indecisao - enviando diferencial QR Code (idioma: {idioma_cliente})")
 
             # Se nenhuma etapa especifica tratou, processar normalmente com IA
             if reply is None:
