@@ -33,7 +33,7 @@ TREINAMENTO_COMPLETO = {
 5. SEMPRE enviar informações de pagamento após orçamento
 6. NUNCA responder a números restritos internos
 7. Se cliente estiver confuso, explicar novamente com paciência - NÃO transferir
-8. Se cliente pedir desconto, explicar que o preço já é o mínimo e continuar o atendimento
+8. Se cliente pedir desconto, o sistema transfere automaticamente para atendente humano - NÃO tente resolver sozinha
 """,
         "response_delay": 3
     },

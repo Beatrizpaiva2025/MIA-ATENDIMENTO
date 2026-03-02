@@ -607,7 +607,7 @@ A IA ja esta PAUSADA para este cliente."""
 async def detectar_solicitacao_humano(message: str) -> bool:
     """Detecta se cliente esta pedindo atendente humano"""
     palavras_chave = [
-        # Palavras principais
+        # Palavras principais (usam word boundary para evitar falsos positivos)
         "atendente", "humano", "pessoa", "operador",
         # Nomes dos atendentes
         "beatriz", "eduarda",
@@ -631,7 +631,36 @@ async def detectar_solicitacao_humano(message: str) -> bool:
     ]
 
     message_lower = message.lower()
-    return any(palavra in message_lower for palavra in palavras_chave)
+    # Usar word boundary (re) para evitar falsos positivos
+    # Ex: "pessoa" nao deve casar com "pessoal" (staff/people)
+    for palavra in palavras_chave:
+        if re.search(r'\b' + re.escape(palavra) + r'\b', message_lower):
+            return True
+    return False
+
+
+async def detectar_pedido_desconto(message: str) -> bool:
+    """Detecta se cliente esta pedindo desconto"""
+    palavras_desconto = [
+        # Portugues
+        "desconto", "mais barato", "preco menor", "preço menor",
+        "valor menor", "reduzir o valor", "reduzir o preco", "reduzir o preço",
+        "abaixar o valor", "abaixar o preco", "abaixar o preço",
+        "diminuir o valor", "diminuir o preco", "diminuir o preço",
+        "fazer por menos", "preco melhor", "preço melhor",
+        "valor melhor", "condicao especial", "condição especial",
+        "tem como fazer mais barato", "muito caro", "achei caro",
+        "caro demais", "nao tenho esse valor", "não tenho esse valor",
+        # English
+        "discount", "cheaper", "lower price", "better price",
+        "reduce the price", "too expensive", "can you do less",
+        # Espanhol
+        "descuento", "mas barato", "más barato", "precio menor",
+        "muy caro", "demasiado caro"
+    ]
+
+    message_lower = message.lower()
+    return any(palavra in message_lower for palavra in palavras_desconto)
 
 
 async def detectar_pedido_desconto(message: str) -> bool:
@@ -2017,9 +2046,15 @@ Membro da American Translators Association (ATA)
 - Envio físico Priority Mail: $18.99
 - Desconto: Acima de 7 páginas = 10% de desconto automático
 
-**IMPORTANTE - INDICAÇÕES DE PARCEIROS (George Law, Geovanna, Gdreams, etc.):**
-Quando o cliente mencionar que foi indicado por um escritório ou parceiro (George Law, Geovanna, Gdreams, ou qualquer outro), continue o atendimento normalmente. NÃO transfira para atendente. NÃO ofereca desconto. Apenas continue o fluxo de atendimento.
-NÃO oferecemos descontos para parceiros ou indicações. O único desconto é o automático de 10% para 7+ páginas.
+**IMPORTANTE - INDICAÇÕES DE ESCRITÓRIOS/PARCEIROS (George Law, Geovanna, Gdreams, etc.):**
+Quando o cliente mencionar que um escritório ou parceiro indicou (ex: "o pessoal do George Law me indicou", "vim pelo escritório X"),
+NÃO transfira para atendente. Continue o atendimento normalmente seguindo o fluxo padrão.
+NÃO ofereça desconto por indicação. O preço é o mesmo para todos os clientes.
+Desconto SOMENTE acima de 7 páginas (10% automático).
+
+**IMPORTANTE - PEDIDOS DE DESCONTO:**
+Se o cliente pedir desconto, NÃO tente resolver sozinha. O sistema vai transferir automaticamente para um atendente humano.
+NÃO diga que o preço já é o mínimo. NÃO explique sobre descontos. Apenas aguarde a transferência automática.
 
 **OPÇÃO DE ENVIO POR EMAIL:**
 Se o cliente preferir enviar o documento por e-mail:
@@ -2037,7 +2072,7 @@ Enviar: "Aproveite para nos seguir no Instagram: https://www.instagram.com/legac
 - NUNCA sugira transferir para um atendente humano por conta própria
 - NUNCA diga "vou transferir", "vou encaminhar para um especialista" ou frases similares
 - Você DEVE sempre tentar resolver o atendimento completo seguindo o fluxo abaixo
-- Se o cliente pedir desconto, o sistema automaticamente transferirá para um atendente humano. Você NÃO precisa lidar com pedidos de desconto
+- Se o cliente pedir desconto, o sistema transfere automaticamente para atendente humano. NÃO tente resolver pedidos de desconto sozinha
 - Se o cliente estiver confuso, explique novamente com paciência e clareza - NÃO transfira
 - A transferência para humano SÓ acontece quando o CLIENTE EXPLICITAMENTE pede para falar com um atendente/pessoa real
 - Seu objetivo é COMPLETAR o atendimento: pedir documento, fazer orçamento, enviar formas de pagamento
@@ -2860,6 +2895,18 @@ async def process_message_with_ai(phone: str, message: str) -> str:
             idioma = estado.get("idioma", "pt")
             return get_transfer_message(idioma)
 
+        # Detectar se cliente esta pedindo desconto - transferir para humano
+        if await detectar_pedido_desconto(message):
+            await transferir_para_humano(phone, "Cliente pediu desconto")
+            estado = await get_cliente_estado(phone)
+            idioma = estado.get("idioma", "pt")
+            if idioma == "en":
+                return "I understand! Let me connect you with our team so they can help you with that. A representative will get in touch with you shortly. 😊"
+            elif idioma == "es":
+                return "¡Entiendo! Permítame conectarte con nuestro equipo para que puedan ayudarte con eso. Un representante se pondrá en contacto contigo en breve. 😊"
+            else:
+                return "Entendi! Vou te conectar com nossa equipe para que possam te ajudar com isso. Um atendente entrara em contato em breve. 😊"
+
         # Buscar treinamento dinamico do MongoDB
         system_prompt = await get_bot_training()
 
@@ -3664,24 +3711,24 @@ Para urgencias: (contato)"""
                 })
                 return JSONResponse({"status": "transferred_to_human", "etapa": etapa_atual})
 
-            # VERIFICAR SE CLIENTE ESTA PEDINDO DESCONTO (em qualquer etapa)
+            # VERIFICAR SE CLIENTE ESTA PEDINDO DESCONTO (transferir para humano)
             if await detectar_pedido_desconto(text):
                 logger.info(f"[DESCONTO] Cliente {phone} pediu desconto na etapa {etapa_atual}")
                 await transferir_para_humano(phone, f"Cliente pediu desconto (etapa: {etapa_atual})")
                 idioma_cliente = estado.get("idioma", "pt")
                 if idioma_cliente == "en":
                     reply = (
-                        f"I understand you'd like to discuss pricing! Let me connect you with our team so they can assist you personally.\n\n"
+                        f"I understand! Let me connect you with our team so they can help you with that.\n\n"
                         f"A representative will get in touch with you shortly. 😊"
                     )
                 elif idioma_cliente == "es":
                     reply = (
-                        f"¡Entiendo que te gustaría hablar sobre el precio! Déjame conectarte con nuestro equipo para que puedan ayudarte personalmente.\n\n"
+                        f"¡Entiendo! Permítame conectarte con nuestro equipo para que puedan ayudarte con eso.\n\n"
                         f"Un representante se pondrá en contacto contigo en breve. 😊"
                     )
                 else:
                     reply = (
-                        f"Entendi que voce gostaria de conversar sobre o valor! Vou te conectar com nossa equipe para que possam te atender pessoalmente.\n\n"
+                        f"Entendi! Vou te conectar com nossa equipe para que possam te ajudar com isso.\n\n"
                         f"Um atendente entrara em contato em breve. 😊"
                     )
 
@@ -3700,6 +3747,7 @@ Para urgencias: (contato)"""
                 await set_cliente_estado(phone, etapa=ETAPAS["INICIAL"])
                 etapa_atual = ETAPAS["INICIAL"]
                 logger.info(f"[ETAPA] {phone}: aguardando_origem (legado) -> INICIAL")
+
 
             # Processar baseado na etapa atual
             if etapa_atual == ETAPAS["AGUARDANDO_NOME"]:
