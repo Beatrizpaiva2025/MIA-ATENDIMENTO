@@ -269,11 +269,13 @@ _notificacao_raw = os.getenv("NOTIFICACAO_PHONE", "18572081139")
 # Garantir que numeros tenham o codigo do pais (1 para EUA)
 def normalizar_telefone_eua(numero: str) -> str:
     """Garante que numero EUA tenha o codigo de pais 1"""
-    numero = numero.strip().replace("+", "").replace("-", "").replace(" ", "")
-    # Se comeca com 857 (area de Boston) sem o 1, adiciona
-    if numero.startswith("857") and len(numero) == 10:
-        return "1" + numero
-    return numero
+    numero = numero.strip().replace("+", "").replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
+    # Remover tudo que nao e digito
+    apenas_digitos = ''.join(c for c in numero if c.isdigit())
+    # Se tem 10 digitos (numero local EUA), adiciona codigo de pais 1
+    if len(apenas_digitos) == 10:
+        return "1" + apenas_digitos
+    return apenas_digitos
 
 # Cache para configuracao do operador (evita consultar MongoDB a cada mensagem)
 _operator_config_cache = {"operator": None, "alerts": None, "last_check": None}
@@ -340,6 +342,11 @@ def is_operator_phone(phone: str) -> bool:
         elif digits == op_digits:
             return True
 
+    # Fallback: comparar com hardcoded para garantir que 18573167770 sempre funcione
+    hardcoded_operator = "8573167770"
+    if len(digits) >= 10 and digits[-10:] == hardcoded_operator:
+        return True
+
     return False
 
 async def is_operator_phone_async(phone: str) -> bool:
@@ -357,10 +364,19 @@ async def is_operator_phone_async(phone: str) -> bool:
         op_digits = ''.join(c for c in op_phone if c.isdigit())
         if len(digits) >= 10 and len(op_digits) >= 10:
             if digits[-10:] == op_digits[-10:]:
+                logger.info(f"[OPERADOR-MATCH] phone={phone} (ultimos10={digits[-10:]}) == operador {op_phone} (ultimos10={op_digits[-10:]})")
                 return True
         elif digits == op_digits:
+            logger.info(f"[OPERADOR-MATCH] phone={phone} == operador {op_phone} (match exato)")
             return True
 
+    # Fallback: comparar com hardcoded para garantir que 18573167770 sempre funcione
+    hardcoded_operator = "8573167770"
+    if len(digits) >= 10 and digits[-10:] == hardcoded_operator:
+        logger.info(f"[OPERADOR-MATCH] phone={phone} == operador hardcoded 18573167770 (fallback)")
+        return True
+
+    logger.info(f"[OPERADOR-NOMATCH] phone={phone} (digits={digits}) NAO corresponde a nenhum operador: {operator_phones}")
     return False
 
 ATENDENTE_PHONE = normalizar_telefone_eua(_atendente_raw)
