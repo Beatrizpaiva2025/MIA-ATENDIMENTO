@@ -20,3 +20,7 @@ pytz==2024.1
 
 # Anthropic Claude API (document extraction for Portal integration)
 anthropic==0.39.0
+
+# Google Drive API (upload de documentos do WhatsApp)
+google-api-python-client==2.108.0
+google-auth==2.25.2
