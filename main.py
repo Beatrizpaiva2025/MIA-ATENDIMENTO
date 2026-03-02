@@ -379,7 +379,6 @@ HUMAN_MODE_TIMEOUT_MINUTES = int(os.getenv("HUMAN_MODE_TIMEOUT_MINUTES", "30"))
 # Etapas possiveis:
 # - INICIAL: Conversa normal, sem documento analisado
 # - AGUARDANDO_NOME: Bot pediu o nome do cliente
-# - AGUARDANDO_ORIGEM: Bot pediu como conheceu a Legacy
 # - AGUARDANDO_OPCAO_ATENDIMENTO: Fora do horario - opcoes: continuar aqui / website / atendente
 # - AGUARDANDO_CONFIRMACAO: Orcamento enviado, aguardando cliente confirmar
 # - AGUARDANDO_PAGAMENTO: Cliente confirmou, aguardando comprovante
@@ -388,7 +387,6 @@ HUMAN_MODE_TIMEOUT_MINUTES = int(os.getenv("HUMAN_MODE_TIMEOUT_MINUTES", "30"))
 ETAPAS = {
     "INICIAL": "inicial",
     "AGUARDANDO_NOME": "aguardando_nome",
-    "AGUARDANDO_ORIGEM": "aguardando_origem",
     "AGUARDANDO_OPCAO_ATENDIMENTO": "aguardando_opcao_atendimento",
     "AGUARDANDO_CONFIRMACAO": "aguardando_confirmacao",
     "AGUARDANDO_PAGAMENTO": "aguardando_pagamento",
@@ -632,6 +630,24 @@ async def detectar_solicitacao_humano(message: str) -> bool:
         "falar com gente", "alguem real", "alguém real"
     ]
 
+    message_lower = message.lower()
+    return any(palavra in message_lower for palavra in palavras_chave)
+
+
+async def detectar_pedido_desconto(message: str) -> bool:
+    """Detecta se cliente esta pedindo desconto"""
+    palavras_chave = [
+        # Portugues
+        "desconto", "abatimento", "reduzir o valor", "reduzir o preco",
+        "reduzir o preço", "mais barato", "baixar o preco", "baixar o preço",
+        "valor menor", "preco menor", "preço menor",
+        "tem como diminuir", "fazer por menos",
+        # English
+        "discount", "lower price", "cheaper", "reduce the price",
+        "better price", "price match", "any deals",
+        # Spanish
+        "descuento", "rebaja", "reducir el precio", "más barato"
+    ]
     message_lower = message.lower()
     return any(palavra in message_lower for palavra in palavras_chave)
 
@@ -1476,87 +1492,6 @@ async def processar_etapa_nome(phone: str, mensagem: str) -> str:
     return saudacao + orcamento
 
 
-async def processar_etapa_origem(phone: str, mensagem: str) -> str:
-    """Processa resposta da origem e gera orcamento (ou opcoes fora do horario)"""
-    estado = await get_cliente_estado(phone)
-    idioma = estado.get("idioma", "pt")
-    nome = estado.get("nome", "")
-
-    # Detectar origem
-    msg_lower = mensagem.lower()
-    if "1" in mensagem or "google" in msg_lower:
-        origem = "Google"
-    elif "2" in mensagem or "instagram" in msg_lower or "insta" in msg_lower:
-        origem = "Instagram"
-    elif "3" in mensagem or "facebook" in msg_lower or "face" in msg_lower:
-        origem = "Facebook"
-    elif "4" in mensagem or "amigo" in msg_lower or "friend" in msg_lower or "referencia" in msg_lower:
-        origem = "Referencia de amigo"
-    else:
-        origem = mensagem.strip()[:50]
-
-    # Salvar origem no estado do cliente
-    await set_cliente_estado(phone, origem=origem)
-
-    # Salvar origem no CRM (aba MIA)
-    try:
-        await criar_ou_atualizar_contato(phone, {
-            "nome": nome,
-            "origem": origem,
-            "idioma": idioma
-        })
-        logger.info(f"[CRM] Origem '{origem}' salva para cliente {phone}")
-    except Exception as e:
-        logger.error(f"[CRM] Erro ao salvar origem: {e}")
-
-    # Agradecer baseado no idioma
-    if idioma == "en":
-        agradecimento = f"Thank you! Great to know you found us through {origem}. 🙏\n\n"
-    elif idioma == "es":
-        agradecimento = f"¡Gracias! Que bueno saber que nos encontraste por {origem}. 🙏\n\n"
-    else:
-        agradecimento = f"Obrigada! Que bom saber que nos conheceu pelo {origem}. 🙏\n\n"
-
-    # Se fora do horario comercial E cliente nao tem documento ainda, apresentar opcoes
-    doc_info = estado.get("documento_info")
-    if not is_business_hours() and not doc_info:
-        await set_cliente_estado(phone, etapa=ETAPAS["AGUARDANDO_OPCAO_ATENDIMENTO"])
-
-        if idioma == "en":
-            opcoes = (
-                f"{agradecimento}"
-                f"How would you like to proceed?\n\n"
-                f"1️⃣ Continue the service right here\n"
-                f"2️⃣ Place my order through the website\n"
-                f"3️⃣ I'd like to speak with a representative\n\n"
-                f"Just reply with the number!"
-            )
-        elif idioma == "es":
-            opcoes = (
-                f"{agradecimento}"
-                f"¿Cómo prefieres continuar?\n\n"
-                f"1️⃣ Continuar la atención aquí\n"
-                f"2️⃣ Hacer mi pedido por el sitio web\n"
-                f"3️⃣ Quiero hablar con un representante\n\n"
-                f"¡Solo responde con el número!"
-            )
-        else:
-            opcoes = (
-                f"{agradecimento}"
-                f"Como voce prefere prosseguir?\n\n"
-                f"1️⃣ Continuar o atendimento aqui\n"
-                f"2️⃣ Fazer meu pedido pelo website\n"
-                f"3️⃣ Quero falar com um atendente\n\n"
-                f"Responda com o numero!"
-            )
-        return opcoes
-
-    # Fluxo normal (horario comercial ou ja tem documento): gerar orcamento
-    orcamento = await gerar_orcamento_final(phone)
-
-    return agradecimento + orcamento
-
-
 async def processar_etapa_opcao_atendimento(phone: str, mensagem: str) -> str:
     """Processa a escolha do cliente entre as 3 opcoes de atendimento (fora do horario)"""
     estado = await get_cliente_estado(phone)
@@ -2082,10 +2017,9 @@ Membro da American Translators Association (ATA)
 - Envio físico Priority Mail: $18.99
 - Desconto: Acima de 7 páginas = 10% de desconto automático
 
-**IMPORTANTE - DESCONTOS DE PARCEIROS (George Law, Geovanna, Gdreams, etc.):**
-NÃO oferecemos mais descontos para parceiros ou indicações.
-Se o cliente perguntar sobre desconto de George Law, Geovanna, Gdreams, ou qualquer outro parceiro/escritório, responda:
-"Nosso preço por página era $35.00 e agora trabalhamos com o valor mínimo de $24.99 por página. Por isso, não temos mais descontos de parceiros, pois o preço já está reduzido."
+**IMPORTANTE - INDICAÇÕES DE PARCEIROS (George Law, Geovanna, Gdreams, etc.):**
+Quando o cliente mencionar que foi indicado por um escritório ou parceiro (George Law, Geovanna, Gdreams, ou qualquer outro), continue o atendimento normalmente. NÃO transfira para atendente. NÃO ofereca desconto. Apenas continue o fluxo de atendimento.
+NÃO oferecemos descontos para parceiros ou indicações. O único desconto é o automático de 10% para 7+ páginas.
 
 **OPÇÃO DE ENVIO POR EMAIL:**
 Se o cliente preferir enviar o documento por e-mail:
@@ -2103,7 +2037,7 @@ Enviar: "Aproveite para nos seguir no Instagram: https://www.instagram.com/legac
 - NUNCA sugira transferir para um atendente humano por conta própria
 - NUNCA diga "vou transferir", "vou encaminhar para um especialista" ou frases similares
 - Você DEVE sempre tentar resolver o atendimento completo seguindo o fluxo abaixo
-- Se o cliente pedir desconto além do automático de 10% (7+ páginas), explique educadamente que o preço já é o mínimo ($24.99/página) e continue o atendimento
+- Se o cliente pedir desconto, o sistema automaticamente transferirá para um atendente humano. Você NÃO precisa lidar com pedidos de desconto
 - Se o cliente estiver confuso, explique novamente com paciência e clareza - NÃO transfira
 - A transferência para humano SÓ acontece quando o CLIENTE EXPLICITAMENTE pede para falar com um atendente/pessoa real
 - Seu objetivo é COMPLETAR o atendimento: pedir documento, fazer orçamento, enviar formas de pagamento
@@ -3730,19 +3664,49 @@ Para urgencias: (contato)"""
                 })
                 return JSONResponse({"status": "transferred_to_human", "etapa": etapa_atual})
 
+            # VERIFICAR SE CLIENTE ESTA PEDINDO DESCONTO (em qualquer etapa)
+            if await detectar_pedido_desconto(text):
+                logger.info(f"[DESCONTO] Cliente {phone} pediu desconto na etapa {etapa_atual}")
+                await transferir_para_humano(phone, f"Cliente pediu desconto (etapa: {etapa_atual})")
+                idioma_cliente = estado.get("idioma", "pt")
+                if idioma_cliente == "en":
+                    reply = (
+                        f"I understand you'd like to discuss pricing! Let me connect you with our team so they can assist you personally.\n\n"
+                        f"A representative will get in touch with you shortly. 😊"
+                    )
+                elif idioma_cliente == "es":
+                    reply = (
+                        f"¡Entiendo que te gustaría hablar sobre el precio! Déjame conectarte con nuestro equipo para que puedan ayudarte personalmente.\n\n"
+                        f"Un representante se pondrá en contacto contigo en breve. 😊"
+                    )
+                else:
+                    reply = (
+                        f"Entendi que voce gostaria de conversar sobre o valor! Vou te conectar com nossa equipe para que possam te atender pessoalmente.\n\n"
+                        f"Um atendente entrara em contato em breve. 😊"
+                    )
+
+                await send_whatsapp_message(phone, reply)
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": reply,
+                    "role": "assistant",
+                    "timestamp": datetime.now(),
+                    "canal": "WhatsApp"
+                })
+                return JSONResponse({"status": "transferred_to_human_discount", "etapa": etapa_atual})
+
+            # Migrar clientes presos na etapa legada "aguardando_origem"
+            if etapa_atual == "aguardando_origem":
+                await set_cliente_estado(phone, etapa=ETAPAS["INICIAL"])
+                etapa_atual = ETAPAS["INICIAL"]
+                logger.info(f"[ETAPA] {phone}: aguardando_origem (legado) -> INICIAL")
+
             # Processar baseado na etapa atual
             if etapa_atual == ETAPAS["AGUARDANDO_NOME"]:
                 reply = await processar_etapa_nome(phone, text)
                 estado_atualizado = await get_cliente_estado(phone)
                 nova_etapa = estado_atualizado.get("etapa", "")
                 logger.info(f"[ETAPA] {phone}: AGUARDANDO_NOME -> {nova_etapa}")
-
-            elif etapa_atual == ETAPAS["AGUARDANDO_ORIGEM"]:
-                # Etapa legada - tratar como se fosse nome (caso cliente esteja preso nessa etapa)
-                reply = await processar_etapa_origem(phone, text)
-                estado_atualizado = await get_cliente_estado(phone)
-                nova_etapa = estado_atualizado.get("etapa", "")
-                logger.info(f"[ETAPA] {phone}: AGUARDANDO_ORIGEM -> {nova_etapa}")
 
             elif etapa_atual == ETAPAS["AGUARDANDO_OPCAO_ATENDIMENTO"]:
                 reply = await processar_etapa_opcao_atendimento(phone, text)
