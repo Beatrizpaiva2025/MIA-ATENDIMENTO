@@ -266,6 +266,20 @@ async def set_bot_status(enabled: bool):
 _atendente_raw = os.getenv("ATENDENTE_PHONE", "18573167770")
 _notificacao_raw = os.getenv("NOTIFICACAO_PHONE", "18572081139")
 
+def calcular_preco_pagina(idioma_destino: str) -> float:
+    """Retorna o preco por pagina baseado no idioma destino.
+    Ingles = $24.99 (certificada), Portugues = $35.00 (juramentada).
+    Outros idiomas retornam 0 (deve transferir para atendente).
+    """
+    destino = idioma_destino.lower().strip()
+    if any(p in destino for p in ["ingl", "english", "en"]):
+        return 24.99
+    elif any(p in destino for p in ["portugu", "portuguese", "pt"]):
+        return 35.00
+    else:
+        return 0.0  # Idioma nao suportado - transferir para atendente
+
+
 # Garantir que numeros tenham o codigo do pais (1 para EUA)
 def normalizar_telefone_eua(numero: str) -> str:
     """Garante que numero EUA tenha o codigo de pais 1"""
@@ -1311,9 +1325,36 @@ async def gerar_orcamento_final(phone: str) -> str:
     idioma_destino = doc_info.get("idioma_destino", "ingles")
 
     # Determinar preco por pagina baseado no idioma DESTINO
-    # Se destino for portugues = juramentada ($35.00), senao = certificada ($24.99)
     destino_lower = idioma_destino.lower().strip()
-    eh_juramentada = any(p in destino_lower for p in ["portugu", "portuguese", "pt"])
+    eh_destino_ingles = any(p in destino_lower for p in ["ingl", "english", "en"])
+    eh_destino_portugues = any(p in destino_lower for p in ["portugu", "portuguese", "pt"])
+
+    # Se destino NAO for ingles nem portugues -> transferir para atendente
+    if not eh_destino_ingles and not eh_destino_portugues:
+        logger.info(f"[ORCAMENTO] {phone}: Destino '{idioma_destino}' nao e ingles nem portugues - transferindo para atendente")
+        await notificar_atendente(phone, f"CLIENTE QUER TRADUCAO PARA {idioma_destino.upper()} - Precisa atendimento humano")
+
+        if idioma == "en":
+            return (
+                f"We do offer translations to {idioma_destino}! 😊\n\n"
+                f"For more details on this service, I'll connect you with one of our specialists who can help you with pricing and timelines.\n\n"
+                f"One moment please! 🙏"
+            )
+        elif idioma == "es":
+            return (
+                f"¡Sí, hacemos traducciones al {idioma_destino}! 😊\n\n"
+                f"Para más detalles sobre este servicio, voy a conectarte con uno de nuestros especialistas que podrá ayudarte con precios y plazos.\n\n"
+                f"¡Un momento por favor! 🙏"
+            )
+        else:
+            return (
+                f"Fazemos sim traducoes para o {idioma_destino}! 😊\n\n"
+                f"Para mais detalhes sobre este servico, vou transferir voce para um dos nossos atendentes que podera te ajudar com precos e prazos.\n\n"
+                f"So um momento! 🙏"
+            )
+
+    # Destino ingles = certificada ($24.99), destino portugues = juramentada ($35.00)
+    eh_juramentada = eh_destino_portugues
     preco_pagina = 35.00 if eh_juramentada else 24.99
     tipo_traducao = "juramentada (sworn)" if eh_juramentada else "certificada (certified)"
     prazo = "5 dias úteis" if eh_juramentada else "3 dias úteis"
@@ -1796,9 +1837,10 @@ async def processar_etapa_confirmacao(phone: str, mensagem: str) -> str:
         total_pages = doc_info.get("total_pages", 1)
         if not total_pages or total_pages < 1:
             total_pages = 1
-        # Preco baseado no idioma destino: portugues = $35 (juramentada), outros = $24.99
-        destino = doc_info.get("idioma_destino", "ingles").lower()
-        preco_pg = 35.00 if any(p in destino for p in ["portugu", "portuguese", "pt"]) else 24.99
+        # Preco baseado no idioma destino: ingles=$24.99, portugues=$35.00
+        preco_pg = calcular_preco_pagina(doc_info.get("idioma_destino", "ingles"))
+        if preco_pg <= 0:
+            preco_pg = 24.99  # Fallback seguro
         valor_calculado = total_pages * preco_pg
         valor = f"${valor_calculado:.2f}"
         await set_cliente_estado(phone, valor_orcamento=valor)
@@ -1870,9 +1912,10 @@ async def processar_etapa_pagamento(phone: str, mensagem: str, is_image: bool = 
         total_pages = doc_info.get("total_pages", 1) if doc_info else 1
         if not total_pages or total_pages < 1:
             total_pages = 1
-        # Preco baseado no idioma destino: portugues = $35 (juramentada), outros = $24.99
-        destino = (doc_info.get("idioma_destino", "ingles") if doc_info else "ingles").lower()
-        preco_pg = 35.00 if any(p in destino for p in ["portugu", "portuguese", "pt"]) else 24.99
+        # Preco baseado no idioma destino: ingles=$24.99, portugues=$35.00
+        preco_pg = calcular_preco_pagina((doc_info.get("idioma_destino", "ingles") if doc_info else "ingles"))
+        if preco_pg <= 0:
+            preco_pg = 24.99  # Fallback seguro
         valor = f"${total_pages * preco_pg:.2f}"
         await set_cliente_estado(phone, valor_orcamento=valor)
         logger.warning(f"[PAGAMENTO] Valor era invalido - recalculado para {valor} ({total_pages} pags x ${preco_pg})")
@@ -2268,22 +2311,22 @@ Membro da American Translators Association (ATA)
 - NUNCA use o nome do cliente nas respostas. NÃO pergunte o nome do cliente. NÃO tente chamar o cliente pelo nome
 
 **TABELA DE PREÇOS:**
-- Tradução Certificada (qualquer idioma → Inglês): $24.99/página | 3 dias úteis
-- Tradução Certificada (qualquer idioma → Espanhol): $24.99/página | 3 dias úteis
-- Tradução Juramentada (qualquer idioma → Português): $35.00/página | 5 dias úteis
+- Tradução para INGLÊS (qualquer idioma → Inglês): $24.99/página | 3 dias úteis
+- Tradução para PORTUGUÊS (qualquer idioma → Português / Juramentada/Sworn): $35.00/página | 5 dias úteis
+- Tradução para OUTROS IDIOMAS (Espanhol, Francês, etc.): NÃO fazemos orçamento automático - transferir para atendente
 - Urgência Priority (24h): +25%
 - Urgência Urgente (12h): +50%
 - Envio físico Priority Mail: $18.99
 - Desconto: Acima de 7 páginas = 10% de desconto automático
 
 **REGRA CRÍTICA DE PREÇO - LEIA COM ATENÇÃO:**
-- O preço depende do IDIOMA DE DESTINO da tradução:
-  → Se o idioma DESTINO for PORTUGUÊS = Tradução Juramentada (Sworn) = $35.00/página | 5 dias úteis
-  → Se o idioma DESTINO for qualquer OUTRO idioma (Inglês, Espanhol, etc.) = Tradução Certificada = $24.99/página | 3 dias úteis
-- Exemplos: Inglês → Português = $35.00 (juramentada) | Português → Inglês = $24.99 (certificada) | Espanhol → Inglês = $24.99 (certificada)
-- Documentos como certidão, diploma, histórico, extrato bancário, informe de rendimentos traduzidos PARA INGLÊS = $24.99/página
-- Os mesmos documentos traduzidos PARA PORTUGUÊS = $35.00/página (juramentada)
-- NUNCA use $35.00 quando o destino for Inglês ou Espanhol
+- O preço depende EXCLUSIVAMENTE do IDIOMA DE DESTINO da tradução:
+  → Destino = INGLÊS = Tradução Certificada = $24.99/página | 3 dias úteis
+  → Destino = PORTUGUÊS = Tradução Juramentada (Sworn) = $35.00/página | 5 dias úteis
+  → Destino = QUALQUER OUTRO IDIOMA = NÃO dar orçamento, informar que fazemos sim mas transferir para atendente humano
+- Exemplos: Português → Inglês = $24.99 | Espanhol → Inglês = $24.99 | Inglês → Português = $35.00
+- Se o cliente perguntar sobre tradução para Espanhol, Francês, Alemão ou qualquer outro idioma que NÃO seja Inglês ou Português, responda de forma gentil que fazemos sim, mas para mais detalhes transfira para um dos nossos atendentes
+- NUNCA invente preço para idiomas que não sejam Inglês ou Português como destino
 
 **IMPORTANTE - DESCONTOS DE PARCEIROS (George Law, Geovanna, Gdreams, etc.):**
 NÃO oferecemos mais descontos para parceiros ou indicações.
@@ -2303,13 +2346,14 @@ ZELLE: Contact@legacytranslations.com — LEGACY TRANSLATIONS INC
 Enviar: "Aproveite para nos seguir no Instagram: https://www.instagram.com/legacytranslations/"
 
 **REGRA CRÍTICA - TRANSFERÊNCIA PARA ATENDENTE HUMANO:**
-- NUNCA sugira transferir para um atendente humano por conta própria
-- NUNCA diga "vou transferir", "vou encaminhar para um especialista" ou frases similares
+- NÃO sugira transferir para um atendente humano por conta própria na maioria dos casos
 - Você DEVE sempre tentar resolver o atendimento completo seguindo o fluxo abaixo
-- Se o cliente pedir desconto além do automático de 10% (7+ páginas), explique educadamente que o preço já é o mínimo ($24.99/página) e continue o atendimento
+- Se o cliente pedir desconto além do automático de 10% (7+ páginas), explique educadamente que o preço já é o mínimo e continue o atendimento
 - Se o cliente estiver confuso, explique novamente com paciência e clareza - NÃO transfira
-- A transferência para humano SÓ acontece quando o CLIENTE EXPLICITAMENTE pede para falar com um atendente/pessoa real
 - Seu objetivo é COMPLETAR o atendimento: pedir documento, fazer orçamento, enviar formas de pagamento
+- EXCEÇÕES em que DEVE transferir para atendente:
+  1. O cliente EXPLICITAMENTE pede para falar com um atendente/pessoa real
+  2. O idioma de DESTINO da tradução NÃO é Inglês nem Português (ex: Espanhol, Francês, Alemão, etc.) - nesse caso, diga que fazemos sim, mas para mais detalhes vai transferir para um dos nossos atendentes
 
 **FLUXO OBRIGATÓRIO DE ATENDIMENTO:**
 1. Cumprimentar o cliente (NÃO perguntar o nome)
@@ -4002,9 +4046,10 @@ Para urgencias: (contato)"""
                     except:
                         val_num = 0.0
                     if val_num <= 0:
-                        # Preco baseado no idioma destino: portugues = $35, outros = $24.99
-                        destino_ctx = (doc_ctx.get("idioma_destino", "ingles") if doc_ctx else "ingles").lower()
-                        preco_ctx = 35.00 if any(p in destino_ctx for p in ["portugu", "portuguese", "pt"]) else 24.99
+                        # Preco baseado no idioma destino: ingles=$24.99, portugues=$35.00
+                        preco_ctx = calcular_preco_pagina((doc_ctx.get("idioma_destino", "ingles") if doc_ctx else "ingles"))
+                        if preco_ctx <= 0:
+                            preco_ctx = 24.99  # Fallback seguro
                         val_num = pages_ctx * preco_ctx
                         valor_ctx = f"${val_num:.2f}"
                         await set_cliente_estado(phone, valor_orcamento=valor_ctx)
