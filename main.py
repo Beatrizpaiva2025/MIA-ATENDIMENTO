@@ -1063,6 +1063,27 @@ Seja especifico e util. Baseie-se na pergunta do cliente."""
 
 
 # ============================================================
+# HELPER: BACKGROUND TASK COM LOG DE ERROS
+# ============================================================
+def _create_gdrive_task(coro, phone: str, description: str = "upload"):
+    """Cria asyncio.create_task com callback de erro para uploads Google Drive"""
+    task = asyncio.create_task(coro)
+    def _on_done(t):
+        if t.cancelled():
+            logger.warning(f"[GDRIVE] Task {description} cancelada para {phone}")
+        elif t.exception():
+            logger.error(f"[GDRIVE] ERRO em task {description} para {phone}: {t.exception()}", exc_info=t.exception())
+        else:
+            result = t.result()
+            if result:
+                logger.info(f"[GDRIVE] Task {description} concluida para {phone}: {result.get('filename', 'ok')}")
+            else:
+                logger.warning(f"[GDRIVE] Task {description} retornou None para {phone}")
+    task.add_done_callback(_on_done)
+    return task
+
+
+# ============================================================
 # ============================================================
 # SISTEMA DE DEDUPLICACAO DE MENSAGENS
 # ============================================================
@@ -4197,13 +4218,17 @@ Para urgencias: (contato)"""
 
             # Salvar imagem no Google Drive (background, nao bloqueia)
             if is_drive_enabled():
-                asyncio.create_task(save_whatsapp_media_to_drive(
-                    file_bytes=image_bytes,
+                _create_gdrive_task(
+                    save_whatsapp_media_to_drive(
+                        file_bytes=image_bytes,
+                        phone=phone,
+                        media_type="image",
+                        filename=f"imagem_{phone}_{int(time.time())}.jpg",
+                        mime_type="image/jpeg"
+                    ),
                     phone=phone,
-                    media_type="image",
-                    filename=f"imagem_{phone}_{int(time.time())}.jpg",
-                    mime_type="image/jpeg"
-                ))
+                    description="upload imagem"
+                )
 
             # ============================================
             # VERIFICAR SE ESTA NA ETAPA DE PAGAMENTO
@@ -4421,13 +4446,17 @@ Para urgencias: (contato)"""
 
             # Salvar audio no Google Drive (background)
             if is_drive_enabled():
-                asyncio.create_task(save_whatsapp_media_to_drive(
-                    file_bytes=audio_bytes,
+                _create_gdrive_task(
+                    save_whatsapp_media_to_drive(
+                        file_bytes=audio_bytes,
+                        phone=phone,
+                        media_type="audio",
+                        filename=f"audio_{phone}_{int(time.time())}.ogg",
+                        mime_type="audio/ogg"
+                    ),
                     phone=phone,
-                    media_type="audio",
-                    filename=f"audio_{phone}_{int(time.time())}.ogg",
-                    mime_type="audio/ogg"
-                ))
+                    description="upload audio"
+                )
 
             # Transcrever com Whisper
             transcription = await process_audio_with_whisper(audio_bytes, phone)
@@ -4513,13 +4542,17 @@ Para urgencias: (contato)"""
                     doc_filename = data.get("document", {}).get("fileName", f"documento_{phone}_{int(time.time())}")
                     # Salvar no Google Drive (background)
                     if is_drive_enabled():
-                        asyncio.create_task(save_whatsapp_media_to_drive(
-                            file_bytes=doc_bytes,
+                        _create_gdrive_task(
+                            save_whatsapp_media_to_drive(
+                                file_bytes=doc_bytes,
+                                phone=phone,
+                                media_type="document",
+                                filename=doc_filename,
+                                mime_type=mime_type
+                            ),
                             phone=phone,
-                            media_type="document",
-                            filename=doc_filename,
-                            mime_type=mime_type
-                        ))
+                            description="upload documento"
+                        )
                     asyncio.create_task(
                         processar_documento_para_portal(
                             phone=phone,
@@ -4554,13 +4587,17 @@ Para urgencias: (contato)"""
             # Salvar PDF no Google Drive (background)
             if is_drive_enabled():
                 pdf_filename = data.get("document", {}).get("fileName", f"documento_{phone}_{int(time.time())}.pdf")
-                asyncio.create_task(save_whatsapp_media_to_drive(
-                    file_bytes=pdf_bytes,
+                _create_gdrive_task(
+                    save_whatsapp_media_to_drive(
+                        file_bytes=pdf_bytes,
+                        phone=phone,
+                        media_type="document",
+                        filename=pdf_filename,
+                        mime_type=mime_type or "application/pdf"
+                    ),
                     phone=phone,
-                    media_type="document",
-                    filename=pdf_filename,
-                    mime_type=mime_type or "application/pdf"
-                ))
+                    description="upload PDF"
+                )
 
             # Analisar com Vision
             analysis = await process_pdf_with_vision(pdf_bytes, phone)
