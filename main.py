@@ -1850,35 +1850,49 @@ async def processar_etapa_pagamento(phone: str, mensagem: str, is_image: bool = 
         await set_cliente_estado(phone, valor_orcamento=valor)
         logger.warning(f"[PAGAMENTO] Valor era invalido - recalculado para {valor}")
 
-    # Se recebeu imagem ou PDF, tratar como comprovante
+    # Se recebeu imagem ou PDF, tratar como comprovante (estamos na etapa de pagamento)
     if is_image and image_bytes:
-        # Analisar se parece comprovante
+        # Analisar imagem com GPT-4 Vision
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
 
-        response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Analise se esta imagem e um comprovante de pagamento.
-Procure por: valores, datas, nomes de bancos, apps de pagamento (Zelle, Venmo, PayPal, PIX),
-numeros de transacao, confirmacoes.
-Responda APENAS: SIM ou NAO"""
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Esta imagem e um comprovante de pagamento?"},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                    ]
-                }
-            ],
-            max_tokens=10
-        )
+        try:
+            response = openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """Voce esta analisando uma imagem enviada por um cliente que ACABOU de confirmar um pedido de traducao e esta na etapa de PAGAMENTO.
+O cliente foi instruido a enviar o comprovante de pagamento (Zelle, Venmo, PayPal, transferencia bancaria, etc).
 
-        parece_comprovante = "sim" in response.choices[0].message.content.lower()
+Analise a imagem e responda APENAS com uma dessas opcoes:
+- COMPROVANTE - se a imagem parece ser um comprovante/recibo de pagamento (screenshot de Zelle, Venmo, transferencia, etc)
+- DOCUMENTO - se a imagem claramente e um documento para traducao (certidao, diploma, extrato, etc)
+- INCERTO - se nao consegue determinar com certeza o que e a imagem"""
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "O cliente esta na etapa de pagamento. Analise esta imagem:"},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                        ]
+                    }
+                ],
+                max_tokens=20
+            )
+
+            analise = response.choices[0].message.content.lower().strip()
+            logger.info(f"[COMPROVANTE-ANALISE] {phone}: GPT respondeu '{analise}'")
+
+            parece_comprovante = "comprovante" in analise or "receipt" in analise
+            parece_documento = "documento" in analise or "document" in analise
+        except Exception as e:
+            logger.error(f"[COMPROVANTE-ANALISE] Erro ao analisar imagem de {phone}: {e}")
+            # Em caso de erro na analise, assumir que pode ser comprovante (estamos na etapa de pagamento)
+            parece_comprovante = False
+            parece_documento = False
 
         if parece_comprovante:
+            # Parece comprovante - pedir confirmacao
             if idioma == "en":
                 return (
                     f"I received the receipt! 📄\n\n"
@@ -1897,29 +1911,67 @@ Responda APENAS: SIM ou NAO"""
                     f"So confirmando: e o pagamento de {valor} referente ao pedido de traducao acima?\n\n"
                     f"Responda SIM para confirmar ou NAO se for outra coisa."
                 )
-        else:
-            # Nao parece comprovante - perguntar
+        elif parece_documento:
+            # Claramente um documento - perguntar se quer novo orcamento
             if idioma == "en":
                 return (
-                    f"I received an image! Is this a payment receipt or a new document for quote?\n\n"
-                    f"Reply:\n• RECEIPT - if it's the payment confirmation\n• NEW DOCUMENT - if you want a new quote"
+                    f"I see this looks like a document for translation, not a payment receipt.\n\n"
+                    f"Would you like to:\n• Send the PAYMENT RECEIPT for the current order ({valor})\n• Start a NEW QUOTE for this document\n\n"
+                    f"Just let me know!"
                 )
             elif idioma == "es":
                 return (
-                    f"¡Recibí una imagen! ¿Es un comprobante de pago o un nuevo documento para cotizar?\n\n"
-                    f"Responde:\n• COMPROBANTE - si es la confirmación de pago\n• NUEVO DOCUMENTO - si quieres nueva cotización"
+                    f"Veo que parece un documento para traducción, no un comprobante de pago.\n\n"
+                    f"¿Te gustaría:\n• Enviar el COMPROBANTE DE PAGO del pedido actual ({valor})\n• Hacer una NUEVA COTIZACIÓN para este documento\n\n"
+                    f"¡Dime!"
                 )
             else:
                 return (
-                    f"Recebi uma imagem! E um comprovante de pagamento ou um novo documento para orcamento?\n\n"
-                    f"Responda:\n• COMPROVANTE - se for a confirmacao de pagamento\n• NOVO DOCUMENTO - se quiser novo orcamento"
+                    f"Vi que parece um documento para traducao, nao um comprovante de pagamento.\n\n"
+                    f"Voce gostaria de:\n• Enviar o COMPROVANTE DE PAGAMENTO do pedido atual ({valor})\n• Fazer um NOVO ORCAMENTO para este documento\n\n"
+                    f"Me avise!"
+                )
+        else:
+            # Incerto - pedir confirmacao gentilmente (NAO reiniciar atendimento)
+            if idioma == "en":
+                return (
+                    f"I received an image! 📄\n\n"
+                    f"I couldn't clearly identify if this is the payment receipt.\n"
+                    f"Could you confirm: is this the payment receipt of {valor} for your translation order?\n\n"
+                    f"Reply YES if it's the receipt, or let me know if you need anything else."
+                )
+            elif idioma == "es":
+                return (
+                    f"¡Recibí una imagen! 📄\n\n"
+                    f"No pude identificar claramente si es el comprobante de pago.\n"
+                    f"¿Puedes confirmar: es el comprobante de pago de {valor} de tu pedido de traducción?\n\n"
+                    f"Responde SI si es el comprobante, o dime si necesitas algo más."
+                )
+            else:
+                return (
+                    f"Recebi uma imagem! 📄\n\n"
+                    f"Nao consegui identificar claramente se e o comprovante de pagamento.\n"
+                    f"Pode confirmar: e o comprovante de pagamento de {valor} referente ao seu pedido de traducao?\n\n"
+                    f"Responda SIM se for o comprovante, ou me diga se precisa de algo mais."
                 )
 
     # Processar texto
-    msg_lower = mensagem.lower()
+    msg_lower = mensagem.lower().strip()
 
-    # Verificar se confirmou o comprovante
-    if any(x in msg_lower for x in ["sim", "yes", "si", "confirmo", "isso", "correto", "that's right"]):
+    # Palavras que confirmam pagamento/comprovante
+    palavras_confirmacao_pagamento = [
+        "sim", "yes", "si", "sí", "confirmo", "isso", "correto", "that's right",
+        "comprovante", "receipt", "recibo", "comprobante",
+        "paguei", "paid", "pagué", "pago", "fiz o pagamento", "made the payment",
+        "hice el pago", "enviei", "sent", "envié", "transferi", "transferred",
+        "pronto", "done", "listo", "feito", "mandei", "realizei",
+        "ja paguei", "already paid", "ya pagué",
+        "fiz o pix", "fiz o zelle", "fiz o venmo", "zelle", "venmo",
+        "enviado", "realizado", "efetuado"
+    ]
+
+    # Verificar se confirmou pagamento/comprovante
+    if any(x in msg_lower for x in palavras_confirmacao_pagamento):
         # Pagamento confirmado!
         await set_cliente_estado(phone, etapa=ETAPAS["PAGAMENTO_RECEBIDO"])
         doc_info = estado.get("documento_info", {})
@@ -1971,8 +2023,9 @@ Responda APENAS: SIM ou NAO"""
                 f"Qualquer duvida, e so chamar aqui! 😊"
             )
 
-    # Se disse NAO ou novo documento
-    if any(x in msg_lower for x in ["nao", "no", "novo", "new", "another", "otro"]):
+    # Se disse NAO ou quer novo documento
+    palavras_novo_doc = ["novo documento", "new document", "nuevo documento", "another quote", "novo orcamento", "new quote"]
+    if any(x in msg_lower for x in palavras_novo_doc):
         # Resetar para inicial
         await set_cliente_estado(phone, etapa=ETAPAS["INICIAL"])
         if idioma == "en":
@@ -1982,8 +2035,36 @@ Responda APENAS: SIM ou NAO"""
         else:
             return "Sem problema! Envie o novo documento que eu faco o orcamento. 📄"
 
-    # Outra mensagem - manter conversa
-    return None
+    # IMPORTANTE: Na etapa de pagamento, NUNCA retornar None (isso faria a IA generica assumir e reiniciar o atendimento)
+    # Em vez disso, relembrar o cliente sobre o pagamento pendente
+    logger.info(f"[PAGAMENTO] {phone}: Mensagem nao reconhecida na etapa de pagamento: '{mensagem[:50]}'")
+    if idioma == "en":
+        return (
+            f"I'm here! 😊\n\n"
+            f"Just a reminder: your translation order of {valor} is pending payment.\n\n"
+            f"To proceed, send the payment via:\n"
+            f"VENMO: @legacytranslations\n"
+            f"ZELLE: Contact@legacytranslations.com (LEGACY TRANSLATIONS INC)\n\n"
+            f"After payment, just send the receipt/screenshot here! ✅"
+        )
+    elif idioma == "es":
+        return (
+            f"¡Estoy aquí! 😊\n\n"
+            f"Solo un recordatorio: tu pedido de traducción de {valor} está pendiente de pago.\n\n"
+            f"Para continuar, envía el pago por:\n"
+            f"VENMO: @legacytranslations\n"
+            f"ZELLE: Contact@legacytranslations.com (LEGACY TRANSLATIONS INC)\n\n"
+            f"Después del pago, ¡solo envía el comprobante aquí! ✅"
+        )
+    else:
+        return (
+            f"Estou aqui! 😊\n\n"
+            f"Lembrando que seu pedido de traducao de {valor} esta pendente de pagamento.\n\n"
+            f"Para prosseguir, envie o pagamento por:\n"
+            f"VENMO: @legacytranslations\n"
+            f"ZELLE: Contact@legacytranslations.com (LEGACY TRANSLATIONS INC)\n\n"
+            f"Apos o pagamento, e so enviar o comprovante aqui! ✅"
+        )
 
 
 async def processar_etapa_pos_pagamento(phone: str, mensagem: str, is_image: bool = False, image_bytes: bytes = None) -> str:
@@ -4001,16 +4082,17 @@ Para urgencias: (contato)"""
             etapa_atual = estado.get("etapa", ETAPAS["INICIAL"])
 
             if etapa_atual == ETAPAS["AGUARDANDO_PAGAMENTO"]:
-                # Tratar imagem como possivel comprovante
+                # Tratar imagem como possivel comprovante - SEMPRE processar na etapa de pagamento
                 logger.info(f"[ETAPA] {phone}: Recebeu imagem na etapa AGUARDANDO_PAGAMENTO - tratando como comprovante")
 
                 reply = await processar_etapa_pagamento(phone, "", is_image=True, image_bytes=image_bytes)
 
+                # reply SEMPRE tera valor (nunca None) na etapa de pagamento
                 if reply:
                     # Salvar no banco
                     await db.conversas.insert_one({
                         "phone": phone,
-                        "message": "[IMAGEM RECEBIDA - POSSIVEL COMPROVANTE]",
+                        "message": "[IMAGEM RECEBIDA - ETAPA PAGAMENTO]",
                         "role": "user",
                         "timestamp": datetime.now(),
                         "canal": "WhatsApp",
@@ -4027,6 +4109,59 @@ Para urgencias: (contato)"""
 
                     await send_whatsapp_message(phone, reply)
                     return JSONResponse({"status": "processed", "type": "receipt_check"})
+
+            # ============================================
+            # VERIFICAR SE ESTA NA ETAPA DE CONFIRMACAO
+            # Tratar como comprovante tambem (cliente pode enviar pagamento antecipado)
+            # ============================================
+            elif etapa_atual == ETAPAS["AGUARDANDO_CONFIRMACAO"]:
+                logger.info(f"[ETAPA] {phone}: Recebeu imagem na etapa AGUARDANDO_CONFIRMACAO - verificando se e comprovante ou novo doc")
+                idioma = estado.get("idioma", "pt")
+                valor = estado.get("valor_orcamento", "")
+
+                # Perguntar ao cliente o que e a imagem (pode ser comprovante antecipado ou documento adicional)
+                if idioma == "en":
+                    reply = (
+                        f"I received an image! 📄\n\n"
+                        f"Is this:\n"
+                        f"• A PAYMENT RECEIPT for the order of {valor}?\n"
+                        f"• An ADDITIONAL DOCUMENT you'd like to add to the translation?\n\n"
+                        f"Just let me know!"
+                    )
+                elif idioma == "es":
+                    reply = (
+                        f"¡Recibí una imagen! 📄\n\n"
+                        f"¿Es:\n"
+                        f"• Un COMPROBANTE DE PAGO del pedido de {valor}?\n"
+                        f"• Un DOCUMENTO ADICIONAL que quieres agregar a la traducción?\n\n"
+                        f"¡Dime!"
+                    )
+                else:
+                    reply = (
+                        f"Recebi uma imagem! 📄\n\n"
+                        f"E:\n"
+                        f"• Um COMPROVANTE DE PAGAMENTO do pedido de {valor}?\n"
+                        f"• Um DOCUMENTO ADICIONAL que gostaria de incluir na traducao?\n\n"
+                        f"Me avise!"
+                    )
+
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": "[IMAGEM RECEBIDA - ETAPA CONFIRMACAO]",
+                    "role": "user",
+                    "timestamp": datetime.now(),
+                    "canal": "WhatsApp",
+                    "type": "image"
+                })
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": reply,
+                    "role": "assistant",
+                    "timestamp": datetime.now(),
+                    "canal": "WhatsApp"
+                })
+                await send_whatsapp_message(phone, reply)
+                return JSONResponse({"status": "processed", "type": "confirmation_stage_image"})
 
             # ============================================
             # NOVO: VERIFICAR SE ESTA NA ETAPA POS-PAGAMENTO
