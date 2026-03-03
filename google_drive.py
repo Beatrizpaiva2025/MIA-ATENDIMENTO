@@ -5,7 +5,7 @@ INTEGRACAO GOOGLE DRIVE - Upload de documentos do WhatsApp
 Salva documentos/imagens recebidos pelo WhatsApp numa pasta
 organizada no Google Drive usando Service Account.
 
-Estrutura: WhatsApp Documents/{phone}_{nome}/{data}_{filename}
+Estrutura: WhatsApp Documents/{phone}/{data}_{filename}
 
 Configuracao:
   - GOOGLE_DRIVE_CREDENTIALS_JSON: JSON da service account (env var)
@@ -16,6 +16,7 @@ Configuracao:
 import os
 import json
 import logging
+import threading
 from datetime import datetime
 from typing import Optional
 from io import BytesIO
@@ -32,6 +33,9 @@ _client_folder_cache: dict = {}
 # Flag para indicar se o Drive esta configurado
 _drive_enabled: bool = False
 _drive_service = None
+
+# Lock para serializar operacoes do Google Drive (httplib2 nao e thread-safe)
+_drive_lock = threading.Lock()
 
 
 def _init_drive_service():
@@ -141,7 +145,9 @@ def _get_or_create_folder(service, folder_name: str, parent_id: str) -> Optional
 def get_client_folder(phone: str, nome: str = "") -> Optional[str]:
     """
     Obtem (ou cria) a pasta do cliente no Google Drive.
-    Estrutura: WhatsApp Documents/{phone}_{nome}/
+    Usa SEMPRE apenas o telefone como nome da pasta para evitar
+    race conditions entre chamadas com/sem nome do cliente.
+    Estrutura: WhatsApp Documents/{phone}/
     Retorna o ID da pasta ou None se Drive nao estiver configurado.
     """
     service = _init_drive_service()
@@ -153,17 +159,18 @@ def get_client_folder(phone: str, nome: str = "") -> Optional[str]:
     if cache_key in _client_folder_cache:
         return _client_folder_cache[cache_key]
 
-    # Sanitizar nome para usar como nome de pasta
-    safe_nome = ""
-    if nome:
-        safe_nome = nome.strip().replace("/", "-").replace("\\", "-")
-        safe_nome = "".join(c for c in safe_nome if c.isalnum() or c in " -_").strip()
+    # Usar APENAS o telefone como nome da pasta (evita pastas duplicadas)
+    folder_name = phone
 
-    folder_name = f"{phone}_{safe_nome}" if safe_nome else phone
+    with _drive_lock:
+        # Re-verificar cache depois do lock (outra thread pode ter preenchido)
+        if cache_key in _client_folder_cache:
+            return _client_folder_cache[cache_key]
 
-    folder_id = _get_or_create_folder(service, folder_name, GOOGLE_DRIVE_FOLDER_ID)
-    if folder_id:
-        _client_folder_cache[cache_key] = folder_id
+        folder_id = _get_or_create_folder(service, folder_name, GOOGLE_DRIVE_FOLDER_ID)
+        if folder_id:
+            _client_folder_cache[cache_key] = folder_id
+            logger.info(f"[GDRIVE] Pasta do cliente obtida: '{folder_name}' (ID: {folder_id})")
 
     return folder_id
 
@@ -195,22 +202,24 @@ def upload_file_to_drive(
     """
     service = _init_drive_service()
     if not service:
+        logger.error(f"[GDRIVE] Servico nao inicializado - upload cancelado para {phone}")
         return None
 
     try:
         from googleapiclient.http import MediaIoBaseUpload
 
         # Obter pasta do cliente
+        logger.info(f"[GDRIVE] Iniciando upload: '{filename}' ({len(file_bytes)} bytes) para {phone}")
         folder_id = get_client_folder(phone, nome)
         if not folder_id:
-            logger.error(f"[GDRIVE] Nao conseguiu criar pasta para {phone}")
+            logger.error(f"[GDRIVE] Nao conseguiu criar/obter pasta para {phone}")
             return None
 
         # Prefixar filename com data/hora
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         final_filename = f"{timestamp}_{filename}"
 
-        # Upload
+        # Upload com lock para thread-safety (httplib2 nao e thread-safe)
         file_metadata = {
             "name": final_filename,
             "parents": [folder_id]
@@ -222,16 +231,17 @@ def upload_file_to_drive(
             resumable=True
         )
 
-        file_result = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, webViewLink"
-        ).execute()
+        with _drive_lock:
+            file_result = service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields="id, webViewLink"
+            ).execute()
 
         file_id = file_result.get("id")
         file_link = file_result.get("webViewLink", f"https://drive.google.com/file/d/{file_id}/view")
 
-        logger.info(f"[GDRIVE] Arquivo salvo: {final_filename} para {phone} (ID: {file_id})")
+        logger.info(f"[GDRIVE] Upload CONCLUIDO: {final_filename} para {phone} (ID: {file_id})")
 
         return {
             "file_id": file_id,
@@ -242,7 +252,7 @@ def upload_file_to_drive(
         }
 
     except Exception as e:
-        logger.error(f"[GDRIVE] Erro ao fazer upload de '{filename}' para {phone}: {e}")
+        logger.error(f"[GDRIVE] ERRO ao fazer upload de '{filename}' para {phone}: {e}", exc_info=True)
         return None
 
 
@@ -258,9 +268,9 @@ async def upload_file_to_drive_async(
     A Google Drive API e sincrona, entao rodamos em executor.
     """
     import asyncio
-    loop = asyncio.get_event_loop()
 
     try:
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None,
             upload_file_to_drive,
@@ -272,7 +282,7 @@ async def upload_file_to_drive_async(
         )
         return result
     except Exception as e:
-        logger.error(f"[GDRIVE] Erro async upload '{filename}' para {phone}: {e}")
+        logger.error(f"[GDRIVE] Erro async upload '{filename}' para {phone}: {e}", exc_info=True)
         return None
 
 
@@ -300,9 +310,11 @@ async def save_whatsapp_media_to_drive(
         dict com info do upload ou None
     """
     if not is_drive_enabled():
+        logger.warning(f"[GDRIVE] Drive desabilitado - ignorando upload para {phone}")
         return None
 
     if not file_bytes:
+        logger.warning(f"[GDRIVE] file_bytes vazio - ignorando upload para {phone}")
         return None
 
     # Determinar filename e mime_type se nao fornecidos
@@ -327,10 +339,19 @@ async def save_whatsapp_media_to_drive(
         else:
             mime_type = "application/octet-stream"
 
-    return await upload_file_to_drive_async(
+    logger.info(f"[GDRIVE] Salvando midia: {filename} ({media_type}, {len(file_bytes)} bytes) para {phone}")
+
+    result = await upload_file_to_drive_async(
         file_bytes=file_bytes,
         filename=filename,
         mime_type=mime_type,
         phone=phone,
         nome=nome
     )
+
+    if result:
+        logger.info(f"[GDRIVE] Midia salva com sucesso para {phone}: {result['filename']}")
+    else:
+        logger.error(f"[GDRIVE] FALHA ao salvar midia '{filename}' para {phone}")
+
+    return result
