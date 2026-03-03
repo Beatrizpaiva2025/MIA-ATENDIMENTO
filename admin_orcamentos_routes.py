@@ -12,6 +12,7 @@ from bson import ObjectId
 import os
 import logging
 import re
+from google_drive import is_drive_enabled, get_client_folder, get_folder_link
 
 logger = logging.getLogger(__name__)
 
@@ -130,9 +131,27 @@ async def api_update_status(request: Request):
         if not orcamento_id or not novo_status:
             return {"success": False, "error": "ID e status são obrigatórios"}
 
+        update_fields = {"status": novo_status, "updated_at": datetime.now()}
+
+        # Quando status muda para "pago", vincular pasta do Google Drive
+        if novo_status == "pago" and is_drive_enabled():
+            try:
+                orcamento = await db.orcamentos.find_one({"_id": ObjectId(orcamento_id)})
+                if orcamento:
+                    phone = orcamento.get("phone", "")
+                    nome = orcamento.get("nome", "")
+                    if phone:
+                        folder_id = get_client_folder(phone, nome)
+                        if folder_id:
+                            update_fields["google_drive_folder"] = get_folder_link(folder_id)
+                            update_fields["google_drive_folder_id"] = folder_id
+                            logger.info(f"[GDRIVE] Pasta vinculada ao orcamento {orcamento_id}")
+            except Exception as gdrive_err:
+                logger.error(f"[GDRIVE] Erro ao vincular pasta: {gdrive_err}")
+
         result = await db.orcamentos.update_one(
             {"_id": ObjectId(orcamento_id)},
-            {"$set": {"status": novo_status, "updated_at": datetime.now()}}
+            {"$set": update_fields}
         )
 
         if result.modified_count > 0:
