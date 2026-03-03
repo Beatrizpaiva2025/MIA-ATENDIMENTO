@@ -736,41 +736,24 @@ async def detectar_solicitacao_humano(message: str) -> bool:
 
 async def detectar_pedido_desconto(message: str) -> bool:
     """Detecta se cliente esta pedindo desconto"""
-    palavras_desconto = [
-        # Portugues
-        "desconto", "mais barato", "preco menor", "preço menor",
-        "valor menor", "reduzir o valor", "reduzir o preco", "reduzir o preço",
-        "abaixar o valor", "abaixar o preco", "abaixar o preço",
-        "diminuir o valor", "diminuir o preco", "diminuir o preço",
-        "fazer por menos", "preco melhor", "preço melhor",
-        "valor melhor", "condicao especial", "condição especial",
-        "tem como fazer mais barato", "muito caro", "achei caro",
-        "caro demais", "nao tenho esse valor", "não tenho esse valor",
-        # English
-        "discount", "cheaper", "lower price", "better price",
-        "reduce the price", "too expensive", "can you do less",
-        # Espanhol
-        "descuento", "mas barato", "más barato", "precio menor",
-        "muy caro", "demasiado caro"
-    ]
-
-    message_lower = message.lower()
-    return any(palavra in message_lower for palavra in palavras_desconto)
-
-
-async def detectar_pedido_desconto(message: str) -> bool:
-    """Detecta se cliente esta pedindo desconto"""
     palavras_chave = [
         # Portugues
         "desconto", "abatimento", "reduzir o valor", "reduzir o preco",
         "reduzir o preço", "mais barato", "baixar o preco", "baixar o preço",
+        "abaixar o valor", "abaixar o preco", "abaixar o preço",
+        "diminuir o valor", "diminuir o preco", "diminuir o preço",
         "valor menor", "preco menor", "preço menor",
         "tem como diminuir", "fazer por menos",
+        "preco melhor", "preço melhor", "valor melhor",
+        "condicao especial", "condição especial",
+        "muito caro", "achei caro", "caro demais",
         # English
         "discount", "lower price", "cheaper", "reduce the price",
         "better price", "price match", "any deals",
+        "too expensive", "can you do less",
         # Spanish
-        "descuento", "rebaja", "reducir el precio", "más barato"
+        "descuento", "rebaja", "reducir el precio", "más barato",
+        "muy caro", "demasiado caro"
     ]
     message_lower = message.lower()
     return any(palavra in message_lower for palavra in palavras_chave)
@@ -3186,28 +3169,34 @@ def get_transfer_message(idioma: str = "pt") -> str:
     }
     return messages.get(idioma, messages["pt"])
 
-async def process_message_with_ai(phone: str, message: str) -> str:
-    """Processar mensagem com GPT-4 usando treinamento dinamico"""
-    try:
-        # Detectar se cliente quer falar com humano
-        if await detectar_solicitacao_humano(message):
-            await transferir_para_humano(phone, "Cliente solicitou atendente")
-            # Retornar mensagem simples de transferência no idioma do cliente
-            estado = await get_cliente_estado(phone)
-            idioma = estado.get("idioma", "pt")
-            return get_transfer_message(idioma)
+async def process_message_with_ai(phone: str, message: str, skip_auto_transfer: bool = False) -> str:
+    """Processar mensagem com GPT-4 usando treinamento dinamico
 
-        # Detectar se cliente esta pedindo desconto - transferir para humano
-        if await detectar_pedido_desconto(message):
-            await transferir_para_humano(phone, "Cliente pediu desconto")
-            estado = await get_cliente_estado(phone)
-            idioma = estado.get("idioma", "pt")
-            if idioma == "en":
-                return "I understand! Let me connect you with our team so they can help you with that. A representative will get in touch with you shortly. 😊"
-            elif idioma == "es":
-                return "¡Entiendo! Permítame conectarte con nuestro equipo para que puedan ayudarte con eso. Un representante se pondrá en contacto contigo en breve. 😊"
-            else:
-                return "Entendi! Vou te conectar com nossa equipe para que possam te ajudar com isso. Um atendente entrara em contato em breve. 😊"
+    Args:
+        skip_auto_transfer: Se True, pula deteccao automatica de transferencia.
+            Usado para audio (transcricoes Whisper geram falsos positivos).
+    """
+    try:
+        if not skip_auto_transfer:
+            # Detectar se cliente quer falar com humano
+            if await detectar_solicitacao_humano(message):
+                await transferir_para_humano(phone, "Cliente solicitou atendente")
+                # Retornar mensagem simples de transferência no idioma do cliente
+                estado = await get_cliente_estado(phone)
+                idioma = estado.get("idioma", "pt")
+                return get_transfer_message(idioma)
+
+            # Detectar se cliente esta pedindo desconto - transferir para humano
+            if await detectar_pedido_desconto(message):
+                await transferir_para_humano(phone, "Cliente pediu desconto")
+                estado = await get_cliente_estado(phone)
+                idioma = estado.get("idioma", "pt")
+                if idioma == "en":
+                    return "I understand! Let me connect you with our team so they can help you with that. A representative will get in touch with you shortly. 😊"
+                elif idioma == "es":
+                    return "¡Entiendo! Permítame conectarte con nuestro equipo para que puedan ayudarte con eso. Un representante se pondrá en contacto contigo en breve. 😊"
+                else:
+                    return "Entendi! Vou te conectar com nossa equipe para que possam te ajudar com isso. Um atendente entrara em contato em breve. 😊"
 
         # Buscar treinamento dinamico do MongoDB
         system_prompt = await get_bot_training()
@@ -4477,30 +4466,32 @@ Para urgencias: (contato)"""
                 "type": "audio"
             })
 
-            # Processar transcricao com IA
-            reply = await process_message_with_ai(phone, transcription)
-
-            # PROTECAO: Impedir transferencia nao solicitada em respostas de audio
-            transfer_phrases = [
-                "vou transferir", "vou te transferir", "vou encaminhar",
-                "transferindo para", "encaminhando para",
-                "um especialista vai", "um atendente vai",
-                "nossa equipe vai entrar", "aguarde um momento",
-                "i'll transfer", "i will transfer", "transferring you",
-                "forwarding you to", "a specialist will",
-                "te transfiero", "transfiriendo"
+            # Verificar se o audio pede EXPLICITAMENTE atendente humano
+            # (frases muito especificas para evitar falsos positivos de transcricao)
+            frases_humano_audio = [
+                "quero falar com atendente", "quero um atendente",
+                "quero falar com uma pessoa", "quero falar com humano",
+                "falar com atendente", "falar com pessoa real",
+                "preciso de um atendente", "preciso falar com alguem",
+                "me transfere para atendente", "atendimento humano",
+                "speak to a person", "talk to someone", "human agent",
+                "want to speak to a real person", "talk to a real person",
+                "hablar con una persona", "quiero hablar con alguien"
             ]
-            reply_lower = reply.lower()
-            if any(phrase in reply_lower for phrase in transfer_phrases):
-                logger.warning(f"[PROTECAO] IA tentou transferir cliente {phone} (audio) sem solicitacao. Substituindo resposta.")
+            transcription_lower = transcription.lower()
+            pediu_humano = any(frase in transcription_lower for frase in frases_humano_audio)
+
+            if pediu_humano:
+                logger.info(f"[AUDIO] Cliente {phone} pediu atendente humano via audio")
+                await transferir_para_humano(phone, "Cliente solicitou atendente via audio")
                 estado = await get_cliente_estado(phone)
-                idioma_cliente = estado.get("idioma", "pt")
-                if idioma_cliente == "en":
-                    reply = "I'm here to help you! Could you please send the document you need translated? You can send a photo or PDF directly here. I'll prepare your quote right away! 😊"
-                elif idioma_cliente == "es":
-                    reply = "¡Estoy aquí para ayudarte! ¿Podrías enviar el documento que necesitas traducir? Puedes enviar una foto o PDF directamente aquí. ¡Prepararé tu presupuesto enseguida! 😊"
-                else:
-                    reply = "Estou aqui para te ajudar! Poderia enviar o documento que precisa traduzir? Pode mandar uma foto ou PDF diretamente aqui. Vou preparar seu orçamento na hora! 😊"
+                idioma = estado.get("idioma", "pt")
+                reply = get_transfer_message(idioma)
+            else:
+                # Processar transcricao com IA (skip_auto_transfer=True para evitar
+                # falsos positivos - transcricoes de audio sao imprecisas e palavras
+                # como "pessoa", "transferir", "caro" podem aparecer em contexto normal)
+                reply = await process_message_with_ai(phone, transcription, skip_auto_transfer=True)
 
             # Enviar resposta
             await send_whatsapp_message(phone, reply)
