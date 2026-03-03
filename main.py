@@ -1328,6 +1328,13 @@ Total de paginas: {total_pages}
 Idioma origem: {idioma_origem}
 Idioma destino: {idioma_destino}
 
+REGRA DE PRECO OBRIGATORIA:
+- O preco PADRAO e SEMPRE $24.99 por pagina (traducao certificada)
+- O preco de $35.00 por pagina so se aplica para traducao JURAMENTADA (sworn) do Portugues para Ingles
+- Use $24.99/pagina EXCETO se o cliente pediu EXPLICITAMENTE "juramentada" ou "sworn"
+- Valor total para este orcamento: ${total_pages} paginas x $24.99 = ${total_pages * 24.99:.2f}
+- Se 7+ paginas, aplicar 10% de desconto automatico
+
 IMPORTANTE:
 - Responda no idioma: {'ingles' if idioma == 'en' else 'espanhol' if idioma == 'es' else 'portugues'}
 - Seja cordial e use o nome do cliente
@@ -1336,7 +1343,7 @@ IMPORTANTE:
             },
             {
                 "role": "user",
-                "content": f"Gere o orcamento para {nome} traduzir {total_pages} paginas de {tipo_doc}"
+                "content": f"Gere o orcamento para {nome} traduzir {total_pages} paginas de {tipo_doc}. Use o preco padrao de $24.99 por pagina (traducao certificada). Total: ${total_pages * 24.99:.2f}"
             }
         ],
         max_tokens=600
@@ -2153,13 +2160,23 @@ Membro da American Translators Association (ATA)
 - NUNCA use o nome do cliente nas respostas. NÃO pergunte o nome do cliente. NÃO tente chamar o cliente pelo nome
 
 **TABELA DE PREÇOS:**
+- PREÇO PADRÃO para TODAS as traduções certificadas: $24.99/página | 3 dias úteis
 - Português → Inglês (Certificada): $24.99/página | 3 dias úteis
 - Espanhol → Inglês (Certificada): $24.99/página | 3 dias úteis
-- Tradução Juramentada (Sworn): $35.00/página | 5 dias úteis
+- Outros idiomas → Inglês (Certificada): $24.99/página | 3 dias úteis
+- Tradução Juramentada (Sworn) EXCLUSIVAMENTE Português → Inglês: $35.00/página | 5 dias úteis
 - Urgência Priority (24h): +25%
 - Urgência Urgente (12h): +50%
 - Envio físico Priority Mail: $18.99
 - Desconto: Acima de 7 páginas = 10% de desconto automático
+
+**REGRA CRÍTICA DE PREÇO - LEIA COM ATENÇÃO:**
+- O preço PADRÃO é SEMPRE $24.99/página para QUALQUER tradução certificada
+- O preço de $35.00/página SOMENTE se aplica quando o CLIENTE EXPLICITAMENTE pedir "tradução juramentada" ou "sworn translation" E for do Português para o Inglês
+- Se o cliente NÃO pedir juramentada/sworn, use SEMPRE $24.99/página, independente do tipo de documento
+- Documentos como certidão, diploma, histórico, extrato bancário, informe de rendimentos, etc. são TODOS $24.99/página (tradução certificada)
+- NUNCA assuma que um documento precisa de tradução juramentada - use $24.99 por padrão
+- Só use $35.00 se o cliente disser explicitamente as palavras "juramentada" ou "sworn"
 
 **IMPORTANTE - DESCONTOS DE PARCEIROS (George Law, Geovanna, Gdreams, etc.):**
 NÃO oferecemos mais descontos para parceiros ou indicações.
