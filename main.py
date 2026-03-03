@@ -1310,6 +1310,23 @@ async def gerar_orcamento_final(phone: str) -> str:
     idioma_origem = doc_info.get("idioma_origem", "")
     idioma_destino = doc_info.get("idioma_destino", "ingles")
 
+    # Determinar preco por pagina baseado no idioma DESTINO
+    # Se destino for portugues = juramentada ($35.00), senao = certificada ($24.99)
+    destino_lower = idioma_destino.lower().strip()
+    eh_juramentada = any(p in destino_lower for p in ["portugu", "portuguese", "pt"])
+    preco_pagina = 35.00 if eh_juramentada else 24.99
+    tipo_traducao = "juramentada (sworn)" if eh_juramentada else "certificada (certified)"
+    prazo = "5 dias úteis" if eh_juramentada else "3 dias úteis"
+    valor_total = total_pages * preco_pagina
+
+    # Aplicar desconto de 10% para 7+ paginas
+    desconto_aplicado = False
+    if total_pages >= 7:
+        valor_total = valor_total * 0.90
+        desconto_aplicado = True
+
+    logger.info(f"[ORCAMENTO] {phone}: {total_pages} pags, destino={idioma_destino}, juramentada={eh_juramentada}, preco=${preco_pagina}, total=${valor_total:.2f}")
+
     # Buscar treinamento para obter valores
     training_prompt = await get_bot_training()
 
@@ -1327,13 +1344,18 @@ Documento: {tipo_doc}
 Total de paginas: {total_pages}
 Idioma origem: {idioma_origem}
 Idioma destino: {idioma_destino}
+Tipo de traducao: {tipo_traducao}
+Preco por pagina: ${preco_pagina:.2f}
+Prazo de entrega: {prazo}
 
-REGRA DE PRECO OBRIGATORIA:
-- O preco PADRAO e SEMPRE $24.99 por pagina (traducao certificada)
-- O preco de $35.00 por pagina so se aplica para traducao JURAMENTADA (sworn) do Portugues para Ingles
-- Use $24.99/pagina EXCETO se o cliente pediu EXPLICITAMENTE "juramentada" ou "sworn"
-- Valor total para este orcamento: ${total_pages} paginas x $24.99 = ${total_pages * 24.99:.2f}
-- Se 7+ paginas, aplicar 10% de desconto automatico
+REGRA DE PRECO OBRIGATORIA - USE EXATAMENTE ESTES VALORES:
+- Idioma destino e: {idioma_destino}
+- Tipo de traducao: {tipo_traducao}
+- Preco por pagina: ${preco_pagina:.2f}
+- Calculo: {total_pages} paginas x ${preco_pagina:.2f} = ${total_pages * preco_pagina:.2f}
+{f'- Desconto 10% (7+ paginas): -${(total_pages * preco_pagina * 0.10):.2f}' if desconto_aplicado else ''}
+- VALOR TOTAL FINAL: ${valor_total:.2f}
+- USE EXATAMENTE O VALOR ${valor_total:.2f} NO ORCAMENTO. NAO CALCULE OUTRO VALOR.
 
 IMPORTANTE:
 - Responda no idioma: {'ingles' if idioma == 'en' else 'espanhol' if idioma == 'es' else 'portugues'}
@@ -1343,7 +1365,7 @@ IMPORTANTE:
             },
             {
                 "role": "user",
-                "content": f"Gere o orcamento para {nome} traduzir {total_pages} paginas de {tipo_doc}. Use o preco padrao de $24.99 por pagina (traducao certificada). Total: ${total_pages * 24.99:.2f}"
+                "content": f"Gere o orcamento para {nome} traduzir {total_pages} paginas de {tipo_doc} de {idioma_origem} para {idioma_destino}. Traducao {tipo_traducao} a ${preco_pagina:.2f}/pagina. Valor total: ${valor_total:.2f}{' (com 10% desconto)' if desconto_aplicado else ''}. Prazo: {prazo}."
             }
         ],
         max_tokens=600
@@ -1774,11 +1796,13 @@ async def processar_etapa_confirmacao(phone: str, mensagem: str) -> str:
         total_pages = doc_info.get("total_pages", 1)
         if not total_pages or total_pages < 1:
             total_pages = 1
-        # Preco padrao: $24.99 por pagina
-        valor_calculado = total_pages * 24.99
+        # Preco baseado no idioma destino: portugues = $35 (juramentada), outros = $24.99
+        destino = doc_info.get("idioma_destino", "ingles").lower()
+        preco_pg = 35.00 if any(p in destino for p in ["portugu", "portuguese", "pt"]) else 24.99
+        valor_calculado = total_pages * preco_pg
         valor = f"${valor_calculado:.2f}"
         await set_cliente_estado(phone, valor_orcamento=valor)
-        logger.warning(f"[ORCAMENTO] Valor era invalido - recalculado para {valor} ({total_pages} paginas)")
+        logger.warning(f"[ORCAMENTO] Valor era invalido - recalculado para {valor} ({total_pages} pags x ${preco_pg})")
 
     if detectar_confirmacao_prosseguimento(mensagem):
         # Cliente confirmou - mudar para aguardando pagamento
@@ -1846,9 +1870,12 @@ async def processar_etapa_pagamento(phone: str, mensagem: str, is_image: bool = 
         total_pages = doc_info.get("total_pages", 1) if doc_info else 1
         if not total_pages or total_pages < 1:
             total_pages = 1
-        valor = f"${total_pages * 24.99:.2f}"
+        # Preco baseado no idioma destino: portugues = $35 (juramentada), outros = $24.99
+        destino = (doc_info.get("idioma_destino", "ingles") if doc_info else "ingles").lower()
+        preco_pg = 35.00 if any(p in destino for p in ["portugu", "portuguese", "pt"]) else 24.99
+        valor = f"${total_pages * preco_pg:.2f}"
         await set_cliente_estado(phone, valor_orcamento=valor)
-        logger.warning(f"[PAGAMENTO] Valor era invalido - recalculado para {valor}")
+        logger.warning(f"[PAGAMENTO] Valor era invalido - recalculado para {valor} ({total_pages} pags x ${preco_pg})")
 
     # Se recebeu imagem ou PDF, tratar como comprovante (estamos na etapa de pagamento)
     if is_image and image_bytes:
@@ -2241,23 +2268,22 @@ Membro da American Translators Association (ATA)
 - NUNCA use o nome do cliente nas respostas. NÃO pergunte o nome do cliente. NÃO tente chamar o cliente pelo nome
 
 **TABELA DE PREÇOS:**
-- PREÇO PADRÃO para TODAS as traduções certificadas: $24.99/página | 3 dias úteis
-- Português → Inglês (Certificada): $24.99/página | 3 dias úteis
-- Espanhol → Inglês (Certificada): $24.99/página | 3 dias úteis
-- Outros idiomas → Inglês (Certificada): $24.99/página | 3 dias úteis
-- Tradução Juramentada (Sworn) EXCLUSIVAMENTE Português → Inglês: $35.00/página | 5 dias úteis
+- Tradução Certificada (qualquer idioma → Inglês): $24.99/página | 3 dias úteis
+- Tradução Certificada (qualquer idioma → Espanhol): $24.99/página | 3 dias úteis
+- Tradução Juramentada (qualquer idioma → Português): $35.00/página | 5 dias úteis
 - Urgência Priority (24h): +25%
 - Urgência Urgente (12h): +50%
 - Envio físico Priority Mail: $18.99
 - Desconto: Acima de 7 páginas = 10% de desconto automático
 
 **REGRA CRÍTICA DE PREÇO - LEIA COM ATENÇÃO:**
-- O preço PADRÃO é SEMPRE $24.99/página para QUALQUER tradução certificada
-- O preço de $35.00/página SOMENTE se aplica quando o CLIENTE EXPLICITAMENTE pedir "tradução juramentada" ou "sworn translation" E for do Português para o Inglês
-- Se o cliente NÃO pedir juramentada/sworn, use SEMPRE $24.99/página, independente do tipo de documento
-- Documentos como certidão, diploma, histórico, extrato bancário, informe de rendimentos, etc. são TODOS $24.99/página (tradução certificada)
-- NUNCA assuma que um documento precisa de tradução juramentada - use $24.99 por padrão
-- Só use $35.00 se o cliente disser explicitamente as palavras "juramentada" ou "sworn"
+- O preço depende do IDIOMA DE DESTINO da tradução:
+  → Se o idioma DESTINO for PORTUGUÊS = Tradução Juramentada (Sworn) = $35.00/página | 5 dias úteis
+  → Se o idioma DESTINO for qualquer OUTRO idioma (Inglês, Espanhol, etc.) = Tradução Certificada = $24.99/página | 3 dias úteis
+- Exemplos: Inglês → Português = $35.00 (juramentada) | Português → Inglês = $24.99 (certificada) | Espanhol → Inglês = $24.99 (certificada)
+- Documentos como certidão, diploma, histórico, extrato bancário, informe de rendimentos traduzidos PARA INGLÊS = $24.99/página
+- Os mesmos documentos traduzidos PARA PORTUGUÊS = $35.00/página (juramentada)
+- NUNCA use $35.00 quando o destino for Inglês ou Espanhol
 
 **IMPORTANTE - DESCONTOS DE PARCEIROS (George Law, Geovanna, Gdreams, etc.):**
 NÃO oferecemos mais descontos para parceiros ou indicações.
@@ -3976,7 +4002,10 @@ Para urgencias: (contato)"""
                     except:
                         val_num = 0.0
                     if val_num <= 0:
-                        val_num = pages_ctx * 24.99
+                        # Preco baseado no idioma destino: portugues = $35, outros = $24.99
+                        destino_ctx = (doc_ctx.get("idioma_destino", "ingles") if doc_ctx else "ingles").lower()
+                        preco_ctx = 35.00 if any(p in destino_ctx for p in ["portugu", "portuguese", "pt"]) else 24.99
+                        val_num = pages_ctx * preco_ctx
                         valor_ctx = f"${val_num:.2f}"
                         await set_cliente_estado(phone, valor_orcamento=valor_ctx)
 

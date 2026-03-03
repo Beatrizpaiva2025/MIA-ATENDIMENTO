@@ -42,13 +42,14 @@ TREINAMENTO_COMPLETO = {
             "_id": "kb_precos",
             "title": "TABELA DE PREÇOS",
             "content": """
-PREÇO PADRÃO para TODAS as traduções certificadas: $24.99/página | 3 dias úteis
-Português → Inglês (Certificada): $24.99/página | 3 dias úteis
-Espanhol → Inglês (Certificada): $24.99/página | 3 dias úteis
-Outros idiomas → Inglês (Certificada): $24.99/página | 3 dias úteis
-Tradução Juramentada (Sworn) EXCLUSIVAMENTE Português → Inglês: $35.00/página | 5 dias úteis
+REGRA DE PREÇO BASEADA NO IDIOMA DESTINO:
+- Tradução Certificada (destino: Inglês, Espanhol ou outros): $24.99/página | 3 dias úteis
+- Tradução Juramentada/Sworn (destino: Português): $35.00/página | 5 dias úteis
 
-REGRA CRÍTICA: O preço de $35.00 SOMENTE se aplica quando o cliente pedir EXPLICITAMENTE "tradução juramentada" ou "sworn translation" do Português para Inglês. Para TODOS os outros casos, usar $24.99/página.
+REGRA CRÍTICA: O preço depende do IDIOMA DE DESTINO:
+→ Destino = Português = Juramentada = $35.00/página
+→ Destino = Inglês, Espanhol ou qualquer outro = Certificada = $24.99/página
+Exemplos: Inglês → Português = $35.00 | Português → Inglês = $24.99 | Espanhol → Inglês = $24.99
 
 URGÊNCIA:
 - Priority (24 horas): +25%
@@ -136,7 +137,7 @@ ESPANHOL:
         {
             "_id": "faq_preco",
             "question": "Quanto custa a tradução?",
-            "answer": "O valor padrão é $24.99/página para tradução certificada (qualquer idioma). O preço de $35.00/página é exclusivo para tradução juramentada (sworn) do Português para o Inglês, somente quando solicitada pelo cliente. Desconto de 10% para mais de 7 páginas!"
+            "answer": "O valor depende do idioma de destino: tradução certificada (destino Inglês/Espanhol) custa $24.99/página, e tradução juramentada (destino Português) custa $35.00/página. Desconto de 10% para mais de 7 páginas!"
         },
         {
             "_id": "faq_pagamento",
