@@ -493,10 +493,18 @@
 
     async function editarConhecimento(id) {
         try {
+            if (!id || id === 'None' || id === 'undefined') {
+                alert('This item has no ID. Please visit /admin/treinamento/corrigir-ids first to fix missing IDs.');
+                return;
+            }
             const response = await fetch(`/admin/treinamento/conhecimento/${id}`);
+            if (!response.ok) {
+                alert('Error loading knowledge item. Status: ' + response.status);
+                return;
+            }
             const data = await response.json();
-            document.getElementById('editKnowledgeTitle').value = data.title;
-            document.getElementById('editKnowledgeContent').value = data.content;
+            document.getElementById('editKnowledgeTitle').value = data.title || '';
+            document.getElementById('editKnowledgeContent').value = data.content || '';
             document.getElementById('formEditarConhecimento').action = `/admin/treinamento/conhecimento/editar/${id}`;
             abrirModal('modalEditarConhecimento');
         } catch (error) {
@@ -513,10 +521,18 @@
 
     async function editarFAQ(id) {
         try {
+            if (!id || id === 'None' || id === 'undefined') {
+                alert('This FAQ has no ID. Please visit /admin/treinamento/corrigir-ids first to fix missing IDs.');
+                return;
+            }
             const response = await fetch(`/admin/treinamento/faq/${id}`);
+            if (!response.ok) {
+                alert('Error loading FAQ. Status: ' + response.status);
+                return;
+            }
             const data = await response.json();
-            document.getElementById('editFAQQuestion').value = data.question;
-            document.getElementById('editFAQAnswer').value = data.answer;
+            document.getElementById('editFAQQuestion').value = data.question || '';
+            document.getElementById('editFAQAnswer').value = data.answer || '';
             document.getElementById('formEditarFAQ').action = `/admin/treinamento/faq/editar/${id}`;
             abrirModal('modalEditarFAQ');
         } catch (error) {
