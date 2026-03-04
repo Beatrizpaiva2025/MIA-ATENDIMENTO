@@ -184,8 +184,8 @@ async def obter_conhecimento(item_id: str):
         
         return JSONResponse({
             "id": item.get("_id"),
-            "title": item.get("title", ""),
-            "content": item.get("content", "")
+            "title": item.get("title") or item.get("titulo", ""),
+            "content": item.get("content") or item.get("conteudo", "")
         })
         
     except Exception as e:
@@ -205,7 +205,9 @@ async def editar_conhecimento(
             {
                 "$set": {
                     "knowledge_base.$.title": title,
-                    "knowledge_base.$.content": content
+                    "knowledge_base.$.content": content,
+                    "knowledge_base.$.titulo": title,
+                    "knowledge_base.$.conteudo": content
                 }
             }
         )
@@ -287,8 +289,8 @@ async def obter_faq(item_id: str):
         
         return JSONResponse({
             "id": item.get("_id"),
-            "question": item.get("question", ""),
-            "answer": item.get("answer", "")
+            "question": item.get("question") or item.get("pergunta", ""),
+            "answer": item.get("answer") or item.get("resposta", "")
         })
         
     except Exception as e:
@@ -308,7 +310,9 @@ async def editar_faq(
             {
                 "$set": {
                     "faqs.$.question": question,
-                    "faqs.$.answer": answer
+                    "faqs.$.answer": answer,
+                    "faqs.$.pergunta": question,
+                    "faqs.$.resposta": answer
                 }
             }
         )
