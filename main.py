@@ -1206,8 +1206,15 @@ async def analisar_documento_inteligente(phone: str, image_bytes: bytes, total_p
     "tipo_documento": "historico escolar / diploma / certidao / contrato / etc",
     "idioma_origem": "portugues / ingles / espanhol / etc",
     "idioma_destino_sugerido": "ingles / portugues / etc",
-    "descricao_curta": "breve descricao do documento em 10 palavras"
+    "descricao_curta": "breve descricao do documento em 10 palavras",
+    "paginas_estimadas": 1
 }
+IMPORTANTE sobre paginas_estimadas:
+- Conte quantas PAGINAS ou DOCUMENTOS SEPARADOS aparecem na imagem
+- Se a imagem mostra 2 certidoes, retorne 2
+- Se mostra frente e verso de 1 documento, retorne 1
+- Se mostra multiplas paginas lado a lado, conte cada uma
+- Na duvida, retorne 1
 Retorne APENAS o JSON, sem texto adicional."""
                 },
                 {
@@ -1264,6 +1271,13 @@ async def processar_sessao_imagem(phone: str):
 
     # Analisar documento inteligentemente
     analise = await analisar_documento_inteligente(phone, first_image, total_pages)
+
+    # Usar paginas estimadas da analise de visao se maior que o total de imagens
+    # Ex: 1 imagem pode conter 2 certidoes lado a lado
+    paginas_estimadas = analise.get("paginas_estimadas", 1)
+    if isinstance(paginas_estimadas, (int, float)) and paginas_estimadas > total_pages:
+        logger.info(f"[PAGES] Visao detectou {paginas_estimadas} paginas em {total_pages} imagem(ns) para {phone}")
+        total_pages = int(paginas_estimadas)
 
     # Guardar informacoes do documento no estado (ir direto para orcamento, sem pedir nome)
     await set_cliente_estado(
@@ -3460,7 +3474,13 @@ async def webhook_whatsapp(request: Request):
         # ============================================
         # EXTRAIR DADOS BASICOS
         # ============================================
-        phone = data.get("phone", "")
+        phone_raw = data.get("phone", "")
+        # Limpar sufixos Z-API como @lid, @c.us, @s.whatsapp.net
+        phone = phone_raw.split("@")[0] if "@" in phone_raw else phone_raw
+        # Remover caracteres nao-numericos (manter apenas digitos)
+        phone = ''.join(c for c in phone if c.isdigit())
+        if phone_raw != phone:
+            logger.info(f"[PHONE-CLEAN] Telefone limpo: '{phone_raw}' -> '{phone}'")
         from_me_raw = data.get("fromMe", False)
         message_id = data.get("messageId", "")
 
@@ -3958,6 +3978,25 @@ Para urgencias: (contato)"""
             idioma_detectado = detectar_idioma(text)
             if idioma_detectado != estado.get("idioma", "pt"):
                 await set_cliente_estado(phone, idioma=idioma_detectado)
+
+            # Extrair quantidade de documentos/paginas mencionada no texto
+            # Ex: "2 certidoes", "3 paginas", "tenho 4 documentos"
+            import re as re_pages
+            doc_count_match = re_pages.search(
+                r'(\d+)\s*(?:certid[oõã]e?s?|documentos?|paginas?|páginas?|pages?|certificates?|docs?)',
+                text, re.IGNORECASE
+            )
+            if doc_count_match:
+                doc_count = int(doc_count_match.group(1))
+                if 1 < doc_count <= 50:  # Sanity check
+                    doc_info = estado.get("documento_info", {})
+                    current_pages = doc_info.get("total_pages", 1) if doc_info else 1
+                    if doc_count > current_pages:
+                        if not doc_info:
+                            doc_info = {}
+                        doc_info["total_pages"] = doc_count
+                        await set_cliente_estado(phone, documento_info=doc_info)
+                        logger.info(f"[PAGES-TEXT] Cliente {phone} mencionou {doc_count} documentos/paginas no texto")
 
             # Salvar mensagem do usuario
             await db.conversas.insert_one({
