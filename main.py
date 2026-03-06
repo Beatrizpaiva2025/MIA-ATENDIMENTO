@@ -4015,9 +4015,8 @@ async def webhook_whatsapp(request: Request):
         ia_enabled = os.getenv("IA_ENABLED", "true").lower() == "true"
         em_manutencao = os.getenv("MANUTENCAO", "false").lower() == "true"
 
-        # Extrair dados basicos
-        phone = data.get("phone", "")
-        message_id = data.get("messageId", "")
+        # Reutilizar dados ja extraidos e limpos acima (linhas 3586-3608)
+        # NAO re-extrair phone aqui - o phone ja foi limpo (removido @c.us, LID resolvido, etc.)
         connected_phone = data.get("connectedPhone", "")
         is_group = data.get("isGroup", False)
 
@@ -4071,7 +4070,9 @@ Para urgencias: (contato)"""
         # Atendimento 24/7 - sem restricao de horario
         # ============================================
         if message_type == "text":
-            text = data.get("text", {}).get("message", "")
+            # Usar message_text ja extraido com fallbacks robustos (linhas 3641-3664)
+            # NAO re-extrair de data["text"]["message"] pois Z-API pode enviar em outros campos
+            text = message_text
 
             if not text:
                 return JSONResponse({"status": "ignored", "reason": "empty text"})
