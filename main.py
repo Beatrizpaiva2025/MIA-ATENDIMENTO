@@ -411,12 +411,11 @@ def is_operator_phone(phone: str) -> bool:
     """
     digits = ''.join(c for c in phone if c.isdigit())
 
-    # Lista de telefones de operadores (valores padroes + cache se disponivel)
-    operator_phones = [ATENDENTE_PHONE, NOTIFICACAO_PHONE]
+    # Lista de telefones de operadores (APENAS operador principal, NAO alertas)
+    # NOTIFICACAO_PHONE so recebe alertas, nao eh operador (pode ser usado para testes)
+    operator_phones = [ATENDENTE_PHONE]
     if _operator_config_cache["operator"] and _operator_config_cache["operator"] not in operator_phones:
         operator_phones.append(_operator_config_cache["operator"])
-    if _operator_config_cache["alerts"] and _operator_config_cache["alerts"] not in operator_phones:
-        operator_phones.append(_operator_config_cache["alerts"])
 
     for op_phone in operator_phones:
         op_digits = ''.join(c for c in op_phone if c.isdigit())
@@ -442,7 +441,8 @@ async def is_operator_phone_async(phone: str) -> bool:
     operator, alerts = await get_operator_phones()
     digits = ''.join(c for c in phone if c.isdigit())
 
-    operator_phones = [operator, alerts, ATENDENTE_PHONE, NOTIFICACAO_PHONE]
+    # APENAS operador principal - NOTIFICACAO_PHONE so recebe alertas, nao eh operador
+    operator_phones = [operator, ATENDENTE_PHONE]
     operator_phones = list(set(filter(None, operator_phones)))  # Remove duplicatas e vazios
 
     for op_phone in operator_phones:
