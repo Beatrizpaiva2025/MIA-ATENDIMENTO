@@ -212,6 +212,14 @@ bot_status_cache = {
 webhook_debug_log = []  # Lista para armazenar ultimos eventos do webhook
 MAX_DEBUG_LOG_SIZE = 50  # Manter apenas os ultimos 50 eventos
 
+# ============================================================
+# MAPEAMENTO LID → TELEFONE REAL
+# Z-API pode enviar LIDs (Linked IDs) em vez de telefones reais
+# quando fromMe=true. Mantemos um cache para resolver LIDs.
+# ============================================================
+lid_to_phone_map = {}  # {lid_digits: real_phone}
+MAX_LID_MAP_SIZE = 500
+
 def add_webhook_debug(event_type: str, data: dict):
     """Adiciona evento ao log de debug do webhook"""
     global webhook_debug_log
@@ -293,6 +301,67 @@ def normalizar_telefone_eua(numero: str) -> str:
         return "1" + apenas_digitos
     return apenas_digitos
 
+
+def is_phone_lid(phone_digits: str) -> bool:
+    """Detecta se um numero e um LID (Linked ID) do WhatsApp/Z-API em vez de telefone real.
+    LIDs sao IDs internos com 14+ digitos que NAO correspondem a numeros de telefone validos.
+    Telefones validos: EUA=11 digitos (1+10), Brasil=12-13 digitos (55+DDD+num)."""
+    if not phone_digits:
+        return True
+    # LIDs tipicamente tem 14+ digitos e NAO comecam com codigo de pais conhecido
+    if len(phone_digits) >= 14:
+        return True
+    # Telefone sem digitos suficientes para ser valido
+    if len(phone_digits) < 10:
+        return True
+    return False
+
+
+async def resolver_phone_de_lid(phone_lid: str) -> Optional[str]:
+    """Tenta resolver um LID para o telefone real do cliente.
+    Busca em: cache em memoria -> cliente_estados recente -> conversas recentes."""
+    global lid_to_phone_map
+
+    # 1. Cache em memoria
+    if phone_lid in lid_to_phone_map:
+        resolved = lid_to_phone_map[phone_lid]
+        logger.info(f"[LID-RESOLVE] Cache hit: {phone_lid} -> {resolved}")
+        return resolved
+
+    # 2. Ultimo cliente ativo (registrado em cada mensagem recebida)
+    ultimo_ativo = await db.sistema.find_one({"key": "ultimo_cliente_ativo"})
+    if ultimo_ativo and ultimo_ativo.get("phone"):
+        phone_real = ultimo_ativo["phone"]
+        if not is_phone_lid(phone_real):
+            logger.info(f"[LID-RESOLVE] Via ultimo_cliente_ativo: {phone_lid} -> {phone_real}")
+            lid_to_phone_map[phone_lid] = phone_real
+            return phone_real
+
+    # 3. Ultimo cliente que o operador interagiu
+    ultimo = await db.sistema.find_one({"key": "ultimo_cliente_operador"})
+    if ultimo and ultimo.get("phone"):
+        phone_real = ultimo["phone"]
+        if not is_phone_lid(phone_real):
+            logger.info(f"[LID-RESOLVE] Via ultimo_cliente_operador: {phone_lid} -> {phone_real}")
+            lid_to_phone_map[phone_lid] = phone_real
+            return phone_real
+
+    # 3. Buscar cliente mais recente em conversas (que tenha telefone real)
+    clientes_recentes = await db.conversas.find(
+        {"role": "user"}
+    ).sort("timestamp", -1).limit(10).to_list(length=10)
+
+    for msg in clientes_recentes:
+        msg_phone = msg.get("phone", "")
+        if msg_phone and not is_phone_lid(msg_phone) and not is_operator_phone(msg_phone):
+            logger.info(f"[LID-RESOLVE] Via conversas recentes: {phone_lid} -> {msg_phone}")
+            lid_to_phone_map[phone_lid] = msg_phone
+            return msg_phone
+
+    logger.warning(f"[LID-RESOLVE] NAO conseguiu resolver LID: {phone_lid}")
+    return None
+
+
 # Cache para configuracao do operador (evita consultar MongoDB a cada mensagem)
 _operator_config_cache = {"operator": None, "alerts": None, "last_check": None}
 
@@ -342,12 +411,11 @@ def is_operator_phone(phone: str) -> bool:
     """
     digits = ''.join(c for c in phone if c.isdigit())
 
-    # Lista de telefones de operadores (valores padroes + cache se disponivel)
-    operator_phones = [ATENDENTE_PHONE, NOTIFICACAO_PHONE]
+    # Lista de telefones de operadores (APENAS operador principal, NAO alertas)
+    # NOTIFICACAO_PHONE so recebe alertas, nao eh operador (pode ser usado para testes)
+    operator_phones = [ATENDENTE_PHONE]
     if _operator_config_cache["operator"] and _operator_config_cache["operator"] not in operator_phones:
         operator_phones.append(_operator_config_cache["operator"])
-    if _operator_config_cache["alerts"] and _operator_config_cache["alerts"] not in operator_phones:
-        operator_phones.append(_operator_config_cache["alerts"])
 
     for op_phone in operator_phones:
         op_digits = ''.join(c for c in op_phone if c.isdigit())
@@ -373,7 +441,8 @@ async def is_operator_phone_async(phone: str) -> bool:
     operator, alerts = await get_operator_phones()
     digits = ''.join(c for c in phone if c.isdigit())
 
-    operator_phones = [operator, alerts, ATENDENTE_PHONE, NOTIFICACAO_PHONE]
+    # APENAS operador principal - NOTIFICACAO_PHONE so recebe alertas, nao eh operador
+    operator_phones = [operator, ATENDENTE_PHONE]
     operator_phones = list(set(filter(None, operator_phones)))  # Remove duplicatas e vazios
 
     for op_phone in operator_phones:
@@ -754,6 +823,46 @@ async def detectar_pedido_desconto(message: str) -> bool:
         # Spanish
         "descuento", "rebaja", "reducir el precio", "más barato",
         "muy caro", "demasiado caro"
+    ]
+    message_lower = message.lower()
+    return any(palavra in message_lower for palavra in palavras_chave)
+
+
+async def detectar_followup_traducao(message: str) -> bool:
+    """Detecta se cliente esta perguntando sobre status da traducao ja paga.
+    Ex: 'nao recebi a traducao', 'poderia verificar se a traducao foi enviada',
+    'ainda nao recebi', 'cadê minha traducao', etc."""
+    palavras_chave = [
+        # Portugues - nao recebeu
+        "nao recebi a traducao", "não recebi a tradução",
+        "nao recebi a traduçao", "não recebi a traducao",
+        "ainda nao recebi", "ainda não recebi",
+        "nao recebi ainda", "não recebi ainda",
+        "nao chegou a traducao", "não chegou a tradução",
+        "cadê a tradução", "cade a traducao", "cadê a traducao",
+        "quando vou receber", "quando recebo",
+        "minha traducao", "minha tradução",
+        "verificar se foi enviada", "verificar se a traducao",
+        "verificar se a tradução",
+        "status da traducao", "status da tradução",
+        "prazo da traducao", "prazo da tradução",
+        "ja foi enviada", "já foi enviada",
+        "ja enviaram", "já enviaram",
+        "esta pronta", "está pronta", "ta pronta", "tá pronta",
+        "ficou pronta", "ja ficou", "já ficou",
+        # English
+        "didn't receive the translation", "didnt receive the translation",
+        "haven't received", "havent received",
+        "did not receive", "not received yet",
+        "where is my translation", "translation status",
+        "when will i receive", "is it ready",
+        "has it been sent", "was it sent",
+        "still waiting for the translation", "waiting for my translation",
+        # Spanish
+        "no recibí la traducción", "no recibi la traduccion",
+        "aún no recibí", "aun no recibi",
+        "donde está mi traducción", "donde esta mi traduccion",
+        "ya fue enviada", "está lista", "esta lista"
     ]
     message_lower = message.lower()
     return any(palavra in message_lower for palavra in palavras_chave)
@@ -3479,8 +3588,22 @@ async def webhook_whatsapp(request: Request):
         phone = phone_raw.split("@")[0] if "@" in phone_raw else phone_raw
         # Remover caracteres nao-numericos (manter apenas digitos)
         phone = ''.join(c for c in phone if c.isdigit())
+
+        # Z-API tambem pode enviar chatId com o telefone real (formato: phone@c.us)
+        chat_id_raw = data.get("chatId", "") or data.get("chat", {}).get("id", "") if isinstance(data.get("chat"), dict) else ""
+        chat_id_phone = ""
+        if chat_id_raw:
+            chat_id_phone = chat_id_raw.split("@")[0]
+            chat_id_phone = ''.join(c for c in chat_id_phone if c.isdigit())
+
+        # Se phone parece ser LID mas chatId tem telefone real, usar chatId
+        if is_phone_lid(phone) and chat_id_phone and not is_phone_lid(chat_id_phone):
+            logger.info(f"[PHONE-LID] phone={phone} e LID, usando chatId={chat_id_phone}")
+            phone = chat_id_phone
+
         if phone_raw != phone:
             logger.info(f"[PHONE-CLEAN] Telefone limpo: '{phone_raw}' -> '{phone}'")
+
         from_me_raw = data.get("fromMe", False)
         message_id = data.get("messageId", "")
 
@@ -3489,6 +3612,18 @@ async def webhook_whatsapp(request: Request):
             from_me = from_me_raw.lower() == "true"
         else:
             from_me = bool(from_me_raw)
+
+        # Registrar mapeamento de telefone real (quando nao e fromMe, phone e real)
+        # Isso ajuda a resolver LIDs futuros
+        if not from_me and phone and not is_phone_lid(phone):
+            # Atualizar ultimo_cliente_operador para que o operador sempre tenha o cliente mais recente
+            # (apenas se nao for operador)
+            if not await is_operator_phone_async(phone):
+                await db.sistema.update_one(
+                    {"key": "ultimo_cliente_ativo"},
+                    {"$set": {"phone": phone, "updated_at": datetime.now()}},
+                    upsert=True
+                )
 
         # LOG DETALHADO PARA DEBUG DE COMANDOS
         logger.info(f"[DEBUG] fromMe={from_me} (raw={from_me_raw}, type={type(from_me_raw).__name__})")
@@ -3607,38 +3742,83 @@ async def webhook_whatsapp(request: Request):
             logger.info(f"[OPERADOR] ========================================")
 
             if e_comando_operador:
-                # METODO 1: fromMe=true E phone NAO eh o operador → phone eh do CLIENTE
+                # RESTRICAO: Comando + (retomar IA) so pode ser executado pelo operador principal (ATENDENTE_PHONE)
+                # O operador principal pode retomar via: fromMe=true (WhatsApp conectado) OU telefone direto
+                if e_comando_retoma and not from_me:
+                    # Se nao e fromMe, verificar se e o telefone do operador principal
+                    atendente_digits = ''.join(c for c in ATENDENTE_PHONE if c.isdigit())
+                    phone_digits_check = ''.join(c for c in phone if c.isdigit())
+                    e_operador_principal = (len(phone_digits_check) >= 10 and len(atendente_digits) >= 10 and
+                                          phone_digits_check[-10:] == atendente_digits[-10:])
+                    if not e_operador_principal:
+                        logger.warning(f"[OPERADOR] Comando + rejeitado - phone {phone} NAO e operador principal {ATENDENTE_PHONE}")
+                        await send_whatsapp_message(phone, "⚠️ Apenas o operador principal pode retomar a IA.")
+                        return {"status": "rejected", "reason": "not_main_operator"}
+
+                # METODO 1: fromMe=true E phone NAO eh o operador → phone DEVERIA ser do CLIENTE
+                # MAS: Z-API pode enviar LID (Linked ID) em vez do telefone real
                 if from_me and not e_telefone_operador:
                     cliente_phone = phone
-                    if e_comando_pausa:
-                        resultado = await pausar_ia_para_cliente(cliente_phone)
-                        logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone} (via fromMe, comando='{comando}')")
-                    else:
-                        resultado = await retomar_ia_para_cliente(cliente_phone)
-                        logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via fromMe, comando='{comando}')")
-                    add_webhook_debug("COMMAND_EXECUTED", {
-                        "comando": comando,
-                        "metodo": "fromMe",
-                        "cliente": cliente_phone,
-                        "resultado": resultado
-                    })
-                    # Registrar ultimo cliente que o operador interagiu
-                    await db.sistema.update_one(
-                        {"key": "ultimo_cliente_operador"},
-                        {"$set": {"phone": cliente_phone, "updated_at": datetime.now()}},
-                        upsert=True
-                    )
-                    # Notificar operador
-                    try:
-                        acao = "pausada" if e_comando_pausa else "retomada"
-                        await send_whatsapp_message(ATENDENTE_PHONE, f"✅ IA {acao} para {cliente_phone}")
-                    except Exception:
-                        pass
-                    return {"status": "command_processed", "client": cliente_phone}
 
-                # METODO 2: Operador enviou do seu numero pessoal (ou fromMe com phone=operador)
+                    # Verificar se phone e um LID (nao e telefone real)
+                    if is_phone_lid(cliente_phone):
+                        logger.warning(f"[OPERADOR] Phone '{cliente_phone}' parece ser LID! Tentando resolver...")
+                        phone_real = await resolver_phone_de_lid(cliente_phone)
+                        if phone_real:
+                            logger.info(f"[OPERADOR] LID {cliente_phone} resolvido para {phone_real}")
+                            cliente_phone = phone_real
+                        else:
+                            # Nao conseguiu resolver LID - usar fallback METODO 2
+                            logger.warning(f"[OPERADOR] LID nao resolvido, usando METODO 2 (busca por conversas)")
+                            cliente_phone = None
+
+                    # Verificar se o phone existe em cliente_estados (seguranca extra)
+                    if cliente_phone:
+                        estado_existe = await db.cliente_estados.find_one({"phone": cliente_phone})
+                        if not estado_existe:
+                            logger.warning(f"[OPERADOR] Phone {cliente_phone} NAO encontrado em cliente_estados, buscando alternativa...")
+                            # Tentar encontrar por conversas recentes
+                            ultimo_msg = await db.conversas.find_one(
+                                {"role": "user", "phone": {"$regex": f".*{cliente_phone[-10:]}$"}} if len(cliente_phone) >= 10 else {"role": "user", "phone": cliente_phone},
+                                sort=[("timestamp", -1)]
+                            )
+                            if ultimo_msg:
+                                cliente_phone = ultimo_msg["phone"]
+                                logger.info(f"[OPERADOR] Encontrado via conversas: {cliente_phone}")
+                            else:
+                                cliente_phone = None
+
+                    if cliente_phone:
+                        if e_comando_pausa:
+                            resultado = await pausar_ia_para_cliente(cliente_phone)
+                            logger.info(f"[OPERADOR] IA PAUSADA para cliente {cliente_phone} (via fromMe, comando='{comando}')")
+                        else:
+                            resultado = await retomar_ia_para_cliente(cliente_phone)
+                            logger.info(f"[OPERADOR] IA RETOMADA para cliente {cliente_phone} (via fromMe, comando='{comando}')")
+                        add_webhook_debug("COMMAND_EXECUTED", {
+                            "comando": comando,
+                            "metodo": "fromMe",
+                            "cliente": cliente_phone,
+                            "resultado": resultado
+                        })
+                        # Registrar ultimo cliente que o operador interagiu
+                        await db.sistema.update_one(
+                            {"key": "ultimo_cliente_operador"},
+                            {"$set": {"phone": cliente_phone, "updated_at": datetime.now()}},
+                            upsert=True
+                        )
+                        # Notificar operador
+                        try:
+                            acao = "pausada" if e_comando_pausa else "retomada"
+                            await send_whatsapp_message(ATENDENTE_PHONE, f"✅ IA {acao} para {cliente_phone}")
+                        except Exception:
+                            pass
+                        return {"status": "command_processed", "client": cliente_phone}
+                    # Se cliente_phone ficou None (LID nao resolvido), cai no METODO 2 abaixo
+
+                # METODO 2: Operador enviou do seu numero pessoal, ou fromMe com LID nao resolvido
                 # Buscar o cliente correto usando estrategia em camadas
-                else:
+                if not (from_me and not e_telefone_operador) or not cliente_phone:
                     logger.info(f"[OPERADOR] Buscando cliente para comando '{comando}' (via telefone operador)...")
                     cliente_phone = None
 
@@ -3722,12 +3902,20 @@ async def webhook_whatsapp(request: Request):
             # Mensagem normal do operador (nao eh comando)
             # Registrar ultimo cliente para referencia se fromMe
             if from_me and not e_telefone_operador:
-                await db.sistema.update_one(
-                    {"key": "ultimo_cliente_operador"},
-                    {"$set": {"phone": phone, "updated_at": datetime.now()}},
-                    upsert=True
-                )
-                logger.info(f"[OPERADOR] Mensagem normal para {phone} - registrando como ultimo cliente")
+                # Resolver LID se necessario antes de registrar
+                phone_para_registrar = phone
+                if is_phone_lid(phone):
+                    phone_real = await resolver_phone_de_lid(phone)
+                    if phone_real:
+                        phone_para_registrar = phone_real
+                        logger.info(f"[OPERADOR] LID {phone} resolvido para {phone_para_registrar} (msg normal)")
+                if not is_phone_lid(phone_para_registrar):
+                    await db.sistema.update_one(
+                        {"key": "ultimo_cliente_operador"},
+                        {"$set": {"phone": phone_para_registrar, "updated_at": datetime.now()}},
+                        upsert=True
+                    )
+                    logger.info(f"[OPERADOR] Mensagem normal para {phone_para_registrar} - registrando como ultimo cliente")
             else:
                 logger.info(f"[OPERADOR] Mensagem normal do operador - ignorando")
             return {"status": "ignored", "reason": "operator_message"}
@@ -4071,6 +4259,39 @@ Para urgencias: (contato)"""
                     "canal": "WhatsApp"
                 })
                 return JSONResponse({"status": "transferred_to_human_discount", "etapa": etapa_atual})
+
+            # VERIFICAR SE CLIENTE ESTA PERGUNTANDO SOBRE TRADUCAO JA PAGA
+            # (nao recebi, cadê minha traducao, etc.) - Transferir para 18572081139
+            if await detectar_followup_traducao(text):
+                logger.info(f"[FOLLOWUP] Cliente {phone} perguntou sobre status da traducao na etapa {etapa_atual}")
+                await pausar_ia_para_cliente(phone)
+                await transferir_para_humano(phone, f"Cliente perguntou sobre status da traducao (etapa: {etapa_atual})")
+                idioma_cliente = estado.get("idioma", "pt")
+                if idioma_cliente == "en":
+                    reply = (
+                        "I understand! Let me connect you with our team to check the status of your translation.\n\n"
+                        "A representative will get back to you shortly. Thank you for your patience! 😊"
+                    )
+                elif idioma_cliente == "es":
+                    reply = (
+                        "¡Entiendo! Permítame conectarte con nuestro equipo para verificar el estado de tu traducción.\n\n"
+                        "Un representante se pondrá en contacto contigo en breve. ¡Gracias por tu paciencia! 😊"
+                    )
+                else:
+                    reply = (
+                        "Entendi! Vou te conectar com nossa equipe para verificar o status da sua tradução.\n\n"
+                        "Um atendente entrará em contato em breve. Obrigada pela paciência! 😊"
+                    )
+
+                await send_whatsapp_message(phone, reply)
+                await db.conversas.insert_one({
+                    "phone": phone,
+                    "message": reply,
+                    "role": "assistant",
+                    "timestamp": datetime.now(),
+                    "canal": "WhatsApp"
+                })
+                return JSONResponse({"status": "transferred_followup_traducao", "etapa": etapa_atual})
 
             # Migrar clientes presos na etapa legada "aguardando_origem"
             if etapa_atual == "aguardando_origem":
